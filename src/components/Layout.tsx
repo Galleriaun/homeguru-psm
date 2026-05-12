@@ -13,19 +13,19 @@ export function Layout() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+      <header className="border-b border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <Link
             to="/dashboard"
-            className="text-lg font-semibold text-brand-600 dark:text-brand-500"
+            className="text-lg font-semibold text-emerald-600 dark:text-emerald-500"
           >
             HomeGuru
           </Link>
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-slate-600 dark:text-slate-300 sm:inline">
+            <span className="hidden text-sm text-stone-600 dark:text-stone-300 sm:inline">
               {profile?.full_name}
-              <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-xs uppercase text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <span className="ml-2 rounded bg-stone-100 px-2 py-0.5 text-xs uppercase text-stone-700 dark:bg-stone-800 dark:text-stone-300">
                 {profile?.role.replace('_', ' ')}
               </span>
             </span>
@@ -34,8 +34,8 @@ export function Layout() {
               onClick={handleSignOut}
               className={cn(
                 'rounded-md border px-3 py-1 text-sm transition-colors',
-                'border-slate-300 text-slate-700 hover:bg-slate-100',
-                'dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800',
+                'border-stone-300 text-stone-700 hover:bg-stone-100',
+                'dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800',
               )}
             >
               Çıkış
