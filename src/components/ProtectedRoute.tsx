@@ -15,7 +15,7 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center text-slate-500">
+      <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-500 dark:bg-slate-950 dark:text-slate-400">
         Yükleniyor…
       </div>
     );
@@ -28,7 +28,7 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
   // Profile exists but no role assigned yet — needs admin attention.
   if (!profile) {
     return (
-      <div className="flex h-screen items-center justify-center text-red-600">
+      <div className="flex h-screen items-center justify-center bg-slate-50 px-4 text-center text-red-600 dark:bg-slate-950 dark:text-red-400">
         Hesabınıza henüz bir rol atanmadı. Lütfen yöneticinizle iletişime geçin.
       </div>
     );
