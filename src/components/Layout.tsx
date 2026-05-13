@@ -1,4 +1,4 @@
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { cn } from '@/lib/utils';
@@ -12,18 +12,36 @@ export function Layout() {
     navigate('/login', { replace: true });
   };
 
+  const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+      isActive
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+        : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800',
+    );
+
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <header className="border-b border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link
-            to="/dashboard"
-            className="text-lg font-semibold text-emerald-600 dark:text-emerald-500"
-          >
-            HomeGuru
-          </Link>
+          <div className="flex items-center gap-6">
+            <Link
+              to="/dashboard"
+              className="text-lg font-semibold text-emerald-600 dark:text-emerald-500"
+            >
+              HomeGuru
+            </Link>
+            <nav className="flex items-center gap-1">
+              <NavLink to="/dashboard" className={navLinkClasses}>
+                Panel
+              </NavLink>
+              <NavLink to="/properties" className={navLinkClasses}>
+                Mülkler
+              </NavLink>
+            </nav>
+          </div>
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-stone-600 dark:text-stone-300 sm:inline">
+            <span className="hidden text-sm text-stone-700 dark:text-stone-300 sm:inline">
               {profile?.full_name}
               <span className="ml-2 rounded bg-stone-100 px-2 py-0.5 text-xs uppercase text-stone-700 dark:bg-stone-800 dark:text-stone-300">
                 {profile?.role.replace('_', ' ')}

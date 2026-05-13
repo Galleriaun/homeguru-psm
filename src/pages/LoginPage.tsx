@@ -39,7 +39,7 @@ export function LoginPage() {
         <h1 className="mb-1 text-2xl font-semibold text-emerald-600 dark:text-emerald-500">
           HomeGuru
         </h1>
-        <p className="mb-6 text-sm text-stone-500 dark:text-stone-400">Personel girişi</p>
+        <p className="mb-6 text-sm text-stone-600 dark:text-stone-400">Personel girişi</p>
 
         <label className="block text-sm font-medium text-stone-700 dark:text-stone-300">
           E-posta

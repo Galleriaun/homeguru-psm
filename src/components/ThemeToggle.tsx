@@ -18,7 +18,7 @@ export function ThemeToggle() {
       title={isDark ? 'Açık tema' : 'Koyu tema'}
       className={cn(
         'inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors',
-        'border-stone-300 text-stone-600 hover:bg-stone-100',
+        'border-stone-300 text-stone-700 hover:bg-stone-100',
         'dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800',
       )}
     >

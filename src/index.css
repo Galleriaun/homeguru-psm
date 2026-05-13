@@ -13,4 +13,16 @@
     font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* Hide native number input spinners (they look terrible in dark mode
+     and conflict with our minimal design). Users can still type or use
+     keyboard arrow keys to increment. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
 }

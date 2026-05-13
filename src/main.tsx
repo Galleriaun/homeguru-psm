@@ -11,7 +11,13 @@ if (!rootEl) throw new Error('Root element #root not found in index.html');
 // in sync with the GitHub Pages subpath without hardcoding the repo name.
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    <BrowserRouter
+      basename={import.meta.env.BASE_URL}
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <App />
     </BrowserRouter>
   </React.StrictMode>,
