@@ -34,6 +34,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
       <form
         onSubmit={handleSubmit}
+        noValidate
         className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900"
       >
         <h1 className="mb-1 text-2xl font-semibold text-emerald-600 dark:text-emerald-500">

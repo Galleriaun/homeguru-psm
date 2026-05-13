@@ -6,7 +6,8 @@
  *
  *   npx supabase gen types typescript --project-id <ref> --schema public > src/types/database.ts
  *
- * The shape must match what `supabase-js` expects for type inference to work.
+ * Shape must match what `@supabase/supabase-js` expects — use a top-level
+ * `type Database = { ... }` alias (NOT interface) and inline all returns.
  */
 
 export type Json =
@@ -29,7 +30,7 @@ export type PaymentStatus = 'UNCONFIRMED' | 'CONFIRMED' | 'DISPUTED';
 export type HousekeepingStatus = 'DIRTY' | 'IN_PROGRESS' | 'CLEAN';
 export type KbsStatus = 'PENDING' | 'SUBMITTED' | 'CONFIRMED' | 'FAILED';
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       properties: {
@@ -123,6 +124,8 @@ export interface Database {
         Row: {
           id: string;
           full_name: string;
+          tc_kimlik_encrypted: string | null;
+          passport_encrypted: string | null;
           phone: string | null;
           email: string | null;
           address: string | null;
@@ -131,6 +134,9 @@ export interface Database {
           consent_version: string | null;
           created_at: string;
         };
+        // NOTE: tc_kimlik_encrypted and passport_encrypted are intentionally
+        // omitted from Insert/Update — use the create_guest / update_guest RPCs
+        // which handle encryption server-side.
         Insert: {
           id?: string;
           full_name: string;
@@ -205,7 +211,71 @@ export interface Database {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      create_guest: {
+        Args: {
+          _full_name: string;
+          _tc_kimlik?: string | null;
+          _passport?: string | null;
+          _phone?: string | null;
+          _email?: string | null;
+          _address?: string | null;
+          _nationality?: string | null;
+        };
+        Returns: {
+          id: string;
+          full_name: string;
+          tc_kimlik_encrypted: string | null;
+          passport_encrypted: string | null;
+          phone: string | null;
+          email: string | null;
+          address: string | null;
+          nationality: string | null;
+          consent_given_at: string | null;
+          consent_version: string | null;
+          created_at: string;
+        };
+      };
+      update_guest: {
+        Args: {
+          _id: string;
+          _full_name: string;
+          _tc_kimlik?: string | null;
+          _passport?: string | null;
+          _phone?: string | null;
+          _email?: string | null;
+          _address?: string | null;
+          _nationality?: string | null;
+        };
+        Returns: {
+          id: string;
+          full_name: string;
+          tc_kimlik_encrypted: string | null;
+          passport_encrypted: string | null;
+          phone: string | null;
+          email: string | null;
+          address: string | null;
+          nationality: string | null;
+          consent_given_at: string | null;
+          consent_version: string | null;
+          created_at: string;
+        };
+      };
+      get_guest_decrypted: {
+        Args: { _id: string };
+        Returns: {
+          id: string;
+          full_name: string;
+          tc_kimlik: string | null;
+          passport: string | null;
+          phone: string | null;
+          email: string | null;
+          address: string | null;
+          nationality: string | null;
+          consent_given_at: string | null;
+          consent_version: string | null;
+          created_at: string;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -214,4 +284,8 @@ export interface Database {
       [_ in never]: never;
     };
   };
-}
+};
+
+// Convenience exports — handy to import where Row/RPC return shapes are referenced
+export type GuestRow = Database['public']['Tables']['guests']['Row'];
+export type DecryptedGuest = Database['public']['Functions']['get_guest_decrypted']['Returns'][number];

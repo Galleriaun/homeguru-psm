@@ -38,6 +38,9 @@ export function Layout() {
               <NavLink to="/properties" className={navLinkClasses}>
                 Mülkler
               </NavLink>
+              <NavLink to="/guests" className={navLinkClasses}>
+                Misafirler
+              </NavLink>
             </nav>
           </div>
           <div className="flex items-center gap-3">
