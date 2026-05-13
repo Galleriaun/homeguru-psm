@@ -1,0 +1,73 @@
+import { supabase } from '@/lib/supabase';
+import type { Database, ReservationStatus } from '@/types/database';
+
+type ReservationRow = Database['public']['Tables']['reservations']['Row'];
+type ReservationInsert = Database['public']['Tables']['reservations']['Insert'];
+
+export type Reservation = ReservationRow;
+
+export interface ReservationWithRefs extends ReservationRow {
+  guest: { full_name: string; phone: string | null } | null;
+  unit: { name: string; property_id: string } | null;
+  property: { name: string; type: string } | null;
+}
+
+const wrapErr = (e: { message: string; details?: string; hint?: string; code?: string }) => {
+  // Friendly translation for the most common DB error in this module
+  if (e.code === '23P01') {
+    return new Error('Bu birim seçilen tarihler arasında başka bir rezervasyonla çakışıyor.');
+  }
+  return new Error(
+    `${e.message}${e.details ? ` — ${e.details}` : ''}${e.hint ? ` [${e.hint}]` : ''}${e.code ? ` (${e.code})` : ''}`,
+  );
+};
+
+/** List reservations with joined guest/unit/property names. */
+export async function listReservations(): Promise<ReservationWithRefs[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, total_amount, deposit, auto_debit, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+    )
+    .order('stay_start', { ascending: false });
+  if (error) throw wrapErr(error);
+  return (data as unknown as ReservationWithRefs[]) ?? [];
+}
+
+export async function getReservation(id: string): Promise<ReservationRow | null> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw wrapErr(error);
+  return data;
+}
+
+export async function createReservation(input: ReservationInsert): Promise<ReservationRow> {
+  const { data, error } = await supabase.from('reservations').insert(input).select().single();
+  if (error) throw wrapErr(error);
+  return data;
+}
+
+export async function updateReservation(
+  id: string,
+  input: Database['public']['Tables']['reservations']['Update'],
+): Promise<ReservationRow> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .update(input)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw wrapErr(error);
+  return data;
+}
+
+export async function cancelReservation(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('reservations')
+    .update({ status: 'cancelled' satisfies ReservationStatus })
+    .eq('id', id);
+  if (error) throw wrapErr(error);
+}

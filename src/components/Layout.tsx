@@ -41,6 +41,9 @@ export function Layout() {
               <NavLink to="/guests" className={navLinkClasses}>
                 Misafirler
               </NavLink>
+              <NavLink to="/reservations" className={navLinkClasses}>
+                Rezervasyonlar
+              </NavLink>
             </nav>
           </div>
           <div className="flex items-center gap-3">

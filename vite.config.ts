@@ -18,20 +18,21 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'icons/apple-touch-180.png'],
+      includeAssets: ['favicon.svg'],
       manifest: {
         name: 'HomeGuru PMS',
         short_name: 'HomeGuru',
         description: 'Property management for HomeGuru',
-        theme_color: '#1a73e8',
+        theme_color: '#059669',
         background_color: '#ffffff',
         display: 'standalone',
         start_url: base,
         scope: base,
+        // Using the SVG favicon as the PWA icon — works for all sizes.
+        // Replace with proper PNG icons (192/512/maskable) before going to production.
         icons: [
-          { src: 'icons/192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
         ],
       },
       workbox: {

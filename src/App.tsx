@@ -12,6 +12,12 @@ import { UnitFormPage } from '@/pages/properties/UnitFormPage';
 import { GuestsListPage } from '@/pages/guests/GuestsListPage';
 import { GuestDetailPage } from '@/pages/guests/GuestDetailPage';
 import { GuestFormPage } from '@/pages/guests/GuestFormPage';
+import { ReservationsListPage } from '@/pages/reservations/ReservationsListPage';
+import { ReservationDetailPage } from '@/pages/reservations/ReservationDetailPage';
+import { ReservationFormPage } from '@/pages/reservations/ReservationFormPage';
+
+const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
+const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
 
 export default function App() {
   return (
@@ -70,7 +76,7 @@ export default function App() {
           <Route
             path="/guests/new"
             element={
-              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION']}>
+              <ProtectedRoute allowedRoles={[...GUEST_WRITERS]}>
                 <GuestFormPage />
               </ProtectedRoute>
             }
@@ -79,8 +85,28 @@ export default function App() {
           <Route
             path="/guests/:id/edit"
             element={
-              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION']}>
+              <ProtectedRoute allowedRoles={[...GUEST_WRITERS]}>
                 <GuestFormPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Reservations */}
+          <Route path="/reservations" element={<ReservationsListPage />} />
+          <Route
+            path="/reservations/new"
+            element={
+              <ProtectedRoute allowedRoles={[...RESERVATION_WRITERS]}>
+                <ReservationFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/reservations/:id" element={<ReservationDetailPage />} />
+          <Route
+            path="/reservations/:id/edit"
+            element={
+              <ProtectedRoute allowedRoles={[...RESERVATION_WRITERS]}>
+                <ReservationFormPage />
               </ProtectedRoute>
             }
           />
