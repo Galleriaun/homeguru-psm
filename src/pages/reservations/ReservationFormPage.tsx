@@ -268,9 +268,17 @@ export function ReservationFormPage() {
               <button
                 type="button"
                 onClick={() => setShowGuestModal(true)}
-                className="text-xs text-emerald-600 hover:underline dark:text-emerald-500"
+                className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
               >
-                + Yeni misafir
+                <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path
+                    d="M10 4v12M4 10h12"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                Yeni Misafir
               </button>
             </div>
             <Select

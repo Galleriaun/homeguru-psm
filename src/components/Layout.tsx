@@ -35,14 +35,14 @@ export function Layout() {
               <NavLink to="/dashboard" className={navLinkClasses}>
                 Panel
               </NavLink>
+              <NavLink to="/reservations" className={navLinkClasses}>
+                Rezervasyonlar
+              </NavLink>
               <NavLink to="/properties" className={navLinkClasses}>
                 Mülkler
               </NavLink>
               <NavLink to="/guests" className={navLinkClasses}>
                 Misafirler
-              </NavLink>
-              <NavLink to="/reservations" className={navLinkClasses}>
-                Rezervasyonlar
               </NavLink>
             </nav>
           </div>

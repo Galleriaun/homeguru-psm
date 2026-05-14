@@ -98,7 +98,7 @@ export function ReservationsListPage() {
         <Card className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-200 text-xs uppercase text-stone-600 dark:border-stone-800 dark:text-stone-400">
+              <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-800 dark:text-stone-400">
                 <tr>
                   <th className="px-6 py-3 font-medium">Misafir</th>
                   <th className="px-6 py-3 font-medium">Mülk / Birim</th>
@@ -107,7 +107,7 @@ export function ReservationsListPage() {
                   <th className="px-6 py-3 font-medium">Durum</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
+              <tbody className="divide-y divide-stone-300 dark:divide-stone-800">
                 {filtered.map((r) => (
                   <tr key={r.id} className="transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50">
                     <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">

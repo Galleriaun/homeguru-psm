@@ -80,7 +80,7 @@ export function GuestsListPage() {
         <Card className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-200 text-xs uppercase text-stone-600 dark:border-stone-800 dark:text-stone-400">
+              <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-800 dark:text-stone-400">
                 <tr>
                   <th className="px-6 py-3 font-medium">Ad Soyad</th>
                   <th className="px-6 py-3 font-medium">Telefon</th>
@@ -88,7 +88,7 @@ export function GuestsListPage() {
                   <th className="px-6 py-3 font-medium">Uyruk</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
+              <tbody className="divide-y divide-stone-300 dark:divide-stone-800">
                 {filtered.map((g) => (
                   <tr
                     key={g.id}
