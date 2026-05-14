@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
 import { formatTRY } from '@/lib/utils';
+import { QuickAddGuestModal } from '@/components/QuickAddGuestModal';
 
 const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
   { value: 'pending', label: 'Beklemede' },
@@ -63,6 +64,7 @@ export function ReservationFormPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showGuestModal, setShowGuestModal] = useState(false);
 
   const checkout = useMemo(() => addDays(checkin, nights), [checkin, nights]);
   const selectedUnit = units.find((u) => u.id === unitId);
@@ -218,6 +220,17 @@ export function ReservationFormPage() {
         </Card>
       )}
 
+      {showGuestModal && (
+        <QuickAddGuestModal
+          onClose={() => setShowGuestModal(false)}
+          onCreated={(guest) => {
+            setGuests((prev) => [guest, ...prev]);
+            setGuestId(guest.id);
+            setShowGuestModal(false);
+          }}
+        />
+      )}
+
       <Card>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <Select
@@ -244,18 +257,34 @@ export function ReservationFormPage() {
             disabled={!propertyId}
           />
 
-          <Select
-            label="Misafir"
-            name="guest"
-            required
-            value={guestId}
-            onChange={setGuestId}
-            options={guests.map((g) => ({
-              value: g.id,
-              label: g.phone ? `${g.full_name} — ${g.phone}` : g.full_name,
-            }))}
-            placeholder="Misafir seçin"
-          />
+          <div>
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="guest"
+                className="block text-sm font-medium text-stone-700 dark:text-stone-300"
+              >
+                Misafir<span className="ml-0.5 text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowGuestModal(true)}
+                className="text-xs text-emerald-600 hover:underline dark:text-emerald-500"
+              >
+                + Yeni misafir
+              </button>
+            </div>
+            <Select
+              name="guest"
+              required
+              value={guestId}
+              onChange={setGuestId}
+              options={guests.map((g) => ({
+                value: g.id,
+                label: g.phone ? `${g.full_name} — ${g.phone}` : g.full_name,
+              }))}
+              placeholder="Misafir seçin"
+            />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Input
