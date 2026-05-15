@@ -11,6 +11,8 @@ interface Props {
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
+  /** Error message shown inside the dialog; the dialog stays open so the user sees why the action failed. */
+  error?: ReactNode;
 }
 
 /**
@@ -27,6 +29,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   loading,
+  error,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -49,7 +52,12 @@ export function ConfirmDialog({
       <div className="w-full max-w-sm p-6">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">{title}</h2>
         {description && (
-          <div className="mt-2 text-sm text-stone-700 dark:text-stone-400">{description}</div>
+          <div className="mt-2 text-sm text-stone-700 dark:text-stone-300">{description}</div>
+        )}
+        {error && (
+          <p className="mt-4 rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
+            {error}
+          </p>
         )}
         <div className="mt-6 flex justify-end gap-2">
           <Button variant="secondary" onClick={onCancel} disabled={loading}>

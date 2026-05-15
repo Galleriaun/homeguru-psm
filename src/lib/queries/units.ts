@@ -18,6 +18,13 @@ export async function listUnitsForProperty(propertyId: string) {
   return data;
 }
 
+/** Every unit across all properties (RLS-filtered), ordered by name. */
+export async function listAllUnits(): Promise<Unit[]> {
+  const { data, error } = await supabase.from('units').select('*').order('name');
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function getUnit(id: string) {
   const { data, error } = await supabase
     .from('units')

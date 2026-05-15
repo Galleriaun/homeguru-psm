@@ -100,7 +100,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
         <div
           className={cn(
             'mt-1 flex items-stretch rounded-md border bg-white transition-colors',
-            'border-stone-300 dark:border-stone-700 dark:bg-stone-800',
+            'border-stone-300 dark:border-stone-600 dark:bg-stone-800',
             'focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/30',
             error && 'border-red-500 dark:border-red-500',
           )}
@@ -123,7 +123,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
           <div
             className="flex flex-col divide-y border-l text-stone-600 dark:text-stone-300
                        border-stone-300 divide-stone-300
-                       dark:border-stone-700 dark:divide-stone-700"
+                       dark:border-stone-600 dark:divide-stone-600"
           >
             <button
               type="button"
@@ -169,7 +169,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
             </button>
           </div>
         </div>
-        {hint && !error && <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">{hint}</p>}
+        {hint && !error && <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">{hint}</p>}
         {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
       </div>
     );

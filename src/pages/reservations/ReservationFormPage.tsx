@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { listProperties, type Property } from '@/lib/queries/properties';
 import { listUnitsForProperty, type Unit } from '@/lib/queries/units';
@@ -45,6 +45,7 @@ export function ReservationFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
   const [properties, setProperties] = useState<Property[]>([]);
@@ -69,6 +70,17 @@ export function ReservationFormPage() {
   const checkout = useMemo(() => addDays(checkin, nights), [checkin, nights]);
   const selectedUnit = units.find((u) => u.id === unitId);
   const suggestedTotal = selectedUnit ? Number(selectedUnit.base_price) * nights : 0;
+
+  // Where "← Geri" / "İptal" should return to. When editing, go back to the
+  // reservation. When creating, honour a ?from= param (e.g. the calendar) so
+  // the user lands back where they started — falling back to the list.
+  const fromParam = searchParams.get('from');
+  const backTo =
+    isEdit && id
+      ? `/reservations/${id}`
+      : fromParam && fromParam.startsWith('/')
+        ? fromParam
+        : '/reservations';
 
   // Load initial data: properties + guests (+ existing reservation if editing)
   useEffect(() => {
@@ -95,6 +107,18 @@ export function ReservationFormPage() {
           setDeposit(Number(r.deposit));
           setAutoDebit(r.auto_debit);
           setStatus(r.status);
+        } else {
+          // Prefill from query params (e.g. arriving from a calendar cell click)
+          const qpProperty = searchParams.get('property');
+          const qpUnit = searchParams.get('unit');
+          const qpCheckin = searchParams.get('checkin');
+          if (qpProperty && props.some((p) => p.id === qpProperty)) {
+            setPropertyId(qpProperty);
+            if (qpUnit) setUnitId(qpUnit);
+          }
+          if (qpCheckin && /^\d{4}-\d{2}-\d{2}$/.test(qpCheckin)) {
+            setCheckin(qpCheckin);
+          }
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Yüklenemedi');
@@ -102,6 +126,8 @@ export function ReservationFormPage() {
         setLoading(false);
       }
     })();
+    // searchParams read once on mount — intentionally not a dep
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdit]);
 
   // Load units when property changes
@@ -183,13 +209,13 @@ export function ReservationFormPage() {
   };
 
   if (loading) {
-    return <p className="text-sm text-stone-600 dark:text-stone-400">Yükleniyor…</p>;
+    return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
   }
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
       <Link
-        to={isEdit && id ? `/reservations/${id}` : '/reservations'}
+        to={backTo}
         className="inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
       >
         ← Geri
@@ -268,7 +294,7 @@ export function ReservationFormPage() {
               <button
                 type="button"
                 onClick={() => setShowGuestModal(true)}
-                className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
               >
                 <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <path
@@ -314,7 +340,7 @@ export function ReservationFormPage() {
             />
           </div>
 
-          <p className="text-xs text-stone-600 dark:text-stone-400">
+          <p className="text-xs text-stone-600 dark:text-stone-300">
             Çıkış tarihi: <strong>{checkout}</strong>
             {selectedUnit && (
               <>
@@ -368,7 +394,7 @@ export function ReservationFormPage() {
           )}
 
           <div className="flex justify-end gap-2">
-            <Link to={isEdit && id ? `/reservations/${id}` : '/reservations'}>
+            <Link to={backTo}>
               <Button type="button" variant="secondary" disabled={saving}>
                 İptal
               </Button>

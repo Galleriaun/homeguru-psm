@@ -27,14 +27,14 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           className={cn(
             'mt-1 w-full rounded-md border px-3 py-2 text-stone-900 placeholder-stone-400 transition-colors',
             'border-stone-300 bg-white focus:border-emerald-500 focus:outline-none',
-            'dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500',
+            'dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500',
             error && 'border-red-500 focus:border-red-500 dark:border-red-500',
             className,
           )}
           {...rest}
         />
         {hint && !error && (
-          <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">{hint}</p>
+          <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">{hint}</p>
         )}
         {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
       </div>

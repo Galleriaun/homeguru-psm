@@ -38,7 +38,7 @@ export function GuestsListPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Misafirler</h1>
-          <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
             Kayıtlı misafirlerinizin listesi
           </p>
         </div>
@@ -65,12 +65,12 @@ export function GuestsListPage() {
       )}
 
       {!guests && !error && (
-        <p className="text-sm text-stone-600 dark:text-stone-400">Yükleniyor…</p>
+        <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
       )}
 
       {guests && filtered.length === 0 && (
         <Card>
-          <p className="text-center text-sm text-stone-600 dark:text-stone-400">
+          <p className="text-center text-sm text-stone-600 dark:text-stone-300">
             {search ? 'Arama sonucu bulunamadı.' : 'Henüz misafir eklenmemiş.'}
           </p>
         </Card>
@@ -80,7 +80,7 @@ export function GuestsListPage() {
         <Card className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-800 dark:text-stone-400">
+              <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
                 <tr>
                   <th className="px-6 py-3 font-medium">Ad Soyad</th>
                   <th className="px-6 py-3 font-medium">Telefon</th>
@@ -88,7 +88,7 @@ export function GuestsListPage() {
                   <th className="px-6 py-3 font-medium">Uyruk</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-300 dark:divide-stone-800">
+              <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
                 {filtered.map((g) => (
                   <tr
                     key={g.id}
@@ -99,13 +99,13 @@ export function GuestsListPage() {
                         {g.full_name}
                       </Link>
                     </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-400">
+                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                       {g.phone ?? '—'}
                     </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-400">
+                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                       {g.email ?? '—'}
                     </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-400">
+                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                       {g.nationality ?? '—'}
                     </td>
                   </tr>

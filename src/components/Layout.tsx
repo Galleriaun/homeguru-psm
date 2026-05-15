@@ -1,13 +1,20 @@
+import { useState } from 'react';
 import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { can } from '@/lib/rbac';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { cn } from '@/lib/utils';
 
 export function Layout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
 
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
   const handleSignOut = async () => {
+    setSigningOut(true);
     await signOut();
     navigate('/login', { replace: true });
   };
@@ -22,7 +29,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
-      <header className="border-b border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+      <header className="border-b border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">
             <Link
@@ -44,6 +51,11 @@ export function Layout() {
               <NavLink to="/guests" className={navLinkClasses}>
                 Misafirler
               </NavLink>
+              {profile && can(profile.role, 'finance:read') && (
+                <NavLink to="/finance/cash" className={navLinkClasses}>
+                  Finans
+                </NavLink>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -55,11 +67,11 @@ export function Layout() {
             </span>
             <ThemeToggle />
             <button
-              onClick={handleSignOut}
+              onClick={() => setConfirmSignOut(true)}
               className={cn(
                 'rounded-md border px-3 py-1 text-sm transition-colors',
                 'border-stone-300 text-stone-700 hover:bg-stone-100',
-                'dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800',
+                'dark:border-stone-600 dark:text-stone-200 dark:hover:bg-stone-800',
               )}
             >
               Çıkış
@@ -70,6 +82,18 @@ export function Layout() {
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Outlet />
       </main>
+
+      <ConfirmDialog
+        open={confirmSignOut}
+        title="Çıkış yapılsın mı?"
+        description="Oturumunuz kapatılacak ve giriş ekranına yönlendirileceksiniz."
+        confirmLabel="Çıkış Yap"
+        cancelLabel="Vazgeç"
+        destructive
+        loading={signingOut}
+        onConfirm={handleSignOut}
+        onCancel={() => setConfirmSignOut(false)}
+      />
     </div>
   );
 }

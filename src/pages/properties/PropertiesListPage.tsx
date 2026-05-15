@@ -33,7 +33,7 @@ export function PropertiesListPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Mülkler</h1>
-          <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
             Otel ve dairelerinizin listesi
           </p>
         </div>
@@ -53,7 +53,7 @@ export function PropertiesListPage() {
             className={
               filter === f
                 ? 'rounded-full bg-emerald-600 px-4 py-1 text-sm font-medium text-white'
-                : 'rounded-full border border-stone-300 px-4 py-1 text-sm text-stone-700 hover:bg-stone-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800'
+                : 'rounded-full border border-stone-300 px-4 py-1 text-sm text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800'
             }
           >
             {f === 'ALL' ? 'Tümü' : f === 'HOTEL' ? 'Oteller' : 'Daireler'}
@@ -68,12 +68,12 @@ export function PropertiesListPage() {
       )}
 
       {!properties && !error && (
-        <p className="text-sm text-stone-600 dark:text-stone-400">Yükleniyor…</p>
+        <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
       )}
 
       {properties && filtered.length === 0 && (
         <Card>
-          <p className="text-center text-sm text-stone-600 dark:text-stone-400">
+          <p className="text-center text-sm text-stone-600 dark:text-stone-300">
             Henüz mülk eklenmemiş.
           </p>
         </Card>
@@ -89,7 +89,7 @@ export function PropertiesListPage() {
                     {p.name}
                   </h3>
                   {p.address && (
-                    <p className="mt-1 truncate text-xs text-stone-600 dark:text-stone-400">
+                    <p className="mt-1 truncate text-xs text-stone-600 dark:text-stone-300">
                       {p.address}
                     </p>
                   )}

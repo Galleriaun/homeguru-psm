@@ -78,5 +78,13 @@ export async function updateGuest(id: string, input: GuestInput): Promise<GuestR
 /** Deletes a guest. Only SUPER_ADMIN is permitted per RLS. */
 export async function deleteGuest(id: string): Promise<void> {
   const { error } = await supabase.from('guests').delete().eq('id', id);
-  if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  if (error) {
+    // Foreign-key violation — guest is still referenced by one or more reservations
+    if (error.code === '23503') {
+      throw new Error(
+        'Bu misafir bir veya daha fazla rezervasyona bağlı olduğu için silinemez. Silmeden önce misafire ait rezervasyonları kaldırın.',
+      );
+    }
+    throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  }
 }

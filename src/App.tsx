@@ -13,11 +13,17 @@ import { GuestsListPage } from '@/pages/guests/GuestsListPage';
 import { GuestDetailPage } from '@/pages/guests/GuestDetailPage';
 import { GuestFormPage } from '@/pages/guests/GuestFormPage';
 import { ReservationsListPage } from '@/pages/reservations/ReservationsListPage';
+import { ReservationsCalendarPage } from '@/pages/reservations/ReservationsCalendarPage';
+import { ReservationsAvailabilityPage } from '@/pages/reservations/ReservationsAvailabilityPage';
 import { ReservationDetailPage } from '@/pages/reservations/ReservationDetailPage';
 import { ReservationFormPage } from '@/pages/reservations/ReservationFormPage';
+import { CashAccountsListPage } from '@/pages/finance/CashAccountsListPage';
+import { CashAccountFormPage } from '@/pages/finance/CashAccountFormPage';
+import { CashAccountDetailPage } from '@/pages/finance/CashAccountDetailPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
 const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
+const FINANCE_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER'] as const;
 
 export default function App() {
   return (
@@ -93,6 +99,8 @@ export default function App() {
 
           {/* Reservations */}
           <Route path="/reservations" element={<ReservationsListPage />} />
+          <Route path="/reservations/calendar" element={<ReservationsCalendarPage />} />
+          <Route path="/reservations/availability" element={<ReservationsAvailabilityPage />} />
           <Route
             path="/reservations/new"
             element={
@@ -107,6 +115,40 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={[...RESERVATION_WRITERS]}>
                 <ReservationFormPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Finance — Cash accounts (Phase 2A). Reception/Housekeeping are RLS-blocked anyway. */}
+          <Route
+            path="/finance/cash"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <CashAccountsListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/finance/cash/new"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <CashAccountFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/finance/cash/:id"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <CashAccountDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/finance/cash/:id/edit"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <CashAccountFormPage />
               </ProtectedRoute>
             }
           />

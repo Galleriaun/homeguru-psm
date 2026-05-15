@@ -19,6 +19,7 @@ export function GuestDetailPage() {
   const [guest, setGuest] = useState<DecryptedGuest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -50,7 +51,7 @@ export function GuestDetailPage() {
   }
 
   if (!guest) {
-    return <p className="text-sm text-stone-600 dark:text-stone-400">Yükleniyor…</p>;
+    return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
   }
 
   const isAdmin = profile && can(profile.role, 'admin:*');
@@ -60,13 +61,15 @@ export function GuestDetailPage() {
   const handleDelete = async () => {
     if (!id) return;
     setBusy(true);
+    setDeleteError(null);
     try {
       await deleteGuest(id);
       navigate('/guests', { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Silme başarısız');
+      // Keep the dialog open and surface the reason inside it — don't
+      // replace the whole page with a load-error card.
+      setDeleteError(e instanceof Error ? e.message : 'Silme başarısız');
       setBusy(false);
-      setConfirmDelete(false);
     }
   };
 
@@ -85,7 +88,7 @@ export function GuestDetailPage() {
             {guest.full_name}
           </h1>
           {guest.nationality && (
-            <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{guest.nationality}</p>
+            <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{guest.nationality}</p>
           )}
         </div>
         <div className="flex gap-2">
@@ -97,7 +100,14 @@ export function GuestDetailPage() {
             </Link>
           )}
           {canDelete && (
-            <Button variant="danger" size="sm" onClick={() => setConfirmDelete(true)}>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                setDeleteError(null);
+                setConfirmDelete(true);
+              }}
+            >
               Sil
             </Button>
           )}
@@ -128,8 +138,12 @@ export function GuestDetailPage() {
         confirmLabel="Sil"
         destructive
         loading={busy}
+        error={deleteError}
         onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
+        onCancel={() => {
+          setConfirmDelete(false);
+          setDeleteError(null);
+        }}
       />
     </div>
   );
@@ -144,7 +158,7 @@ interface FieldProps {
 function Field({ label, value, className }: FieldProps) {
   return (
     <div className={className}>
-      <dt className="text-xs font-medium uppercase tracking-wide text-stone-600 dark:text-stone-400">
+      <dt className="text-xs font-medium uppercase tracking-wide text-stone-600 dark:text-stone-300">
         {label}
       </dt>
       <dd className="mt-1 text-stone-900 dark:text-stone-100">{value || '—'}</dd>

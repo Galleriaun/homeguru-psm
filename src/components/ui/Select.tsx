@@ -161,7 +161,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
           onKeyDown={handleKeyDown}
           className={cn(
             'mt-1 flex w-full items-center justify-between rounded-md border bg-white px-3 py-2 text-left text-sm transition-colors',
-            'border-stone-300 dark:border-stone-700 dark:bg-stone-800',
+            'border-stone-300 dark:border-stone-600 dark:bg-stone-800',
             'focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/30',
             error && 'border-red-500 dark:border-red-500',
             disabled && 'cursor-not-allowed opacity-60',
@@ -172,14 +172,14 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
             className={
               selected
                 ? 'text-stone-900 dark:text-stone-100'
-                : 'text-stone-400 dark:text-stone-500'
+                : 'text-stone-400 dark:text-stone-400'
             }
           >
             {selected?.label ?? placeholder}
           </span>
           <svg
             className={cn(
-              'h-4 w-4 text-stone-500 transition-transform dark:text-stone-400',
+              'h-4 w-4 text-stone-500 transition-transform dark:text-stone-300',
               open && 'rotate-180',
             )}
             viewBox="0 0 20 20"
@@ -201,7 +201,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
             role="listbox"
             tabIndex={-1}
             className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-white py-1 shadow-lg
-                       border-stone-200 dark:border-stone-700 dark:bg-stone-900"
+                       border-stone-200 dark:border-stone-600 dark:bg-stone-900"
           >
             {options.map((opt, i) => {
               const isSelected = opt.value === value;

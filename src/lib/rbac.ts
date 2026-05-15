@@ -11,6 +11,7 @@ export type Permission =
   | 'reservation:read'
   | 'reservation:update'
   | 'reservation:cancel'
+  | 'reservation:delete'
   | 'guest:read'
   | 'guest:create'
   | 'guest:update'
@@ -33,6 +34,7 @@ const BASE: Record<Role, Permission[]> = {
     'reservation:read',
     'reservation:update',
     'reservation:cancel',
+    'reservation:delete',
     'guest:read',
     'guest:create',
     'guest:update',
@@ -50,6 +52,7 @@ const BASE: Record<Role, Permission[]> = {
     'reservation:read',
     'reservation:update',
     'reservation:cancel',
+    'reservation:delete',
     'guest:read',
     'guest:create',
     'guest:update',

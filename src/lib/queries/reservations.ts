@@ -34,6 +34,26 @@ export async function listReservations(): Promise<ReservationWithRefs[]> {
   return (data as unknown as ReservationWithRefs[]) ?? [];
 }
 
+/**
+ * Reservations overlapping the window [startISO, endISO).
+ * A stay overlaps when it starts before the window ends and ends after the window starts.
+ */
+export async function listReservationsInRange(
+  startISO: string,
+  endISO: string,
+): Promise<ReservationWithRefs[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, total_amount, deposit, auto_debit, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+    )
+    .lt('stay_start', endISO)
+    .gt('stay_end', startISO)
+    .order('stay_start', { ascending: true });
+  if (error) throw wrapErr(error);
+  return (data as unknown as ReservationWithRefs[]) ?? [];
+}
+
 export async function getReservation(id: string): Promise<ReservationRow | null> {
   const { data, error } = await supabase
     .from('reservations')
@@ -70,4 +90,19 @@ export async function cancelReservation(id: string): Promise<void> {
     .update({ status: 'cancelled' satisfies ReservationStatus })
     .eq('id', id);
   if (error) throw wrapErr(error);
+}
+
+/** Permanently deletes a reservation. Permitted for SUPER_ADMIN / PROPERTY_MANAGER / RECEPTION per RLS. */
+export async function deleteReservation(id: string): Promise<void> {
+  const { error } = await supabase.from('reservations').delete().eq('id', id);
+  if (error) {
+    // Foreign-key violation — reservation is still referenced by downstream
+    // records (ledger entries, KBS submissions, payments, housekeeping tasks)
+    if (error.code === '23503') {
+      throw new Error(
+        'Bu rezervasyon başka kayıtlara (ödeme, KBS, temizlik vb.) bağlı olduğu için silinemez. Önce ilgili kayıtları kaldırın.',
+      );
+    }
+    throw wrapErr(error);
+  }
 }

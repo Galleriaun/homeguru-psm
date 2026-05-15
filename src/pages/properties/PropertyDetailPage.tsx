@@ -48,7 +48,7 @@ export function PropertyDetailPage() {
   }
 
   if (!property || !units) {
-    return <p className="text-sm text-stone-600 dark:text-stone-400">Yükleniyor…</p>;
+    return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
   }
 
   const isAdmin = profile && can(profile.role, 'admin:*');
@@ -110,7 +110,7 @@ export function PropertyDetailPage() {
               {property.type === 'HOTEL' ? 'Otel' : 'Daire'}
             </span>
             {property.address && (
-              <span className="text-sm text-stone-600 dark:text-stone-400">{property.address}</span>
+              <span className="text-sm text-stone-600 dark:text-stone-300">{property.address}</span>
             )}
           </div>
         </div>
@@ -148,13 +148,13 @@ export function PropertyDetailPage() {
         )}
 
         {units.length === 0 ? (
-          <p className="py-4 text-center text-sm text-stone-600 dark:text-stone-400">
+          <p className="py-4 text-center text-sm text-stone-600 dark:text-stone-300">
             Henüz birim eklenmemiş.
           </p>
         ) : (
           <div className="-mx-6 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-200 text-xs uppercase text-stone-600 dark:border-stone-800 dark:text-stone-400">
+              <thead className="border-b border-stone-200 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
                 <tr>
                   <th className="px-6 py-2 font-medium">Ad</th>
                   <th className="px-6 py-2 font-medium">Tip</th>
@@ -163,19 +163,19 @@ export function PropertyDetailPage() {
                   {canManageUnits && <th className="px-6 py-2"></th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
+              <tbody className="divide-y divide-stone-200 dark:divide-stone-700">
                 {units.map((u) => (
                   <tr key={u.id}>
                     <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
                       {u.name}
                     </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-400">
+                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                       {formatRoomType(u.room_type)}
                     </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-400">
+                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                       {u.capacity} kişi
                     </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-400">
+                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                       {formatTRY(u.base_price)}
                     </td>
                     {canManageUnits && (

@@ -117,7 +117,7 @@ export function GuestFormPage() {
   };
 
   if (loading) {
-    return <p className="text-sm text-stone-600 dark:text-stone-400">Yükleniyor…</p>;
+    return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
   }
 
   return (
@@ -140,6 +140,7 @@ export function GuestFormPage() {
             required
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
+            maxLength={100}
           />
 
           <Input
@@ -160,15 +161,19 @@ export function GuestFormPage() {
             value={passport}
             onChange={(e) => setPassport(e.target.value)}
             placeholder="Yabancı misafirler için"
+            maxLength={20}
           />
 
           <Input
             label="Telefon"
             name="phone"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            // Phone may only contain digits and + ( ) - and spaces — strip letters etc.
+            onChange={(e) => setPhone(e.target.value.replace(/[^\d+ ()-]/g, ''))}
             placeholder="+90 5xx xxx xx xx"
             type="tel"
+            inputMode="tel"
+            maxLength={25}
           />
 
           <Input
@@ -176,8 +181,10 @@ export function GuestFormPage() {
             name="email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            // Only standard email characters: letters, digits, and . @ _ + -
+            onChange={(e) => setEmail(e.target.value.replace(/[^a-zA-Z0-9.@_+-]/g, ''))}
             placeholder="ornek@email.com"
+            maxLength={254}
           />
 
           <Input
@@ -186,6 +193,7 @@ export function GuestFormPage() {
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder="Mahalle, İlçe, İl"
+            maxLength={250}
           />
 
           <Input
@@ -194,6 +202,7 @@ export function GuestFormPage() {
             value={nationality}
             onChange={(e) => setNationality(e.target.value)}
             placeholder="Örn: Türkiye"
+            maxLength={60}
           />
 
           {error && (

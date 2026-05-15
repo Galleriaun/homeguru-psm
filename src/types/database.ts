@@ -26,6 +26,8 @@ export type RoomType =
 export type ReservationStatus = 'pending' | 'active' | 'completed' | 'cancelled';
 export type LedgerEntryType = 'DEBT' | 'PAYMENT';
 export type PaymentMethod = 'CASH' | 'TRANSFER' | 'CARD';
+export type AccountType = 'CASH' | 'BANK' | 'CARD';
+export type TxDirection = 'IN' | 'OUT';
 export type PaymentStatus = 'UNCONFIRMED' | 'CONFIRMED' | 'DISPUTED';
 export type HousekeepingStatus = 'DIRTY' | 'IN_PROGRESS' | 'CLEAN';
 export type KbsStatus = 'PENDING' | 'SUBMITTED' | 'CONFIRMED' | 'FAILED';
@@ -202,6 +204,109 @@ export type Database = {
           deposit?: number;
           auto_debit?: boolean;
           created_by?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      cash_accounts: {
+        Row: {
+          id: string;
+          property_id: string;
+          name: string;
+          account_type: AccountType;
+          currency: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          name: string;
+          account_type: AccountType;
+          currency?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          property_id?: string;
+          name?: string;
+          account_type?: AccountType;
+          currency?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      ledger_entries: {
+        Row: {
+          id: string;
+          guest_id: string;
+          reservation_id: string | null;
+          type: LedgerEntryType;
+          amount: number;
+          currency: string;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          guest_id: string;
+          reservation_id?: string | null;
+          type: LedgerEntryType;
+          amount: number;
+          currency?: string;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          // ledger_entries are append-only by RLS — no UPDATE/DELETE policies.
+          // Shape here is for type-completeness only.
+          id?: string;
+          guest_id?: string;
+          reservation_id?: string | null;
+          type?: LedgerEntryType;
+          amount?: number;
+          currency?: string;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      cash_transactions: {
+        Row: {
+          id: string;
+          cash_account_id: string;
+          amount: number;
+          direction: TxDirection;
+          description: string | null;
+          ref_type: string | null;
+          ref_id: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          cash_account_id: string;
+          amount: number;
+          direction: TxDirection;
+          description?: string | null;
+          ref_type?: string | null;
+          ref_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          // cash_transactions are append-only by RLS — no UPDATE policy exists,
+          // so this shape is only here for type-completeness.
+          id?: string;
+          cash_account_id?: string;
+          amount?: number;
+          direction?: TxDirection;
+          description?: string | null;
+          ref_type?: string | null;
+          ref_id?: string | null;
+          created_by?: string | null;
           created_at?: string;
         };
         Relationships: [];

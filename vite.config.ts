@@ -14,6 +14,21 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split big third-party deps into their own chunks so the main bundle
+        // stays small and these heavy libs cache independently across deploys.
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('@supabase')) return 'supabase';
+          if (id.includes('react-router')) return 'router';
+          if (id.includes('react-dom') || /[\\/]react[\\/]/.test(id)) return 'react';
+          return 'vendor';
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

@@ -66,7 +66,7 @@ export function PropertyFormPage() {
   };
 
   if (loading) {
-    return <p className="text-sm text-stone-600 dark:text-stone-400">Yükleniyor…</p>;
+    return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
   }
 
   return (
