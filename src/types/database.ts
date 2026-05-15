@@ -273,6 +273,84 @@ export type Database = {
         };
         Relationships: [];
       };
+      expenses: {
+        Row: {
+          id: string;
+          property_id: string;
+          category: string;
+          amount: number;
+          description: string | null;
+          expense_date: string; // DATE column → "YYYY-MM-DD"
+          is_recurring: boolean;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          category: string;
+          amount: number;
+          description?: string | null;
+          expense_date: string;
+          is_recurring?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          property_id?: string;
+          category?: string;
+          amount?: number;
+          description?: string | null;
+          expense_date?: string;
+          is_recurring?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_collections: {
+        Row: {
+          id: string;
+          reservation_id: string;
+          property_id: string;
+          collected_by_user_id: string;
+          amount: number;
+          method: PaymentMethod;
+          receipt_photo_path: string | null;
+          status: PaymentStatus;
+          confirmed_by: string | null;
+          confirmed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          reservation_id: string;
+          property_id: string;
+          collected_by_user_id: string;
+          amount: number;
+          method: PaymentMethod;
+          receipt_photo_path?: string | null;
+          status?: PaymentStatus;
+          confirmed_by?: string | null;
+          confirmed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          reservation_id?: string;
+          property_id?: string;
+          collected_by_user_id?: string;
+          amount?: number;
+          method?: PaymentMethod;
+          receipt_photo_path?: string | null;
+          status?: PaymentStatus;
+          confirmed_by?: string | null;
+          confirmed_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       cash_transactions: {
         Row: {
           id: string;
@@ -380,6 +458,16 @@ export type Database = {
           consent_version: string | null;
           created_at: string;
         }[];
+      };
+      collect_payment: {
+        Args: {
+          _reservation_id: string;
+          _amount: number;
+          _method: PaymentMethod;
+          _cash_account_id?: string | null;
+          _note?: string | null;
+        };
+        Returns: string; // payment_collections.id
       };
     };
     Enums: {

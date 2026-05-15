@@ -1,0 +1,214 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { can } from '@/lib/rbac';
+import {
+  listExpenses,
+  totalAmount,
+  EXPENSE_CATEGORIES,
+  type ExpenseWithProperty,
+} from '@/lib/queries/expenses';
+import { listProperties, type Property } from '@/lib/queries/properties';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { FinanceTabs } from './FinanceTabs';
+import { formatTRY, formatDate } from '@/lib/utils';
+
+function currentMonthStr(): string {
+  // YYYY-MM in local time
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+export function ExpensesListPage() {
+  const { profile } = useAuth();
+
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [propertyId, setPropertyId] = useState(''); // '' = all
+  const [month, setMonth] = useState(currentMonthStr());
+  const [category, setCategory] = useState(''); // '' = all
+
+  const [expenses, setExpenses] = useState<ExpenseWithProperty[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const canWrite = profile && can(profile.role, 'finance:write');
+
+  // Load properties once
+  useEffect(() => {
+    listProperties()
+      .then(setProperties)
+      .catch((e) => setError(e?.message ?? 'Mülkler yüklenemedi'));
+  }, []);
+
+  // Refetch whenever filters change
+  useEffect(() => {
+    setError(null);
+    setExpenses(null);
+    listExpenses({
+      propertyId: propertyId || undefined,
+      month: month || undefined,
+      category: category || undefined,
+    })
+      .then(setExpenses)
+      .catch((e) => setError(e?.message ?? 'Giderler yüklenemedi'));
+  }, [propertyId, month, category]);
+
+  const propertyOptions = useMemo(
+    () => [
+      { value: '', label: 'Tüm mülkler' },
+      ...properties.map((p) => ({ value: p.id, label: p.name })),
+    ],
+    [properties],
+  );
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: '', label: 'Tüm kategoriler' },
+      ...EXPENSE_CATEGORIES.map((c) => ({ value: c, label: c })),
+    ],
+    [],
+  );
+
+  const total = expenses ? totalAmount(expenses) : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
+            Giderler
+          </h1>
+          <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+            Mülk bazında işletme giderlerinizin kaydı
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <FinanceTabs />
+          {canWrite && (
+            <Link to="/finance/expenses/new">
+              <Button>+ Yeni Gider</Button>
+            </Link>
+          )}
+        </div>
+      </div>
+
+      <Card>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Select
+            label="Mülk"
+            name="filter_property"
+            value={propertyId}
+            onChange={setPropertyId}
+            options={propertyOptions}
+          />
+          <Input
+            label="Ay"
+            name="filter_month"
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+          />
+          <Select
+            label="Kategori"
+            name="filter_category"
+            value={category}
+            onChange={setCategory}
+            options={categoryOptions}
+          />
+        </div>
+      </Card>
+
+      {error && (
+        <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
+          <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+        </Card>
+      )}
+
+      {!error && expenses === null && (
+        <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
+      )}
+
+      {expenses && expenses.length === 0 && (
+        <Card>
+          <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+            Bu kriterlerle kayıt bulunamadı.
+          </p>
+        </Card>
+      )}
+
+      {expenses && expenses.length > 0 && (
+        <>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm text-stone-600 dark:text-stone-300">
+              {expenses.length} kayıt
+            </p>
+            <p className="text-sm">
+              <span className="text-stone-600 dark:text-stone-300">Toplam: </span>
+              <strong className="text-lg text-stone-900 dark:text-stone-100">
+                {formatTRY(total)}
+              </strong>
+            </p>
+          </div>
+
+          <Card className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Tarih</th>
+                    <th className="px-6 py-3 font-medium">Mülk</th>
+                    <th className="px-6 py-3 font-medium">Kategori</th>
+                    <th className="px-6 py-3 font-medium">Açıklama</th>
+                    <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+                  {expenses.map((e) => (
+                    <tr
+                      key={e.id}
+                      className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                    >
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        <Link to={`/finance/expenses/${e.id}/edit`} className="block">
+                          {formatDate(e.expense_date)}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {e.property?.name ?? '—'}
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200">
+                            {e.category}
+                          </span>
+                          {e.is_recurring && (
+                            <span
+                              title="Düzenli (örn. her ay)"
+                              className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                            >
+                              Düzenli
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {e.description || '—'}
+                      </td>
+                      <td className="px-6 py-3 text-right font-semibold text-stone-900 dark:text-stone-100">
+                        {formatTRY(Number(e.amount))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}

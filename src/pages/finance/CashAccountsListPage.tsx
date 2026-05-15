@@ -9,6 +9,7 @@ import {
 } from '@/lib/queries/cashAccounts';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { FinanceTabs } from './FinanceTabs';
 import { formatTRY } from '@/lib/utils';
 import type { AccountType } from '@/types/database';
 
@@ -66,7 +67,7 @@ export function CashAccountsListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             Kasalar
@@ -75,11 +76,14 @@ export function CashAccountsListPage() {
             Mülk bazında nakit, banka ve kart hesaplarınız
           </p>
         </div>
-        {canWrite && (
-          <Link to="/finance/cash/new">
-            <Button>+ Yeni Kasa</Button>
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          <FinanceTabs />
+          {canWrite && (
+            <Link to="/finance/cash/new">
+              <Button>+ Yeni Kasa</Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       {error && (

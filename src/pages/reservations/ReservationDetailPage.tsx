@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
+import { can, canCollectPayment } from '@/lib/rbac';
 import {
   cancelReservation,
   deleteReservation,
@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LedgerEntryModal } from './LedgerEntryModal';
+import { PaymentCollectModal } from './PaymentCollectModal';
 import { formatDate, formatTRY } from '@/lib/utils';
 
 type Reservation = Database['public']['Tables']['reservations']['Row'];
@@ -56,6 +57,11 @@ export function ReservationDetailPage() {
   const [ledger, setLedger] = useState<LedgerEntry[] | null>(null);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [showLedgerModal, setShowLedgerModal] = useState(false);
+  // Bumping this re-runs the ledger fetch (used after a successful payment collection)
+  const [ledgerVersion, setLedgerVersion] = useState(0);
+
+  // Payment collection — gated to payment:collect via type-conditional canCollectPayment()
+  const [showCollectModal, setShowCollectModal] = useState(false);
 
   const canSeeLedger = Boolean(profile && can(profile.role, 'finance:read'));
   const canWriteLedger = Boolean(profile && can(profile.role, 'finance:write'));
@@ -84,7 +90,8 @@ export function ReservationDetailPage() {
     })();
   }, [id]);
 
-  // Load the per-reservation ledger only if the user is permitted to see it
+  // Load the per-reservation ledger only if the user is permitted to see it.
+  // ledgerVersion bumps re-run this effect (after a payment is collected, etc.)
   useEffect(() => {
     const rid = reservation?.id;
     if (!rid || !canSeeLedger) {
@@ -95,7 +102,7 @@ export function ReservationDetailPage() {
     listLedgerForReservation(rid)
       .then(setLedger)
       .catch((e) => setLedgerError(e?.message ?? 'Cari yüklenemedi'));
-  }, [reservation?.id, canSeeLedger]);
+  }, [reservation?.id, canSeeLedger, ledgerVersion]);
 
   if (error) {
     return (
@@ -118,6 +125,10 @@ export function ReservationDetailPage() {
   const canEdit = profile && can(profile.role, 'reservation:update');
   const canCancel = profile && can(profile.role, 'reservation:cancel');
   const canDelete = profile && can(profile.role, 'reservation:delete');
+  // Ödeme Topla — type-conditional: HOTEL=reception, APARTMENT=housekeeping; manager+admin everywhere.
+  const canCollect = Boolean(
+    profile && property && canCollectPayment(profile.role, property.type),
+  );
   const isCancelled = reservation.status === 'cancelled';
 
   const handleCancel = async () => {
@@ -167,7 +178,7 @@ export function ReservationDetailPage() {
             {property?.name} · {unit?.name}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canEdit && !isCancelled && (
             <Link to={`/reservations/${reservation.id}/edit`}>
               <Button variant="secondary" size="sm">
@@ -219,6 +230,8 @@ export function ReservationDetailPage() {
           ledger={ledger}
           error={ledgerError}
           canWrite={canWriteLedger}
+          canCollect={canCollect && !isCancelled}
+          onCollectClick={() => setShowCollectModal(true)}
           onAddClick={() => setShowLedgerModal(true)}
         />
       )}
@@ -232,6 +245,20 @@ export function ReservationDetailPage() {
           onCreated={(entry) => {
             setLedger((prev) => (prev ? [entry, ...prev] : [entry]));
             setShowLedgerModal(false);
+          }}
+        />
+      )}
+
+      {showCollectModal && property && (
+        <PaymentCollectModal
+          reservationId={reservation.id}
+          propertyId={property.id}
+          canSeeCashAccounts={canSeeLedger}
+          onClose={() => setShowCollectModal(false)}
+          onCollected={() => {
+            setShowCollectModal(false);
+            // Re-fetch the ledger so the new PAYMENT entry appears
+            setLedgerVersion((v) => v + 1);
           }}
         />
       )}
@@ -287,10 +314,19 @@ interface LedgerSectionProps {
   ledger: LedgerEntry[] | null;
   error: string | null;
   canWrite: boolean;
+  canCollect: boolean;
+  onCollectClick: () => void;
   onAddClick: () => void;
 }
 
-function LedgerSection({ ledger, error, canWrite, onAddClick }: LedgerSectionProps) {
+function LedgerSection({
+  ledger,
+  error,
+  canWrite,
+  canCollect,
+  onCollectClick,
+  onAddClick,
+}: LedgerSectionProps) {
   const balance = balanceFor(ledger ?? []);
 
   // Color the balance by who is "in the red":
@@ -308,14 +344,23 @@ function LedgerSection({ ledger, error, canWrite, onAddClick }: LedgerSectionPro
 
   return (
     <section className="space-y-2">
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           Cari Hesap
         </h2>
-        {canWrite && ledger !== null && (
-          <Button size="sm" onClick={onAddClick}>
-            + Manuel Hareket
-          </Button>
+        {ledger !== null && (canCollect || canWrite) && (
+          <div className="flex flex-wrap gap-2">
+            {canCollect && (
+              <Button size="sm" onClick={onCollectClick}>
+                + Ödeme Topla
+              </Button>
+            )}
+            {canWrite && (
+              <Button size="sm" variant="secondary" onClick={onAddClick}>
+                + Manuel Hareket
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
