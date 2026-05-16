@@ -42,16 +42,41 @@ function ReceiptIcon() {
   );
 }
 
+function PeopleIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="3" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M2 17c0-2.8 2.2-5 5-5s5 2.2 5 5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="14" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M12 17c0-2.2 1.5-4 4-4s2 0 2 0"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function FinanceTabs() {
   return (
     <div className="flex gap-2">
-      <NavLink to="/finance/cash" className={tabClass}>
-        <CashIcon />
-        Kasalar
+      <NavLink to="/finance/staff" className={tabClass}>
+        <PeopleIcon />
+        Personel
       </NavLink>
       <NavLink to="/finance/expenses" className={tabClass}>
         <ReceiptIcon />
         Giderler
+      </NavLink>
+      <NavLink to="/finance/cash" className={tabClass}>
+        <CashIcon />
+        Kasalar
       </NavLink>
     </div>
   );

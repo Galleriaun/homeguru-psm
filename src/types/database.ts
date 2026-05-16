@@ -246,6 +246,7 @@ export type Database = {
           note: string | null;
           created_by: string | null;
           created_at: string;
+          payment_collection_id: string | null;
         };
         Insert: {
           id?: string;
@@ -257,6 +258,7 @@ export type Database = {
           note?: string | null;
           created_by?: string | null;
           created_at?: string;
+          payment_collection_id?: string | null;
         };
         Update: {
           // ledger_entries are append-only by RLS — no UPDATE/DELETE policies.
@@ -270,6 +272,35 @@ export type Database = {
           note?: string | null;
           created_by?: string | null;
           created_at?: string;
+          payment_collection_id?: string | null;
+        };
+        Relationships: [];
+      };
+      staff_advances: {
+        Row: {
+          id: string;
+          user_id: string;
+          amount: number;
+          note: string | null;
+          given_at: string;
+          created_by: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          amount: number;
+          note?: string | null;
+          given_at?: string;
+          created_by: string;
+        };
+        Update: {
+          // Append-only by convention; UI doesn't expose update/delete.
+          id?: string;
+          user_id?: string;
+          amount?: number;
+          note?: string | null;
+          given_at?: string;
+          created_by?: string;
         };
         Relationships: [];
       };
@@ -362,6 +393,7 @@ export type Database = {
           ref_id: string | null;
           created_by: string | null;
           created_at: string;
+          payment_collection_id: string | null;
         };
         Insert: {
           id?: string;
@@ -373,6 +405,7 @@ export type Database = {
           ref_id?: string | null;
           created_by?: string | null;
           created_at?: string;
+          payment_collection_id?: string | null;
         };
         Update: {
           // cash_transactions are append-only by RLS — no UPDATE policy exists,
@@ -386,6 +419,7 @@ export type Database = {
           ref_id?: string | null;
           created_by?: string | null;
           created_at?: string;
+          payment_collection_id?: string | null;
         };
         Relationships: [];
       };

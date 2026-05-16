@@ -35,3 +35,26 @@ export async function collectPayment(input: CollectPaymentInput): Promise<string
   if (!data) throw new Error('Ödeme kaydı oluşturulamadı');
   return data as string;
 }
+
+/**
+ * Deletes a payment_collections row. Migration 016 wired ON DELETE CASCADE
+ * to ledger_entries and cash_transactions via payment_collection_id, so this
+ * single call removes the cari PAYMENT entry and the cash drawer IN entry
+ * in lockstep. RLS limits this to SUPER_ADMIN.
+ *
+ * `.select()` ensures we detect silent zero-row outcomes (RLS deny or
+ * pre-migration data) instead of optimistically reporting success.
+ */
+export async function deletePaymentCollection(id: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('payment_collections')
+    .delete()
+    .eq('id', id)
+    .select();
+  if (error) throw wrapErr(error);
+  if (!data || data.length === 0) {
+    throw new Error(
+      'Tahsilat silinemedi. Yetkiniz olmayabilir veya migration 016 henüz uygulanmamış olabilir.',
+    );
+  }
+}

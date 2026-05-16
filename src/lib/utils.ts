@@ -20,6 +20,18 @@ export function formatDate(date: Date | string): string {
   }).format(d);
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Süper Admin',
+  PROPERTY_MANAGER: 'Yönetici',
+  RECEPTION: 'Resepsiyon',
+  HOUSEKEEPING: 'Temizlik',
+};
+
+/** Friendly label for a staff role. Falls back to the raw value for unknown roles. */
+export function formatRole(role: string): string {
+  return ROLE_LABELS[role] ?? role;
+}
+
 const ROOM_TYPE_LABELS: Record<string, string> = {
   SINGLE: 'Tek Kişilik',
   DOUBLE: 'Çift Kişilik',

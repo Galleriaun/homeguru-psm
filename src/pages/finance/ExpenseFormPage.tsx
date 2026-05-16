@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { listProperties, type Property } from '@/lib/queries/properties';
+import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
 import {
   createExpense,
   deleteExpense,
@@ -186,7 +186,7 @@ export function ExpenseFormPage() {
             required
             value={propertyId}
             onChange={setPropertyId}
-            options={properties.map((p) => ({ value: p.id, label: p.name }))}
+            options={sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name }))}
             placeholder="Mülk seçin"
           />
 

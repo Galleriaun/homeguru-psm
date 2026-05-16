@@ -8,7 +8,7 @@ import {
   EXPENSE_CATEGORIES,
   type ExpenseWithProperty,
 } from '@/lib/queries/expenses';
-import { listProperties, type Property } from '@/lib/queries/properties';
+import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -60,7 +60,7 @@ export function ExpensesListPage() {
   const propertyOptions = useMemo(
     () => [
       { value: '', label: 'Tüm mülkler' },
-      ...properties.map((p) => ({ value: p.id, label: p.name })),
+      ...sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name })),
     ],
     [properties],
   );

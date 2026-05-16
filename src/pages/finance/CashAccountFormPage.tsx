@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { listProperties, type Property } from '@/lib/queries/properties';
+import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
 import {
   createCashAccount,
   getCashAccount,
@@ -15,7 +15,6 @@ import type { AccountType } from '@/types/database';
 const ACCOUNT_TYPE_OPTIONS: { value: AccountType; label: string }[] = [
   { value: 'CASH', label: 'Nakit' },
   { value: 'BANK', label: 'Banka' },
-  { value: 'CARD', label: 'Kredi Kartı' },
 ];
 
 export function CashAccountFormPage() {
@@ -136,7 +135,7 @@ export function CashAccountFormPage() {
             required
             value={propertyId}
             onChange={setPropertyId}
-            options={properties.map((p) => ({ value: p.id, label: p.name }))}
+            options={sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name }))}
             placeholder="Mülk seçin"
           />
 

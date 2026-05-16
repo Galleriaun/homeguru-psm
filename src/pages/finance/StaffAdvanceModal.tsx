@@ -1,36 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import {
-  createLedgerEntry,
-  type LedgerEntry,
-} from '@/lib/queries/ledger';
+import { createAdvance, type StaffAdvance } from '@/lib/queries/staff';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 
 interface Props {
-  guestId: string;
-  reservationId: string;
+  staffUserId: string;
   createdByUserId: string;
   onClose: () => void;
-  onCreated: (entry: LedgerEntry) => void;
+  onCreated: (advance: StaffAdvance) => void;
 }
 
-/**
- * Adds an extra charge (DEBT ledger entry) to the guest's cari hesap.
- * Typical use: room service, damage fee, late checkout, minibar, etc.
- *
- * For recording money received from the guest, use the PaymentCollectModal
- * instead — it atomically updates the cari, the cash drawer, and the
- * payment_collections audit row.
- */
-export function LedgerEntryModal({
-  guestId,
-  reservationId,
-  createdByUserId,
-  onClose,
-  onCreated,
-}: Props) {
+export function StaffAdvanceModal({ staffUserId, createdByUserId, onClose, onCreated }: Props) {
   const [amount, setAmount] = useState(0);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -50,7 +32,6 @@ export function LedgerEntryModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-
     if (!amount || amount <= 0) {
       setError('Tutar sıfırdan büyük olmalıdır.');
       return;
@@ -58,10 +39,8 @@ export function LedgerEntryModal({
 
     setSaving(true);
     try {
-      const created = await createLedgerEntry({
-        guest_id: guestId,
-        reservation_id: reservationId,
-        type: 'DEBT',
+      const created = await createAdvance({
+        user_id: staffUserId,
         amount,
         note: note.trim() || null,
         created_by: createdByUserId,
@@ -83,7 +62,7 @@ export function LedgerEntryModal({
       <Card className="w-full max-w-md">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Ekstra Ücret
+            Yeni Avans
           </h2>
           <button
             type="button"
@@ -101,11 +80,6 @@ export function LedgerEntryModal({
             </svg>
           </button>
         </div>
-
-        <p className="mb-4 text-sm text-stone-600 dark:text-stone-300">
-          Misafir hesabına ek bir ücret ekler (örn. ek hizmet, hasar, geç çıkış,
-          minibar). Misafir borcu bu tutar kadar artar.
-        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <NumberInput

@@ -11,9 +11,10 @@ import { getProperty, type Property } from '@/lib/queries/properties';
 import { getUnit, type Unit } from '@/lib/queries/units';
 import {
   listLedgerForReservation,
-  balanceFor,
+  deleteLedgerEntry,
   type LedgerEntry,
 } from '@/lib/queries/ledger';
+import { deletePaymentCollection } from '@/lib/queries/payments';
 import { supabase } from '@/lib/supabase';
 import type { Database, ReservationStatus } from '@/types/database';
 import { Button } from '@/components/ui/Button';
@@ -63,8 +64,14 @@ export function ReservationDetailPage() {
   // Payment collection — gated to payment:collect via type-conditional canCollectPayment()
   const [showCollectModal, setShowCollectModal] = useState(false);
 
+  // Per-row ledger deletion (SUPER_ADMIN only — see migration 017)
+  const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
+  const [entryDeleteError, setEntryDeleteError] = useState<string | null>(null);
+  const [entryDeleting, setEntryDeleting] = useState(false);
+
   const canSeeLedger = Boolean(profile && can(profile.role, 'finance:read'));
   const canWriteLedger = Boolean(profile && can(profile.role, 'finance:write'));
+  const canDeleteLedger = profile?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     if (!id) return;
@@ -160,6 +167,30 @@ export function ReservationDetailPage() {
     }
   };
 
+  const handleDeleteEntry = async () => {
+    if (!entryToDelete) return;
+    setEntryDeleting(true);
+    setEntryDeleteError(null);
+    try {
+      if (entryToDelete.payment_collection_id) {
+        // Cascade path: deleting the payment_collection removes the matching
+        // cash_transactions row AND this ledger entry in one shot
+        // (FK ON DELETE CASCADE — migration 016).
+        await deletePaymentCollection(entryToDelete.payment_collection_id);
+      } else {
+        // Manual ledger entry OR auto-debit row OR legacy unlinked payment —
+        // delete just this row.
+        await deleteLedgerEntry(entryToDelete.id);
+      }
+      setLedger((prev) => prev?.filter((e) => e.id !== entryToDelete.id) ?? prev);
+      setEntryToDelete(null);
+      setEntryDeleting(false);
+    } catch (e) {
+      setEntryDeleteError(e instanceof Error ? e.message : 'Silme başarısız');
+      setEntryDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Link
@@ -231,8 +262,13 @@ export function ReservationDetailPage() {
           error={ledgerError}
           canWrite={canWriteLedger}
           canCollect={canCollect && !isCancelled}
+          canDelete={canDeleteLedger}
           onCollectClick={() => setShowCollectModal(true)}
           onAddClick={() => setShowLedgerModal(true)}
+          onDeleteClick={(entry) => {
+            setEntryDeleteError(null);
+            setEntryToDelete(entry);
+          }}
         />
       )}
 
@@ -295,6 +331,44 @@ export function ReservationDetailPage() {
           setDeleteError(null);
         }}
       />
+
+      <ConfirmDialog
+        open={entryToDelete !== null}
+        title="Cari hareketi silinsin mi?"
+        description={
+          entryToDelete && (
+            <>
+              <p>
+                <strong>
+                  {entryToDelete.type === 'DEBT' ? '+' : '−'}
+                  {formatTRY(Number(entryToDelete.amount))}
+                </strong>
+                {entryToDelete.note ? ` — ${entryToDelete.note}` : ''}
+              </p>
+              <p className="mt-2">Bu işlem geri alınamaz. Bakiye yeniden hesaplanır.</p>
+              {entryToDelete.payment_collection_id && (
+                <div className="mt-3 rounded border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200">
+                  <p>
+                    <strong>Not:</strong> Bu kayıt bir tahsilatla bağlantılı.
+                    Silindiğinde bağlı{' '}
+                    <strong>tahsilat kaydı ve kasa hareketi</strong> de
+                    otomatik olarak silinir.
+                  </p>
+                </div>
+              )}
+            </>
+          )
+        }
+        confirmLabel="Sil"
+        destructive
+        loading={entryDeleting}
+        error={entryDeleteError}
+        onConfirm={handleDeleteEntry}
+        onCancel={() => {
+          setEntryToDelete(null);
+          setEntryDeleteError(null);
+        }}
+      />
     </div>
   );
 }
@@ -315,8 +389,10 @@ interface LedgerSectionProps {
   error: string | null;
   canWrite: boolean;
   canCollect: boolean;
+  canDelete: boolean;
   onCollectClick: () => void;
   onAddClick: () => void;
+  onDeleteClick: (entry: LedgerEntry) => void;
 }
 
 function LedgerSection({
@@ -324,10 +400,23 @@ function LedgerSection({
   error,
   canWrite,
   canCollect,
+  canDelete,
   onCollectClick,
   onAddClick,
+  onDeleteClick,
 }: LedgerSectionProps) {
-  const balance = balanceFor(ledger ?? []);
+  const entries = ledger ?? [];
+  // Split the two totals so the user can verify the math by sight,
+  // instead of trusting a single signed number.
+  const totalDebt = entries.reduce(
+    (s, e) => (e.type === 'DEBT' ? s + Number(e.amount) : s),
+    0,
+  );
+  const totalPayment = entries.reduce(
+    (s, e) => (e.type === 'PAYMENT' ? s + Number(e.amount) : s),
+    0,
+  );
+  const balance = totalDebt - totalPayment;
 
   // Color the balance by who is "in the red":
   //   positive  → guest owes us       (amber)
@@ -340,7 +429,7 @@ function LedgerSection({
         ? 'text-indigo-600 dark:text-indigo-400'
         : 'text-emerald-600 dark:text-emerald-400';
   const balanceLabel =
-    balance > 0 ? 'Misafir borçlu' : balance < 0 ? 'Misafir alacaklı' : 'Hesap kapalı';
+    balance > 0 ? 'Misafir borçlu' : balance < 0 ? 'Misafirden Alınacak' : 'Hesap kapalı';
 
   return (
     <section className="space-y-2">
@@ -356,8 +445,13 @@ function LedgerSection({
               </Button>
             )}
             {canWrite && (
-              <Button size="sm" variant="secondary" onClick={onAddClick}>
-                + Manuel Hareket
+              <Button
+                size="sm"
+                variant="secondary"
+                className="border-transparent bg-stone-200 hover:bg-stone-300 dark:border-transparent dark:bg-stone-700 dark:hover:bg-stone-600"
+                onClick={onAddClick}
+              >
+                + Ekstra Ücret
               </Button>
             )}
           </div>
@@ -377,18 +471,43 @@ function LedgerSection({
       {!error && ledger !== null && (
         <>
           <Card>
-            <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
-              Güncel Bakiye
-            </p>
-            <p className={`mt-1 text-2xl font-semibold ${balanceColor}`}>
-              {formatTRY(balance)}
-            </p>
-            <p className={`mt-1 text-base font-semibold ${balanceColor}`}>
-              {balanceLabel}
-            </p>
-            <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-300">
-              {ledger.length} hareket
-            </p>
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-stone-600 dark:text-stone-300">
+                  Toplam Ücret
+                </span>
+                <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                  {formatTRY(totalDebt)}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-stone-600 dark:text-stone-300">
+                  Toplam Ödeme
+                </span>
+                <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  {formatTRY(totalPayment)}
+                </span>
+              </div>
+              <div className="border-t border-stone-300 pt-2 dark:border-stone-700">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-base font-medium text-stone-700 dark:text-stone-200">
+                    Bakiye
+                  </span>
+                  <span className={`text-2xl font-semibold ${balanceColor}`}>
+                    {balance < 0 ? '−' : ''}
+                    {formatTRY(Math.abs(balance))}
+                  </span>
+                </div>
+                <div className="mt-1 flex items-baseline justify-between">
+                  <span className="text-xs text-stone-600 dark:text-stone-300">
+                    {ledger.length} hareket
+                  </span>
+                  <span className={`text-sm font-medium ${balanceColor}`}>
+                    {balanceLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
           </Card>
 
           {ledger.length === 0 ? (
@@ -407,6 +526,7 @@ function LedgerSection({
                       <th className="px-6 py-3 font-medium">Tür</th>
                       <th className="px-6 py-3 font-medium">Açıklama</th>
                       <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                      {canDelete && <th className="px-6 py-3" aria-label="Sil" />}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
@@ -428,7 +548,7 @@ function LedgerSection({
                                   : 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                               }
                             >
-                              {isDebt ? 'Borç' : 'Ödeme'}
+                              {isDebt ? 'Ücret' : 'Ödeme'}
                             </span>
                           </td>
                           <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
@@ -449,6 +569,31 @@ function LedgerSection({
                             {isDebt ? '+' : '−'}
                             {formatTRY(Number(e.amount))}
                           </td>
+                          {canDelete && (
+                            <td className="px-6 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => onDeleteClick(e)}
+                                aria-label="Hareketi sil"
+                                className="rounded p-1 text-stone-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                              >
+                                <svg
+                                  className="h-4 w-4"
+                                  viewBox="0 0 20 20"
+                                  fill="none"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}

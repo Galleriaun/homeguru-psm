@@ -6,10 +6,12 @@ import {
   getCashAccount,
   listCashTransactions,
   deleteCashAccount,
+  deleteCashTransaction,
   balanceOf,
   type CashAccount,
   type CashTransaction,
 } from '@/lib/queries/cashAccounts';
+import { deletePaymentCollection } from '@/lib/queries/payments';
 import { getProperty, type Property } from '@/lib/queries/properties';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -50,7 +52,13 @@ export function CashAccountDetailPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Per-row tx deletion (SUPER_ADMIN only — see migration 015).
+  const [txToDelete, setTxToDelete] = useState<CashTransaction | null>(null);
+  const [txDeleteError, setTxDeleteError] = useState<string | null>(null);
+  const [txDeleting, setTxDeleting] = useState(false);
+
   const canWrite = Boolean(profile && can(profile.role, 'finance:write'));
+  const canDeleteTx = profile?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     if (!id) return;
@@ -105,6 +113,31 @@ export function CashAccountDetailPage() {
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : 'Silme başarısız');
       setDeleting(false);
+    }
+  };
+
+  const handleDeleteTx = async () => {
+    if (!txToDelete) return;
+    setTxDeleting(true);
+    setTxDeleteError(null);
+    try {
+      if (txToDelete.payment_collection_id) {
+        // Cascade path: deleting the payment_collection removes the linked
+        // ledger PAYMENT entry AND this cash_transactions row in one shot
+        // (FK ON DELETE CASCADE — migration 016).
+        await deletePaymentCollection(txToDelete.payment_collection_id);
+      } else {
+        // Manual cash entry OR legacy pre-migration payment without FK link —
+        // delete just this row. If it's the legacy case the amber warning
+        // already told the operator that the cari + tahsilat will orphan.
+        await deleteCashTransaction(txToDelete.id);
+      }
+      setTransactions((prev) => prev.filter((t) => t.id !== txToDelete.id));
+      setTxToDelete(null);
+      setTxDeleting(false);
+    } catch (e) {
+      setTxDeleteError(e instanceof Error ? e.message : 'Silme başarısız');
+      setTxDeleting(false);
     }
   };
 
@@ -194,6 +227,7 @@ export function CashAccountDetailPage() {
                     <th className="px-6 py-3 font-medium">Yön</th>
                     <th className="px-6 py-3 font-medium">Açıklama</th>
                     <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                    {canDeleteTx && <th className="px-6 py-3" aria-label="Sil" />}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
@@ -231,6 +265,34 @@ export function CashAccountDetailPage() {
                           {positive ? '+' : '−'}
                           {formatTRY(Number(t.amount))}
                         </td>
+                        {canDeleteTx && (
+                          <td className="px-6 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTxDeleteError(null);
+                                setTxToDelete(t);
+                              }}
+                              aria-label="Hareketi sil"
+                              className="rounded p-1 text-stone-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                            >
+                              <svg
+                                className="h-4 w-4"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -272,6 +334,57 @@ export function CashAccountDetailPage() {
         onCancel={() => {
           setConfirmDelete(false);
           setDeleteError(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={txToDelete !== null}
+        title="Hareket silinsin mi?"
+        description={
+          txToDelete && (
+            <>
+              <p>
+                <strong>
+                  {txToDelete.direction === 'IN' ? '+' : '−'}
+                  {formatTRY(Number(txToDelete.amount))}
+                </strong>
+                {txToDelete.description ? ` — ${txToDelete.description}` : ''}
+              </p>
+              <p className="mt-2">
+                Bu işlem geri alınamaz. Bakiye yeniden hesaplanır.
+              </p>
+              {txToDelete.payment_collection_id ? (
+                <div className="mt-3 rounded border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200">
+                  <p>
+                    <strong>Not:</strong> Bu hareket bir tahsilatla bağlantılı.
+                    İşlem silindiğinde bağlı{' '}
+                    <strong>tahsilat kaydı ve misafirin cari ödemesi</strong>{' '}
+                    de otomatik olarak silinir.
+                  </p>
+                </div>
+              ) : (
+                txToDelete.ref_id && (
+                  <div className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    <p className="font-medium">⚠ Eski kayıt: bağlantı zayıf.</p>
+                    <p className="mt-1">
+                      Bu hareket eski bir tahsilata aittir (cascade öncesi).
+                      Silinirse cari ve tahsilat kayıtları silinmez —
+                      bunları elle temizlemeniz gerekir.
+                    </p>
+                  </div>
+                )
+              )}
+            </>
+          )
+        }
+        confirmLabel="Sil"
+        destructive
+        loading={txDeleting}
+        error={txDeleteError}
+        onConfirm={handleDeleteTx}
+        onCancel={() => {
+          setTxToDelete(null);
+          setTxDeleteError(null);
         }}
       />
     </div>

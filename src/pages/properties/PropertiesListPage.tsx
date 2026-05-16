@@ -98,7 +98,7 @@ export function PropertiesListPage() {
                   className={
                     p.type === 'HOTEL'
                       ? 'rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                      : 'rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                      : 'rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200'
                   }
                 >
                   {p.type === 'HOTEL' ? 'Otel' : 'Daire'}

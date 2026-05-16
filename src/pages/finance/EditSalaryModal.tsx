@@ -1,45 +1,32 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import {
-  createLedgerEntry,
-  type LedgerEntry,
-} from '@/lib/queries/ledger';
+import { updateStaffSalary } from '@/lib/queries/staff';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 
 interface Props {
-  guestId: string;
-  reservationId: string;
-  createdByUserId: string;
+  staffUserId: string;
+  staffName: string;
+  currentSalary: number | null;
   onClose: () => void;
-  onCreated: (entry: LedgerEntry) => void;
+  onUpdated: (newSalary: number) => void;
 }
 
-/**
- * Adds an extra charge (DEBT ledger entry) to the guest's cari hesap.
- * Typical use: room service, damage fee, late checkout, minibar, etc.
- *
- * For recording money received from the guest, use the PaymentCollectModal
- * instead — it atomically updates the cari, the cash drawer, and the
- * payment_collections audit row.
- */
-export function LedgerEntryModal({
-  guestId,
-  reservationId,
-  createdByUserId,
+export function EditSalaryModal({
+  staffUserId,
+  staffName,
+  currentSalary,
   onClose,
-  onCreated,
+  onUpdated,
 }: Props) {
-  const [amount, setAmount] = useState(0);
-  const [note, setNote] = useState('');
+  const [salary, setSalary] = useState<number>(currentSalary ?? 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const amountRef = useRef<HTMLInputElement>(null);
+  const salaryRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    amountRef.current?.focus();
+    salaryRef.current?.focus();
     const handle = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -50,23 +37,15 @@ export function LedgerEntryModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-
-    if (!amount || amount <= 0) {
-      setError('Tutar sıfırdan büyük olmalıdır.');
+    if (salary < 0) {
+      setError('Maaş negatif olamaz.');
       return;
     }
 
     setSaving(true);
     try {
-      const created = await createLedgerEntry({
-        guest_id: guestId,
-        reservation_id: reservationId,
-        type: 'DEBT',
-        amount,
-        note: note.trim() || null,
-        created_by: createdByUserId,
-      });
-      onCreated(created);
+      await updateStaffSalary(staffUserId, salary);
+      onUpdated(salary);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kaydedilemedi');
       setSaving(false);
@@ -83,7 +62,7 @@ export function LedgerEntryModal({
       <Card className="w-full max-w-md">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Ekstra Ücret
+            Maaş Düzenle
           </h2>
           <button
             type="button"
@@ -103,28 +82,20 @@ export function LedgerEntryModal({
         </div>
 
         <p className="mb-4 text-sm text-stone-600 dark:text-stone-300">
-          Misafir hesabına ek bir ücret ekler (örn. ek hizmet, hasar, geç çıkış,
-          minibar). Misafir borcu bu tutar kadar artar.
+          <strong className="text-stone-900 dark:text-stone-100">{staffName}</strong>{' '}
+          için aylık maaşı belirleyin.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <NumberInput
-            ref={amountRef}
-            label="Tutar (₺)"
-            name="amount"
+            ref={salaryRef}
+            label="Aylık Maaş (₺)"
+            name="salary"
             required
             min={0}
-            step={10}
-            value={amount}
-            onChange={setAmount}
-          />
-
-          <Input
-            label="Açıklama"
-            name="note"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            maxLength={250}
+            step={100}
+            value={salary}
+            onChange={setSalary}
           />
 
           {error && (

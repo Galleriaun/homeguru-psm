@@ -22,6 +22,8 @@ import { CashAccountFormPage } from '@/pages/finance/CashAccountFormPage';
 import { CashAccountDetailPage } from '@/pages/finance/CashAccountDetailPage';
 import { ExpensesListPage } from '@/pages/finance/ExpensesListPage';
 import { ExpenseFormPage } from '@/pages/finance/ExpenseFormPage';
+import { StaffListPage } from '@/pages/finance/StaffListPage';
+import { StaffDetailPage } from '@/pages/finance/StaffDetailPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
 const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
@@ -175,6 +177,22 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
                 <ExpenseFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/finance/staff"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <StaffListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/finance/staff/:userId"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <StaffDetailPage />
               </ProtectedRoute>
             }
           />

@@ -53,3 +53,14 @@ export async function deleteProperty(id: string) {
   const { error } = await supabase.from('properties').delete().eq('id', id);
   if (error) throw error;
 }
+
+/**
+ * Sort a properties array HOTEL-first, APARTMENT-second, alphabetical within
+ * each type. Pure function — returns a new sorted array, doesn't mutate.
+ */
+export function sortHotelsFirst(properties: Property[]): Property[] {
+  return [...properties].sort((a, b) => {
+    if (a.type !== b.type) return a.type === 'HOTEL' ? -1 : 1;
+    return a.name.localeCompare(b.name, 'tr');
+  });
+}

@@ -19,11 +19,9 @@ const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
   CARD: 'Kredi Kartı',
 };
 
-const ACCOUNT_TYPE_BADGE: Record<AccountType, string> = {
-  CASH: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-  BANK: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
-  CARD: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-};
+// Account type is a classification, not a status — use a single neutral
+// stone palette so colour doesn't suggest meaning that isn't there.
+const ACCOUNT_TYPE_BADGE = 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200';
 
 export function CashAccountsListPage() {
   const { profile } = useAuth();
@@ -42,12 +40,17 @@ export function CashAccountsListPage() {
       .catch((e) => setError(e?.message ?? 'Kasalar yüklenemedi'));
   }, []);
 
-  // Group by property; preserve listCashAccounts' creation-order so output is stable
+  // Group by property; sort HOTEL groups before APARTMENT, alphabetical inside each type.
   const grouped = useMemo(() => {
     if (!accounts) return [];
     const buckets = new Map<
       string,
-      { propertyName: string; propertyId: string; items: CashAccountWithProperty[] }
+      {
+        propertyId: string;
+        propertyName: string;
+        propertyType: string;
+        items: CashAccountWithProperty[];
+      }
     >();
     for (const a of accounts) {
       const key = a.property_id;
@@ -58,11 +61,17 @@ export function CashAccountsListPage() {
         buckets.set(key, {
           propertyId: key,
           propertyName: a.property?.name ?? '—',
+          propertyType: a.property?.type ?? 'APARTMENT',
           items: [a],
         });
       }
     }
-    return Array.from(buckets.values());
+    return Array.from(buckets.values()).sort((g1, g2) => {
+      if (g1.propertyType !== g2.propertyType) {
+        return g1.propertyType === 'HOTEL' ? -1 : 1;
+      }
+      return g1.propertyName.localeCompare(g2.propertyName, 'tr');
+    });
   }, [accounts]);
 
   return (
@@ -140,7 +149,7 @@ export function CashAccountsListPage() {
                             </div>
                             <div className="mt-0.5 flex items-center gap-2">
                               <span
-                                className={`rounded px-2 py-0.5 text-xs font-medium ${ACCOUNT_TYPE_BADGE[a.account_type]}`}
+                                className={`rounded px-2 py-0.5 text-xs font-medium ${ACCOUNT_TYPE_BADGE}`}
                               >
                                 {ACCOUNT_TYPE_LABEL[a.account_type]}
                               </span>
