@@ -78,3 +78,12 @@ export function toWhatsAppPhone(phone: string | null | undefined): string | null
 export function whatsAppUrl(phone: string, text: string): string {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
+
+/**
+ * Build a wa.me URL with NO recipient — opens WhatsApp and lets the user
+ * pick which chat to send to. Used when the guest has no saved phone or
+ * the message is going to someone not in the guest record.
+ */
+export function whatsAppShareUrl(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}

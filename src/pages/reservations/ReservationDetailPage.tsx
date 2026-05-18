@@ -218,15 +218,13 @@ export function ReservationDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {guestPhone && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowWhatsApp(true)}
-            >
-              WhatsApp
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowWhatsApp(true)}
+          >
+            WhatsApp
+          </Button>
           {canEdit && !isCancelled && (
             <Link to={`/reservations/${reservation.id}/edit`}>
               <Button variant="secondary" size="sm">

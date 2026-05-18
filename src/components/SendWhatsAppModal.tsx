@@ -8,7 +8,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
-import { toWhatsAppPhone, whatsAppUrl } from '@/lib/utils';
+import { toWhatsAppPhone, whatsAppShareUrl, whatsAppUrl } from '@/lib/utils';
 
 interface Props {
   /** Display name shown in the heading. */
@@ -30,6 +30,7 @@ export function SendWhatsAppModal({
   const [selectedId, setSelectedId] = useState<string>('');
   const [draft, setDraft] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'ok' | 'fail'>('idle');
 
   const normalizedPhone = useMemo(() => toWhatsAppPhone(recipientPhone), [recipientPhone]);
 
@@ -63,13 +64,32 @@ export function SendWhatsAppModal({
     if (t) setDraft(substituteVariables(t.content, variables));
   };
 
-  const canSend = Boolean(normalizedPhone && draft.trim().length > 0);
+  const hasDraft = draft.trim().length > 0;
+  const canSend = Boolean(normalizedPhone && hasDraft);
 
   const handleSend = () => {
     if (!canSend || !normalizedPhone) return;
     const url = whatsAppUrl(normalizedPhone, draft);
     window.open(url, '_blank', 'noopener,noreferrer');
     onClose();
+  };
+
+  const handleSendNoPhone = () => {
+    if (!hasDraft) return;
+    window.open(whatsAppShareUrl(draft), '_blank', 'noopener,noreferrer');
+    onClose();
+  };
+
+  const handleCopy = async () => {
+    if (!hasDraft) return;
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopyStatus('ok');
+      window.setTimeout(() => setCopyStatus('idle'), 2000);
+    } catch {
+      setCopyStatus('fail');
+      window.setTimeout(() => setCopyStatus('idle'), 3000);
+    }
   };
 
   return (
@@ -90,8 +110,8 @@ export function SendWhatsAppModal({
               {normalizedPhone ? (
                 <span className="font-mono text-xs">+{normalizedPhone}</span>
               ) : (
-                <span className="text-red-600 dark:text-red-400">
-                  (telefon numarası eksik)
+                <span className="text-amber-700 dark:text-amber-400">
+                  (telefon yok — kopyala veya telefonsuz aç)
                 </span>
               )}
             </p>
@@ -167,9 +187,19 @@ export function SendWhatsAppModal({
           )}
         </div>
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             İptal
+          </Button>
+          <Button variant="secondary" onClick={handleCopy} disabled={!hasDraft}>
+            {copyStatus === 'ok'
+              ? 'Kopyalandı ✓'
+              : copyStatus === 'fail'
+                ? 'Kopyalanamadı'
+                : 'Mesajı Kopyala'}
+          </Button>
+          <Button variant="secondary" onClick={handleSendNoPhone} disabled={!hasDraft}>
+            Telefonsuz Aç
           </Button>
           <Button onClick={handleSend} disabled={!canSend}>
             WhatsApp'ta Aç

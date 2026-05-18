@@ -94,15 +94,13 @@ export function GuestDetailPage() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {guest.phone && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowWhatsApp(true)}
-            >
-              WhatsApp
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowWhatsApp(true)}
+          >
+            WhatsApp
+          </Button>
           {canEdit && (
             <Link to={`/guests/${guest.id}/edit`}>
               <Button variant="secondary" size="sm">
