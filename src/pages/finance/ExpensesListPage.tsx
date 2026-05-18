@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { FinanceTabs } from './FinanceTabs';
 import { formatTRY, formatDate } from '@/lib/utils';
+import { exportRowsToCsv } from '@/lib/csvExport';
 
 function currentMonthStr(): string {
   // YYYY-MM in local time
@@ -146,12 +147,46 @@ export function ExpensesListPage() {
             <p className="text-sm text-stone-600 dark:text-stone-300">
               {expenses.length} kayıt
             </p>
-            <p className="text-sm">
-              <span className="text-stone-600 dark:text-stone-300">Toplam: </span>
-              <strong className="text-lg text-stone-900 dark:text-stone-100">
-                {formatTRY(total)}
-              </strong>
-            </p>
+            <div className="flex items-baseline gap-3">
+              <p className="text-sm">
+                <span className="text-stone-600 dark:text-stone-300">Toplam: </span>
+                <strong className="text-lg text-stone-900 dark:text-stone-100">
+                  {formatTRY(total)}
+                </strong>
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const rows = expenses.map((e) => ({
+                    Tarih: formatDate(e.expense_date),
+                    Mülk: e.property?.name ?? '',
+                    Kategori: e.category,
+                    Düzenli: e.is_recurring ? 'Evet' : 'Hayır',
+                    Tutar: Number(e.amount).toFixed(2),
+                    Açıklama: e.description ?? '',
+                  }));
+                  const parts = [
+                    'giderler',
+                    propertyId ? properties.find((p) => p.id === propertyId)?.name : null,
+                    month || null,
+                    category || null,
+                  ]
+                    .filter(Boolean)
+                    .join('-');
+                  exportRowsToCsv(parts, rows, [
+                    { key: 'Tarih', label: 'Tarih' },
+                    { key: 'Mülk', label: 'Mülk' },
+                    { key: 'Kategori', label: 'Kategori' },
+                    { key: 'Düzenli', label: 'Düzenli' },
+                    { key: 'Tutar', label: 'Tutar (TRY)' },
+                    { key: 'Açıklama', label: 'Açıklama' },
+                  ]);
+                }}
+              >
+                CSV İndir
+              </Button>
+            </div>
           </div>
 
           <Card className="p-0">

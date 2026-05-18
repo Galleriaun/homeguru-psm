@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CashTxModal } from './CashTxModal';
 import { formatTRY, formatDate } from '@/lib/utils';
+import { exportRowsToCsv } from '@/lib/csvExport';
 import type { AccountType, TxDirection } from '@/types/database';
 
 const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
@@ -208,9 +209,43 @@ export function CashAccountDetailPage() {
 
       {/* Transactions table */}
       <section className="space-y-2">
-        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Hareketler
-        </h2>
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Hareketler
+          </h2>
+          {transactions.length > 0 && account && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const rows = transactions.map((t) => ({
+                  Tarih: formatDate(t.created_at),
+                  Saat: formatTime(t.created_at),
+                  Yön: DIRECTION_LABEL[t.direction],
+                  Tutar: Number(t.amount).toFixed(2),
+                  'Para Birimi': account.currency,
+                  Açıklama: t.description ?? '',
+                  Tip: t.ref_type ?? '',
+                }));
+                exportRowsToCsv(
+                  `kasa-${account.name}-${new Date().toISOString().slice(0, 10)}`,
+                  rows,
+                  [
+                    { key: 'Tarih', label: 'Tarih' },
+                    { key: 'Saat', label: 'Saat' },
+                    { key: 'Yön', label: 'Yön' },
+                    { key: 'Tutar', label: 'Tutar' },
+                    { key: 'Para Birimi', label: 'Para Birimi' },
+                    { key: 'Açıklama', label: 'Açıklama' },
+                    { key: 'Tip', label: 'Tip' },
+                  ],
+                );
+              }}
+            >
+              CSV İndir
+            </Button>
+          )}
+        </div>
         {transactions.length === 0 ? (
           <Card>
             <p className="text-center text-sm text-stone-600 dark:text-stone-300">

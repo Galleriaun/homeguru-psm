@@ -25,6 +25,7 @@ import { PaymentCollectModal } from './PaymentCollectModal';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { formatDate, formatTRY } from '@/lib/utils';
+import { exportRowsToCsv } from '@/lib/csvExport';
 
 type Reservation = Database['public']['Tables']['reservations']['Row'];
 
@@ -280,6 +281,8 @@ export function ReservationDetailPage() {
           canWrite={canWriteLedger}
           canCollect={canCollect && !isCancelled}
           canDelete={canDeleteLedger}
+          guestName={guestName}
+          stayStart={reservation.stay_start}
           onCollectClick={() => setShowCollectModal(true)}
           onAddClick={() => setShowLedgerModal(true)}
           onDeleteClick={(entry) => {
@@ -434,6 +437,9 @@ interface LedgerSectionProps {
   canWrite: boolean;
   canCollect: boolean;
   canDelete: boolean;
+  /** Used to build the CSV download filename. */
+  guestName: string;
+  stayStart: string;
   onCollectClick: () => void;
   onAddClick: () => void;
   onDeleteClick: (entry: LedgerEntry) => void;
@@ -445,6 +451,8 @@ function LedgerSection({
   canWrite,
   canCollect,
   canDelete,
+  guestName,
+  stayStart,
   onCollectClick,
   onAddClick,
   onDeleteClick,
@@ -481,8 +489,33 @@ function LedgerSection({
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
           Cari Hesap
         </h2>
-        {ledger !== null && (canCollect || canWrite) && (
+        {ledger !== null && (
           <div className="flex flex-wrap gap-2">
+            {entries.length > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  const rows = entries.map((e) => ({
+                    Tarih: formatDate(e.created_at),
+                    Tip: e.type === 'DEBT' ? 'Ücret' : 'Ödeme',
+                    Tutar: Number(e.amount).toFixed(2),
+                    'Para Birimi': e.currency,
+                    Açıklama: e.note ?? '',
+                  }));
+                  const base = `cari-${guestName || 'misafir'}-${stayStart.slice(0, 10)}`;
+                  exportRowsToCsv(base, rows, [
+                    { key: 'Tarih', label: 'Tarih' },
+                    { key: 'Tip', label: 'Tip' },
+                    { key: 'Tutar', label: 'Tutar' },
+                    { key: 'Para Birimi', label: 'Para Birimi' },
+                    { key: 'Açıklama', label: 'Açıklama' },
+                  ]);
+                }}
+              >
+                CSV İndir
+              </Button>
+            )}
             {canCollect && (
               <Button size="sm" onClick={onCollectClick}>
                 + Ödeme Topla

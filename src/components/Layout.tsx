@@ -61,6 +61,14 @@ export function Layout() {
                   Finans
                 </NavLink>
               )}
+              {profile &&
+                (profile.role === 'SUPER_ADMIN' ||
+                  profile.role === 'PROPERTY_MANAGER' ||
+                  profile.role === 'RECEPTION') && (
+                  <NavLink to="/kbs" className={navLinkClasses}>
+                    KBS
+                  </NavLink>
+                )}
               {profile && can(profile.role, 'finance:read') && (
                 <NavLink to="/settings/templates" className={navLinkClasses}>
                   Şablonlar
