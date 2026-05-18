@@ -359,21 +359,26 @@ export function PropertyDetailPage() {
         </Card>
       )}
 
-      {/* Confirm delete property */}
+      {/* Confirm delete property — two-step (type the name to enable Sil) */}
       <ConfirmDialog
         open={confirmDeleteProperty}
         title={`"${property.name}" silinsin mi?`}
         description={
           <>
-            <p>Bu işlem geri alınamaz. Mülke bağlı tüm birimler de silinir.</p>
+            <p>
+              Bu işlem <strong>geri alınamaz</strong>. Mülke bağlı tüm birimler,
+              kasalar, giderler ve temizlik geçmişi de kalıcı olarak silinir.
+              Çöp Kutusu'na taşınmaz.
+            </p>
             <p className="mt-2 font-medium">
               Not: Aktif rezervasyonu olan mülkler silinemez.
             </p>
           </>
         }
-        confirmLabel="Sil"
+        confirmLabel="Kalıcı Sil"
         destructive
         loading={busy}
+        requireText={property.name}
         onConfirm={handleDeleteProperty}
         onCancel={() => setConfirmDeleteProperty(false)}
       />
