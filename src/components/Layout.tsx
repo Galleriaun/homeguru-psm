@@ -45,20 +45,20 @@ export function Layout() {
               <NavLink to="/reservations" className={navLinkClasses}>
                 Rezervasyonlar
               </NavLink>
-              <NavLink to="/properties" className={navLinkClasses}>
-                Mülkler
-              </NavLink>
+              {profile && can(profile.role, 'housekeeping:read') && (
+                <NavLink to="/housekeeping" className={navLinkClasses}>
+                  Temizlik
+                </NavLink>
+              )}
               <NavLink to="/guests" className={navLinkClasses}>
                 Misafirler
+              </NavLink>
+              <NavLink to="/properties" className={navLinkClasses}>
+                Mülkler
               </NavLink>
               {profile && can(profile.role, 'finance:read') && (
                 <NavLink to="/finance/cash" className={navLinkClasses}>
                   Finans
-                </NavLink>
-              )}
-              {profile && can(profile.role, 'housekeeping:read') && (
-                <NavLink to="/housekeeping" className={navLinkClasses}>
-                  Temizlik
                 </NavLink>
               )}
               {profile && can(profile.role, 'finance:read') && (
