@@ -55,3 +55,26 @@ export function formatRoomType(roomType: string): string {
 export function capacityFromRoomType(roomType: string): number | null {
   return HOTEL_ROOM_CAPACITY[roomType] ?? null;
 }
+
+/**
+ * Normalize a Turkish-or-international phone number into the digits-only
+ * country-code-prefixed form wa.me expects (e.g. "905551234567").
+ * Returns null when the input is missing or clearly invalid.
+ */
+export function toWhatsAppPhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  let digits = phone.replace(/\D/g, '');
+  // Trim a leading 0 — Turkish local format "0555…" becomes "555…"
+  if (digits.startsWith('0')) digits = digits.slice(1);
+  // 10-digit number with no country code → assume Turkey (+90)
+  if (digits.length === 10 && !digits.startsWith('90')) {
+    digits = '90' + digits;
+  }
+  if (digits.length < 10 || digits.length > 15) return null;
+  return digits;
+}
+
+/** Build a wa.me URL with the message URL-encoded. */
+export function whatsAppUrl(phone: string, text: string): string {
+  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+}

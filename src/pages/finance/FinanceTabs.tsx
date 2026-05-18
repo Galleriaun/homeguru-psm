@@ -42,6 +42,20 @@ function ReceiptIcon() {
   );
 }
 
+function CheckIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M4 10l4 4 8-9"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function PeopleIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -65,7 +79,7 @@ function PeopleIcon() {
 
 export function FinanceTabs() {
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <NavLink to="/finance/staff" className={tabClass}>
         <PeopleIcon />
         Personel
@@ -77,6 +91,10 @@ export function FinanceTabs() {
       <NavLink to="/finance/cash" className={tabClass}>
         <CashIcon />
         Kasalar
+      </NavLink>
+      <NavLink to="/finance/pending" className={tabClass}>
+        <CheckIcon />
+        Onaylar
       </NavLink>
     </div>
   );

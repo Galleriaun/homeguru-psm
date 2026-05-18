@@ -22,6 +22,7 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LedgerEntryModal } from './LedgerEntryModal';
 import { PaymentCollectModal } from './PaymentCollectModal';
+import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 import { formatDate, formatTRY } from '@/lib/utils';
 
 type Reservation = Database['public']['Tables']['reservations']['Row'];
@@ -47,6 +48,8 @@ export function ReservationDetailPage() {
   const [property, setProperty] = useState<Property | null>(null);
   const [unit, setUnit] = useState<Unit | null>(null);
   const [guestName, setGuestName] = useState<string>('');
+  const [guestPhone, setGuestPhone] = useState<string | null>(null);
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -86,11 +89,16 @@ export function ReservationDetailPage() {
         const [p, u, g] = await Promise.all([
           getProperty(r.property_id),
           getUnit(r.unit_id),
-          supabase.from('guests').select('full_name').eq('id', r.guest_id).maybeSingle(),
+          supabase
+            .from('guests')
+            .select('full_name, phone')
+            .eq('id', r.guest_id)
+            .maybeSingle(),
         ]);
         setProperty(p);
         setUnit(u);
         setGuestName(g.data?.full_name ?? '');
+        setGuestPhone(g.data?.phone ?? null);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Yüklenemedi');
       }
@@ -210,6 +218,15 @@ export function ReservationDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {guestPhone && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowWhatsApp(true)}
+            >
+              WhatsApp
+            </Button>
+          )}
           {canEdit && !isCancelled && (
             <Link to={`/reservations/${reservation.id}/edit`}>
               <Button variant="secondary" size="sm">
@@ -331,6 +348,32 @@ export function ReservationDetailPage() {
           setDeleteError(null);
         }}
       />
+
+      {showWhatsApp && (
+        <SendWhatsAppModal
+          recipientName={guestName || 'Misafir'}
+          recipientPhone={guestPhone}
+          variables={{
+            misafir_adi: guestName,
+            giris_tarihi: formatDate(reservation.stay_start),
+            cikis_tarihi: formatDate(reservation.stay_end),
+            gece_sayisi: String(
+              Math.max(
+                1,
+                Math.round(
+                  (new Date(reservation.stay_end).getTime() -
+                    new Date(reservation.stay_start).getTime()) /
+                    (24 * 60 * 60 * 1000),
+                ),
+              ),
+            ),
+            toplam_tutar: formatTRY(Number(reservation.total_amount)),
+            mulk_adi: property?.name ?? '',
+            birim_adi: unit?.name ?? '',
+          }}
+          onClose={() => setShowWhatsApp(false)}
+        />
+      )}
 
       <ConfirmDialog
         open={entryToDelete !== null}

@@ -56,6 +56,16 @@ export function Layout() {
                   Finans
                 </NavLink>
               )}
+              {profile && can(profile.role, 'housekeeping:read') && (
+                <NavLink to="/housekeeping" className={navLinkClasses}>
+                  Temizlik
+                </NavLink>
+              )}
+              {profile && can(profile.role, 'finance:read') && (
+                <NavLink to="/settings/templates" className={navLinkClasses}>
+                  Şablonlar
+                </NavLink>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3">

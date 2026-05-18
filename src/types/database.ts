@@ -276,6 +276,102 @@ export type Database = {
         };
         Relationships: [];
       };
+      housekeeping_issues: {
+        Row: {
+          id: string;
+          task_id: string | null;
+          property_id: string;
+          unit_id: string;
+          description: string;
+          photo_paths: string[];
+          status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+          reported_by: string | null;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          task_id?: string | null;
+          property_id: string;
+          unit_id: string;
+          description: string;
+          photo_paths?: string[];
+          status?: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+          reported_by?: string | null;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          task_id?: string | null;
+          property_id?: string;
+          unit_id?: string;
+          description?: string;
+          photo_paths?: string[];
+          status?: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+          reported_by?: string | null;
+          created_at?: string;
+          resolved_at?: string | null;
+        };
+        Relationships: [];
+      };
+      housekeeping_tasks: {
+        Row: {
+          id: string;
+          property_id: string;
+          unit_id: string;
+          status: HousekeepingStatus;
+          notes: string | null;
+          updated_by: string | null;
+          updated_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          unit_id: string;
+          status: HousekeepingStatus;
+          notes?: string | null;
+          updated_by?: string | null;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          property_id?: string;
+          unit_id?: string;
+          status?: HousekeepingStatus;
+          notes?: string | null;
+          updated_by?: string | null;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      message_templates: {
+        Row: {
+          id: string;
+          name: string;
+          content: string;
+          is_default: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          content: string;
+          is_default?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          content?: string;
+          is_default?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       staff_advances: {
         Row: {
           id: string;
@@ -502,6 +598,14 @@ export type Database = {
           _note?: string | null;
         };
         Returns: string; // payment_collections.id
+      };
+      confirm_payment: {
+        Args: { _payment_id: string };
+        Returns: Database['public']['Tables']['payment_collections']['Row'];
+      };
+      dispute_payment: {
+        Args: { _payment_id: string };
+        Returns: Database['public']['Tables']['payment_collections']['Row'];
       };
     };
     Enums: {

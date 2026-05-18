@@ -22,12 +22,16 @@ import { CashAccountFormPage } from '@/pages/finance/CashAccountFormPage';
 import { CashAccountDetailPage } from '@/pages/finance/CashAccountDetailPage';
 import { ExpensesListPage } from '@/pages/finance/ExpensesListPage';
 import { ExpenseFormPage } from '@/pages/finance/ExpenseFormPage';
+import { PendingPaymentsPage } from '@/pages/finance/PendingPaymentsPage';
+import { HousekeepingPage } from '@/pages/housekeeping/HousekeepingPage';
 import { StaffListPage } from '@/pages/finance/StaffListPage';
 import { StaffDetailPage } from '@/pages/finance/StaffDetailPage';
+import { TemplatesPage } from '@/pages/settings/TemplatesPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
 const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
 const FINANCE_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER'] as const;
+const HOUSEKEEPING_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'HOUSEKEEPING'] as const;
 
 export default function App() {
   return (
@@ -193,6 +197,36 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
                 <StaffDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Payment approvals queue (Phase 3C-lite) — managers approve/dispute housekeeping-collected payments */}
+          <Route
+            path="/finance/pending"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <PendingPaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Housekeeping (Phase 3A) — visible to housekeeping role + managers + admins */}
+          <Route
+            path="/housekeeping"
+            element={
+              <ProtectedRoute allowedRoles={[...HOUSEKEEPING_ACCESS]}>
+                <HousekeepingPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* WhatsApp message templates (Phase 3D) — managers + admins manage; all roles can READ via RLS to use in modals */}
+          <Route
+            path="/settings/templates"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <TemplatesPage />
               </ProtectedRoute>
             }
           />

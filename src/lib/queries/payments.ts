@@ -1,5 +1,21 @@
 import { supabase } from '@/lib/supabase';
-import type { PaymentMethod } from '@/types/database';
+import type { Database, PaymentMethod, PaymentStatus } from '@/types/database';
+
+type PaymentCollectionRow = Database['public']['Tables']['payment_collections']['Row'];
+
+export type PaymentCollection = PaymentCollectionRow;
+
+/**
+ * payment_collections row enriched with reservation + guest + property/unit names
+ * for the pending-approvals queue.
+ */
+export interface PendingPaymentWithRefs extends PaymentCollectionRow {
+  reservation: {
+    guest: { full_name: string } | null;
+    unit: { name: string } | null;
+  } | null;
+  property: { name: string; type: string } | null;
+}
 
 export interface CollectPaymentInput {
   reservationId: string;
@@ -57,4 +73,41 @@ export async function deletePaymentCollection(id: string): Promise<void> {
       'Tahsilat silinemedi. Yetkiniz olmayabilir veya migration 016 henüz uygulanmamış olabilir.',
     );
   }
+}
+
+/**
+ * Lists every payment_collections row currently waiting for manager approval
+ * (status = UNCONFIRMED). RLS scopes managers to their branch.
+ */
+export async function listUnconfirmedPayments(): Promise<PendingPaymentWithRefs[]> {
+  const { data, error } = await supabase
+    .from('payment_collections')
+    .select(
+      'id, reservation_id, property_id, collected_by_user_id, amount, method, receipt_photo_path, status, confirmed_by, confirmed_at, created_at, reservation:reservations(guest:guests(full_name), unit:units(name)), property:properties(name, type)',
+    )
+    .eq('status', 'UNCONFIRMED' satisfies PaymentStatus)
+    .order('created_at', { ascending: false });
+  if (error) throw wrapErr(error);
+  return (data as unknown as PendingPaymentWithRefs[]) ?? [];
+}
+
+/**
+ * Manager approves a pending payment (Phase 3C). The RPC creates the
+ * previously-deferred ledger PAYMENT entry and (if CASH) the cash_transactions
+ * IN row, then stamps the audit row CONFIRMED.
+ */
+export async function confirmPayment(paymentId: string): Promise<PaymentCollectionRow> {
+  const { data, error } = await supabase.rpc('confirm_payment', { _payment_id: paymentId });
+  if (error) throw wrapErr(error);
+  return data as unknown as PaymentCollectionRow;
+}
+
+/**
+ * Manager rejects a pending payment. Row is marked DISPUTED; no ledger/cash
+ * entries are ever created. The row stays as an audit record.
+ */
+export async function disputePayment(paymentId: string): Promise<PaymentCollectionRow> {
+  const { data, error } = await supabase.rpc('dispute_payment', { _payment_id: paymentId });
+  if (error) throw wrapErr(error);
+  return data as unknown as PaymentCollectionRow;
 }

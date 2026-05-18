@@ -10,6 +10,7 @@ import type { DecryptedGuest } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 
 export function GuestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,6 +22,7 @@ export function GuestDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showWhatsApp, setShowWhatsApp] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -91,7 +93,16 @@ export function GuestDetailPage() {
             <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{guest.nationality}</p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {guest.phone && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowWhatsApp(true)}
+            >
+              WhatsApp
+            </Button>
+          )}
           {canEdit && (
             <Link to={`/guests/${guest.id}/edit`}>
               <Button variant="secondary" size="sm">
@@ -145,6 +156,17 @@ export function GuestDetailPage() {
           setDeleteError(null);
         }}
       />
+
+      {showWhatsApp && (
+        <SendWhatsAppModal
+          recipientName={guest.full_name}
+          recipientPhone={guest.phone}
+          variables={{
+            misafir_adi: guest.full_name,
+          }}
+          onClose={() => setShowWhatsApp(false)}
+        />
+      )}
     </div>
   );
 }
