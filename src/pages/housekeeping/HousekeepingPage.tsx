@@ -18,7 +18,7 @@ import { listOpenIssueCountsByUnit } from '@/lib/queries/housekeepingIssues';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { IssuesModal } from './IssuesModal';
-import { cn, formatRoomType } from '@/lib/utils';
+import { cn, formatDateTime, formatRoomType } from '@/lib/utils';
 import type { HousekeepingStatus } from '@/types/database';
 
 const STATUS_LABELS: Record<HousekeepingStatus, string> = {
@@ -246,8 +246,8 @@ export function HousekeepingPage() {
                 </h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {visibleUnits.map((unit) => {
-                    const current =
-                      currentByUnit.get(unit.id)?.status ?? DEFAULT_STATUS;
+                    const latest = currentByUnit.get(unit.id);
+                    const current = latest?.status ?? DEFAULT_STATUS;
                     const isSaving = savingUnitId === unit.id;
                     const openIssues = openIssueCounts.get(unit.id) ?? 0;
                     return (
@@ -259,6 +259,11 @@ export function HousekeepingPage() {
                             </p>
                             <p className="text-xs text-stone-600 dark:text-stone-300">
                               {formatRoomType(unit.room_type)}
+                            </p>
+                            <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                              {latest
+                                ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
+                                : 'Henüz kayıt yok'}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">

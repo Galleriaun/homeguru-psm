@@ -20,6 +20,15 @@ export function formatDate(date: Date | string): string {
   }).format(d);
 }
 
+/** Short Turkish date + time, e.g. "18.05.2026 11:25". */
+export function formatDateTime(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return new Intl.DateTimeFormat('tr-TR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(d);
+}
+
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Süper Admin',
   PROPERTY_MANAGER: 'Yönetici',
