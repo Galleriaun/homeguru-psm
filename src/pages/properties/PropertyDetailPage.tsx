@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatTRY, formatRoomType } from '@/lib/utils';
+import { propertyPhotoUrl } from '@/lib/photos';
 
 export function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -127,6 +128,33 @@ export function PropertyDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Photo gallery */}
+      {property.photo_paths && property.photo_paths.length > 0 && (
+        <Card>
+          <h2 className="mb-3 text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Fotoğraflar ({property.photo_paths.length})
+          </h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {property.photo_paths.map((p) => (
+              <a
+                key={p}
+                href={propertyPhotoUrl(p)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block aspect-square overflow-hidden rounded"
+              >
+                <img
+                  src={propertyPhotoUrl(p)}
+                  alt={`${property.name} fotoğrafı`}
+                  className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                  loading="lazy"
+                />
+              </a>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Units */}
       <Card>

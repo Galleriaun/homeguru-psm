@@ -42,6 +42,7 @@ export type Database = {
           type: PropertyType;
           address: string | null;
           manager_user_id: string | null;
+          photo_paths: string[];
           created_at: string;
         };
         Insert: {
@@ -50,6 +51,7 @@ export type Database = {
           type: PropertyType;
           address?: string | null;
           manager_user_id?: string | null;
+          photo_paths?: string[];
           created_at?: string;
         };
         Update: {
@@ -58,6 +60,7 @@ export type Database = {
           type?: PropertyType;
           address?: string | null;
           manager_user_id?: string | null;
+          photo_paths?: string[];
           created_at?: string;
         };
         Relationships: [];
