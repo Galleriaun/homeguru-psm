@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatTRY, formatRoomType } from '@/lib/utils';
-import { propertyPhotoUrl } from '@/lib/photos';
+import { propertyPhotoUrl, unitPhotoUrl } from '@/lib/photos';
 
 export function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +20,7 @@ export function PropertyDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteProperty, setConfirmDeleteProperty] = useState(false);
   const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
+  const [galleryUnit, setGalleryUnit] = useState<Unit | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -188,6 +189,7 @@ export function PropertyDetailPage() {
                   <th className="px-6 py-2 font-medium">Tip</th>
                   <th className="px-6 py-2 font-medium">Kapasite</th>
                   <th className="px-6 py-2 font-medium">Gecelik Ücret</th>
+                  <th className="px-6 py-2 font-medium">Fotoğraflar</th>
                   {canManageUnits && <th className="px-6 py-2"></th>}
                 </tr>
               </thead>
@@ -205,6 +207,19 @@ export function PropertyDetailPage() {
                     </td>
                     <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                       {formatTRY(u.base_price)}
+                    </td>
+                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                      {u.photo_paths && u.photo_paths.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setGalleryUnit(u)}
+                          className="text-sm text-sky-700 hover:underline dark:text-sky-400"
+                        >
+                          🖼 {u.photo_paths.length}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-stone-400 dark:text-stone-500">—</span>
+                      )}
                     </td>
                     {canManageUnits && (
                       <td className="px-6 py-3 text-right">
@@ -263,6 +278,57 @@ export function PropertyDetailPage() {
         onConfirm={handleDeleteUnit}
         onCancel={() => setUnitToDelete(null)}
       />
+
+      {/* Unit photo lightbox */}
+      {galleryUnit && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-16"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setGalleryUnit(null);
+          }}
+        >
+          <Card className="w-full max-w-3xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+                {galleryUnit.name} — Fotoğraflar ({galleryUnit.photo_paths.length})
+              </h2>
+              <button
+                type="button"
+                onClick={() => setGalleryUnit(null)}
+                className="rounded p-1 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700"
+                aria-label="Kapat"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path
+                    d="M5 5l10 10M15 5L5 15"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              {galleryUnit.photo_paths.map((p) => (
+                <a
+                  key={p}
+                  href={unitPhotoUrl(p)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block aspect-square overflow-hidden rounded"
+                >
+                  <img
+                    src={unitPhotoUrl(p)}
+                    alt={`${galleryUnit.name} fotoğrafı`}
+                    className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                    loading="lazy"
+                  />
+                </a>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

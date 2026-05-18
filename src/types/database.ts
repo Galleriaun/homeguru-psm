@@ -74,6 +74,7 @@ export type Database = {
           capacity: number;
           base_price: number;
           catalog_url: string | null;
+          photo_paths: string[];
           created_at: string;
         };
         Insert: {
@@ -84,6 +85,7 @@ export type Database = {
           capacity: number;
           base_price: number;
           catalog_url?: string | null;
+          photo_paths?: string[];
           created_at?: string;
         };
         Update: {
@@ -94,6 +96,7 @@ export type Database = {
           capacity?: number;
           base_price?: number;
           catalog_url?: string | null;
+          photo_paths?: string[];
           created_at?: string;
         };
         Relationships: [];

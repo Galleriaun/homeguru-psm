@@ -7,8 +7,14 @@ const ISSUES_BUCKET = 'housekeeping-issues';
 /** Public Supabase Storage bucket where property gallery photos live. */
 const PROPERTY_PHOTOS_BUCKET = 'property-photos';
 
+/** Public Supabase Storage bucket where per-unit gallery photos live. */
+const UNIT_PHOTOS_BUCKET = 'unit-photos';
+
 /** UI-level cap on the property gallery (DB allows up to 20 as defense-in-depth). */
 export const PROPERTY_PHOTO_MAX = 10;
+
+/** UI-level cap on the unit gallery (DB allows up to 20 as defense-in-depth). */
+export const UNIT_PHOTO_MAX = 10;
 
 const COMPRESSION_OPTS = {
   maxSizeMB: 0.2, // ~200 KB ceiling per CLAUDE.md free-tier mitigation
@@ -82,5 +88,28 @@ export async function deletePropertyPhotos(paths: string[]): Promise<void> {
   const { error } = await supabase.storage.from(PROPERTY_PHOTOS_BUCKET).remove(paths);
   if (error) {
     console.warn('Mülk fotoğrafları silinemedi:', error.message);
+  }
+}
+
+/**
+ * Compress and upload to the unit-photos bucket. Returned path is what the
+ * caller persists into `units.photo_paths`.
+ */
+export async function uploadUnitPhoto(file: File): Promise<string> {
+  return uploadToBucket(UNIT_PHOTOS_BUCKET, file);
+}
+
+/** Build a public URL for a unit photo by its stored path. */
+export function unitPhotoUrl(path: string): string {
+  const { data } = supabase.storage.from(UNIT_PHOTOS_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/** Best-effort cleanup of unit photos. Failures are logged, not thrown. */
+export async function deleteUnitPhotos(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const { error } = await supabase.storage.from(UNIT_PHOTOS_BUCKET).remove(paths);
+  if (error) {
+    console.warn('Birim fotoğrafları silinemedi:', error.message);
   }
 }
