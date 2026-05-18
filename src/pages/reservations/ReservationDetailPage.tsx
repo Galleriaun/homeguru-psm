@@ -23,6 +23,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LedgerEntryModal } from './LedgerEntryModal';
 import { PaymentCollectModal } from './PaymentCollectModal';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
+import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { formatDate, formatTRY } from '@/lib/utils';
 
 type Reservation = Database['public']['Tables']['reservations']['Row'];
@@ -223,6 +224,7 @@ export function ReservationDetailPage() {
             size="sm"
             onClick={() => setShowWhatsApp(true)}
           >
+            <WhatsAppIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
             WhatsApp
           </Button>
           {canEdit && !isCancelled && (

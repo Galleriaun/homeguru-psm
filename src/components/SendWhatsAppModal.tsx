@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
+import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { toWhatsAppPhone, whatsAppShareUrl, whatsAppUrl } from '@/lib/utils';
 
 interface Props {
@@ -199,9 +200,11 @@ export function SendWhatsAppModal({
                 : 'Mesajı Kopyala'}
           </Button>
           <Button variant="secondary" onClick={handleSendNoPhone} disabled={!hasDraft}>
+            <WhatsAppIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
             Telefonsuz Aç
           </Button>
           <Button onClick={handleSend} disabled={!canSend}>
+            <WhatsAppIcon className="h-4 w-4" />
             WhatsApp'ta Aç
           </Button>
         </div>

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
+import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 
 export function GuestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -127,6 +128,7 @@ export function GuestDetailPage() {
             size="sm"
             onClick={() => setShowWhatsApp(true)}
           >
+            <WhatsAppIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
             WhatsApp
           </Button>
           {canEdit && (

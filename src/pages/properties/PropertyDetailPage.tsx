@@ -201,73 +201,6 @@ export function PropertyDetailPage() {
         )}
       </div>
 
-      {/* Photo gallery */}
-      {property.photo_paths && property.photo_paths.length > 0 && (
-        <Card>
-          <h2 className="mb-3 text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Fotoğraflar ({property.photo_paths.length})
-          </h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {property.photo_paths.map((p, i) => {
-              const isCover = i === 0;
-              return (
-                <div key={p} className="relative aspect-square">
-                  <a
-                    href={propertyPhotoUrl(p)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block h-full w-full overflow-hidden rounded"
-                  >
-                    <img
-                      src={propertyPhotoUrl(p)}
-                      alt={`${property.name} fotoğrafı`}
-                      className="h-full w-full object-cover transition-opacity hover:opacity-80"
-                      loading="lazy"
-                    />
-                  </a>
-                  {canManageProperty && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleSetCover(p)}
-                        disabled={isCover}
-                        aria-label={isCover ? 'Kapak fotoğrafı' : 'Kapak yap'}
-                        title={isCover ? 'Kapak fotoğrafı' : 'Kapak yap'}
-                        className={cn(
-                          'absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full text-sm shadow',
-                          isCover
-                            ? 'cursor-default bg-amber-400 text-white'
-                            : 'bg-stone-900/60 text-white hover:bg-amber-500',
-                        )}
-                      >
-                        ★
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPhotoError(null);
-                          setPhotoToDelete({ scope: 'property', path: p });
-                        }}
-                        aria-label="Fotoğrafı sil"
-                        title="Fotoğrafı sil"
-                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600/90 text-xs text-white shadow hover:bg-red-700"
-                      >
-                        ×
-                      </button>
-                    </>
-                  )}
-                  {isCover && (
-                    <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white shadow">
-                      Kapak
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
       {/* Units */}
       <Card>
         <div className="mb-4 flex items-center justify-between">
@@ -358,6 +291,73 @@ export function PropertyDetailPage() {
           </div>
         )}
       </Card>
+
+      {/* Photo gallery (rendered below units per design preference) */}
+      {property.photo_paths && property.photo_paths.length > 0 && (
+        <Card>
+          <h2 className="mb-3 text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Fotoğraflar ({property.photo_paths.length})
+          </h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {property.photo_paths.map((p, i) => {
+              const isCover = i === 0;
+              return (
+                <div key={p} className="relative aspect-square">
+                  <a
+                    href={propertyPhotoUrl(p)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block h-full w-full overflow-hidden rounded"
+                  >
+                    <img
+                      src={propertyPhotoUrl(p)}
+                      alt={`${property.name} fotoğrafı`}
+                      className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                      loading="lazy"
+                    />
+                  </a>
+                  {canManageProperty && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleSetCover(p)}
+                        disabled={isCover}
+                        aria-label={isCover ? 'Kapak fotoğrafı' : 'Kapak yap'}
+                        title={isCover ? 'Kapak fotoğrafı' : 'Kapak yap'}
+                        className={cn(
+                          'absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full text-sm shadow',
+                          isCover
+                            ? 'cursor-default bg-amber-400 text-white'
+                            : 'bg-stone-900/60 text-white hover:bg-amber-500',
+                        )}
+                      >
+                        ★
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoError(null);
+                          setPhotoToDelete({ scope: 'property', path: p });
+                        }}
+                        aria-label="Fotoğrafı sil"
+                        title="Fotoğrafı sil"
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600/90 text-xs text-white shadow hover:bg-red-700"
+                      >
+                        ×
+                      </button>
+                    </>
+                  )}
+                  {isCover && (
+                    <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white shadow">
+                      Kapak
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Confirm delete property */}
       <ConfirmDialog
