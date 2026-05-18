@@ -48,10 +48,10 @@ SELECT id, 'Kredi Kartı', 'CARD' FROM properties;
 -- 5) WhatsApp Phase 1 default message template
 -- -----------------------------------------------------------------------------
 INSERT INTO message_templates (name, content, is_default) VALUES (
-  'reservation-info',
-  'Merhabalar, {checkin}-{checkout} tarihleri için {property} {unit} dairemiz müsaittir. ' ||
+  'rezervasyon-bilgisi',
+  'Merhabalar, {giris_tarihi}-{cikis_tarihi} tarihleri için {mulk_adi} {birim_adi} dairemiz müsaittir. ' ||
   'Daire görsellerimize buradan ulaşabilirsiniz: {katalog_link}. ' ||
-  'Forget the hotel, be our guest ✨',
+  'Otelden vazgeçin, misafirimiz olun ✨',
   true
 );
 

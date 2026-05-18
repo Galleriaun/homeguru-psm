@@ -18,7 +18,7 @@ import { listOpenIssueCountsByUnit } from '@/lib/queries/housekeepingIssues';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { IssuesModal } from './IssuesModal';
-import { cn } from '@/lib/utils';
+import { cn, formatRoomType } from '@/lib/utils';
 import type { HousekeepingStatus } from '@/types/database';
 
 const STATUS_LABELS: Record<HousekeepingStatus, string> = {
@@ -258,7 +258,7 @@ export function HousekeepingPage() {
                               {unit.name}
                             </p>
                             <p className="text-xs text-stone-600 dark:text-stone-300">
-                              {unit.room_type}
+                              {formatRoomType(unit.room_type)}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
