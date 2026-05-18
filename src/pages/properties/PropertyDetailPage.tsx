@@ -2,13 +2,28 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
-import { getProperty, deleteProperty, type Property } from '@/lib/queries/properties';
-import { listUnitsForProperty, deleteUnit, type Unit } from '@/lib/queries/units';
+import {
+  getProperty,
+  deleteProperty,
+  updateProperty,
+  type Property,
+} from '@/lib/queries/properties';
+import {
+  listUnitsForProperty,
+  deleteUnit,
+  updateUnit,
+  type Unit,
+} from '@/lib/queries/units';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatTRY, formatRoomType } from '@/lib/utils';
-import { propertyPhotoUrl, unitPhotoUrl } from '@/lib/photos';
+import {
+  propertyPhotoUrl,
+  unitPhotoUrl,
+  deletePropertyPhotos,
+  deleteUnitPhotos,
+} from '@/lib/photos';
 
 export function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +37,14 @@ export function PropertyDetailPage() {
   const [unitToDelete, setUnitToDelete] = useState<Unit | null>(null);
   const [galleryUnit, setGalleryUnit] = useState<Unit | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Photo pending removal — discriminated by scope so the same dialog handles both. */
+  const [photoToDelete, setPhotoToDelete] = useState<
+    | { scope: 'property'; path: string }
+    | { scope: 'unit'; unitId: string; path: string }
+    | null
+  >(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -87,6 +110,35 @@ export function PropertyDetailPage() {
     }
   };
 
+  const handleDeletePhoto = async () => {
+    if (!photoToDelete || !property) return;
+    setPhotoBusy(true);
+    setPhotoError(null);
+    try {
+      if (photoToDelete.scope === 'property') {
+        const nextPaths = property.photo_paths.filter((p) => p !== photoToDelete.path);
+        await updateProperty(property.id, { photo_paths: nextPaths });
+        await deletePropertyPhotos([photoToDelete.path]);
+        setProperty({ ...property, photo_paths: nextPaths });
+      } else {
+        const unit = units?.find((u) => u.id === photoToDelete.unitId);
+        if (!unit) throw new Error('Birim bulunamadı');
+        const nextPaths = unit.photo_paths.filter((p) => p !== photoToDelete.path);
+        await updateUnit(unit.id, { photo_paths: nextPaths });
+        await deleteUnitPhotos([photoToDelete.path]);
+        const nextUnit = { ...unit, photo_paths: nextPaths };
+        setUnits((prev) => prev?.map((u) => (u.id === unit.id ? nextUnit : u)) ?? null);
+        // Keep the lightbox open and in sync if it's showing this unit.
+        if (galleryUnit?.id === unit.id) setGalleryUnit(nextUnit);
+      }
+      setPhotoToDelete(null);
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Fotoğraf silinemedi');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Link
@@ -138,20 +190,35 @@ export function PropertyDetailPage() {
           </h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {property.photo_paths.map((p) => (
-              <a
-                key={p}
-                href={propertyPhotoUrl(p)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block aspect-square overflow-hidden rounded"
-              >
-                <img
-                  src={propertyPhotoUrl(p)}
-                  alt={`${property.name} fotoğrafı`}
-                  className="h-full w-full object-cover transition-opacity hover:opacity-80"
-                  loading="lazy"
-                />
-              </a>
+              <div key={p} className="relative aspect-square">
+                <a
+                  href={propertyPhotoUrl(p)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block h-full w-full overflow-hidden rounded"
+                >
+                  <img
+                    src={propertyPhotoUrl(p)}
+                    alt={`${property.name} fotoğrafı`}
+                    className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                    loading="lazy"
+                  />
+                </a>
+                {canManageProperty && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoError(null);
+                      setPhotoToDelete({ scope: 'property', path: p });
+                    }}
+                    aria-label="Fotoğrafı sil"
+                    title="Fotoğrafı sil"
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600/90 text-xs text-white shadow hover:bg-red-700"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </Card>
@@ -308,27 +375,68 @@ export function PropertyDetailPage() {
                 </svg>
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-              {galleryUnit.photo_paths.map((p) => (
-                <a
-                  key={p}
-                  href={unitPhotoUrl(p)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block aspect-square overflow-hidden rounded"
-                >
-                  <img
-                    src={unitPhotoUrl(p)}
-                    alt={`${galleryUnit.name} fotoğrafı`}
-                    className="h-full w-full object-cover transition-opacity hover:opacity-80"
-                    loading="lazy"
-                  />
-                </a>
-              ))}
-            </div>
+            {galleryUnit.photo_paths.length === 0 ? (
+              <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+                Bu birimin fotoğrafı kalmadı.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {galleryUnit.photo_paths.map((p) => (
+                  <div key={p} className="relative aspect-square">
+                    <a
+                      href={unitPhotoUrl(p)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block h-full w-full overflow-hidden rounded"
+                    >
+                      <img
+                        src={unitPhotoUrl(p)}
+                        alt={`${galleryUnit.name} fotoğrafı`}
+                        className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                        loading="lazy"
+                      />
+                    </a>
+                    {canManageUnits && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoError(null);
+                          setPhotoToDelete({
+                            scope: 'unit',
+                            unitId: galleryUnit.id,
+                            path: p,
+                          });
+                        }}
+                        aria-label="Fotoğrafı sil"
+                        title="Fotoğrafı sil"
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600/90 text-xs text-white shadow hover:bg-red-700"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
       )}
+
+      {/* Confirm photo delete */}
+      <ConfirmDialog
+        open={photoToDelete !== null}
+        title="Bu fotoğraf silinsin mi?"
+        description="Geri alınamaz. Fotoğraf hem listeden hem depolamadan kaldırılır."
+        confirmLabel="Sil"
+        destructive
+        loading={photoBusy}
+        error={photoError}
+        onConfirm={handleDeletePhoto}
+        onCancel={() => {
+          setPhotoToDelete(null);
+          setPhotoError(null);
+        }}
+      />
     </div>
   );
 }
