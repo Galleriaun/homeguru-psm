@@ -70,6 +70,7 @@ export type Database = {
           room_type: RoomType;
           capacity: number;
           base_price: number;
+          catalog_url: string | null;
           created_at: string;
         };
         Insert: {
@@ -79,6 +80,7 @@ export type Database = {
           room_type: RoomType;
           capacity: number;
           base_price: number;
+          catalog_url?: string | null;
           created_at?: string;
         };
         Update: {
@@ -88,6 +90,7 @@ export type Database = {
           room_type?: RoomType;
           capacity?: number;
           base_price?: number;
+          catalog_url?: string | null;
           created_at?: string;
         };
         Relationships: [];

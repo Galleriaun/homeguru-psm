@@ -11,6 +11,9 @@ export type MessageTemplate = TemplateRow;
  * Variables supported by the template substitution helper. Template authors
  * insert these as `{misafir_adi}`, `{giris_tarihi}`, etc. Unknown tokens are
  * left as-is so a typo doesn't silently disappear.
+ *
+ * Canonical names are Turkish. English aliases (see VARIABLE_ALIASES below) also
+ * resolve to the same values so templates can use either form.
  */
 export const TEMPLATE_VARIABLES = [
   'misafir_adi',
@@ -21,9 +24,34 @@ export const TEMPLATE_VARIABLES = [
   'bakiye',
   'mulk_adi',
   'birim_adi',
+  'katalog_link',
 ] as const;
 
 export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
+
+/**
+ * English placeholder aliases → canonical Turkish variable name.
+ * Lets templates use `{checkin}` interchangeably with `{giris_tarihi}`.
+ */
+const VARIABLE_ALIASES: Record<string, TemplateVariable> = {
+  guest: 'misafir_adi',
+  guest_name: 'misafir_adi',
+  checkin: 'giris_tarihi',
+  check_in: 'giris_tarihi',
+  checkout: 'cikis_tarihi',
+  check_out: 'cikis_tarihi',
+  nights: 'gece_sayisi',
+  total: 'toplam_tutar',
+  total_amount: 'toplam_tutar',
+  balance: 'bakiye',
+  property: 'mulk_adi',
+  property_name: 'mulk_adi',
+  unit: 'birim_adi',
+  unit_name: 'birim_adi',
+  catalog: 'katalog_link',
+  catalog_link: 'katalog_link',
+  gallery: 'katalog_link',
+};
 
 const wrapErr = (e: { message: string; details?: string; hint?: string; code?: string }) =>
   new Error(
@@ -79,14 +107,17 @@ export async function deleteTemplate(id: string): Promise<void> {
 
 /**
  * Substitute `{var_name}` placeholders in template content using the
- * supplied map. Unknown placeholders are left as-is.
+ * supplied map. Unknown placeholders are left as-is. English aliases
+ * (see VARIABLE_ALIASES) resolve to their canonical Turkish value.
  */
 export function substituteVariables(
   content: string,
   vars: Partial<Record<TemplateVariable, string>>,
 ): string {
+  const map = vars as Record<string, string | undefined>;
   return content.replace(/\{(\w+)\}/g, (match, key) => {
-    const v = (vars as Record<string, string | undefined>)[key];
+    const canonical = VARIABLE_ALIASES[key] ?? key;
+    const v = map[canonical];
     return v ?? match;
   });
 }

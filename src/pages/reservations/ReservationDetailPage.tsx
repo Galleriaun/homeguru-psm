@@ -370,6 +370,7 @@ export function ReservationDetailPage() {
             toplam_tutar: formatTRY(Number(reservation.total_amount)),
             mulk_adi: property?.name ?? '',
             birim_adi: unit?.name ?? '',
+            katalog_link: unit?.catalog_url ?? '',
           }}
           onClose={() => setShowWhatsApp(false)}
         />

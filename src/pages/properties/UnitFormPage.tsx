@@ -29,6 +29,7 @@ export function UnitFormPage() {
   const [roomType, setRoomType] = useState<RoomType>('SINGLE');
   const [capacity, setCapacity] = useState(2);
   const [basePrice, setBasePrice] = useState(1000);
+  const [catalogUrl, setCatalogUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +59,7 @@ export function UnitFormPage() {
           setRoomType(unit.room_type);
           setCapacity(unit.capacity);
           setBasePrice(Number(unit.base_price));
+          setCatalogUrl(unit.catalog_url ?? '');
         }
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Yüklenemedi'))
@@ -88,12 +90,16 @@ export function UnitFormPage() {
         ? (capacityFromRoomType(roomType) ?? capacity)
         : capacity;
 
+      const trimmedCatalog = catalogUrl.trim();
+      const catalogPayload = trimmedCatalog.length > 0 ? trimmedCatalog : null;
+
       if (isEdit && unitId) {
         await updateUnit(unitId, {
           name: name.trim(),
           room_type: roomType,
           capacity: finalCapacity,
           base_price: basePrice,
+          catalog_url: catalogPayload,
         });
       } else {
         await createUnit({
@@ -102,6 +108,7 @@ export function UnitFormPage() {
           room_type: roomType,
           capacity: finalCapacity,
           base_price: basePrice,
+          catalog_url: catalogPayload,
         });
       }
       navigate(`/properties/${propertyId}`, { replace: true });
@@ -179,6 +186,17 @@ export function UnitFormPage() {
             required
             value={basePrice}
             onChange={setBasePrice}
+          />
+
+          <Input
+            label="Katalog Linki"
+            name="catalog_url"
+            type="url"
+            value={catalogUrl}
+            onChange={(e) => setCatalogUrl(e.target.value)}
+            placeholder="https://drive.google.com/..."
+            maxLength={1000}
+            hint="WhatsApp şablonlarında {katalog_link} olarak kullanılır. İsteğe bağlı."
           />
 
           {error && (

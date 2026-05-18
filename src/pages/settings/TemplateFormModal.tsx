@@ -144,6 +144,15 @@ export function TemplateFormModal({ template, onClose, onSaved }: Props) {
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+              İngilizce karşılıklar da çalışır (örn.{' '}
+              <code className="font-mono">{'{checkin}'}</code>,{' '}
+              <code className="font-mono">{'{checkout}'}</code>,{' '}
+              <code className="font-mono">{'{property}'}</code>,{' '}
+              <code className="font-mono">{'{unit}'}</code>,{' '}
+              <code className="font-mono">{'{guest}'}</code>,{' '}
+              <code className="font-mono">{'{catalog}'}</code>).
+            </p>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
