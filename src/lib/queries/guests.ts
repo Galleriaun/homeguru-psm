@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { softDeleteEntity } from '@/lib/queries/trash';
 import type { GuestRow, DecryptedGuest } from '@/types/database';
 
 /** Lightweight guest summary for list pages (no encrypted fields, no decryption). */
@@ -124,4 +125,35 @@ export async function deleteGuest(id: string): Promise<void> {
   }
 
   throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+}
+
+/**
+ * Cascade delete: soft-deletes every reservation + ledger entry tied to
+ * the guest (each lands in Çöp Kutusu), then hard-deletes the guest.
+ *
+ * Note: guests aren't in trash scope, so the guest goes away permanently.
+ * Restoring the cascaded ledgers/reservations later will fail because
+ * their guest_id FK points to a row that no longer exists.
+ *
+ * Aborts on first sub-delete failure (no transaction wrapping — each soft
+ * delete is its own RPC call). Re-running is safe; already-deleted rows
+ * are skipped automatically.
+ */
+export async function cascadeDeleteGuest(id: string): Promise<void> {
+  const [ledgerRes, resvRes] = await Promise.all([
+    supabase.from('ledger_entries').select('id').eq('guest_id', id),
+    supabase.from('reservations').select('id').eq('guest_id', id),
+  ]);
+  if (ledgerRes.error) throw new Error(`Cari hareketler okunamadı: ${ledgerRes.error.message}`);
+  if (resvRes.error) throw new Error(`Rezervasyonlar okunamadı: ${resvRes.error.message}`);
+
+  for (const row of ledgerRes.data ?? []) {
+    await softDeleteEntity('ledger_entries', row.id);
+  }
+  for (const row of resvRes.data ?? []) {
+    await softDeleteEntity('reservations', row.id);
+  }
+
+  // Final hard delete of the guest itself.
+  await deleteGuest(id);
 }

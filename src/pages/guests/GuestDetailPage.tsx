@@ -5,6 +5,8 @@ import { can } from '@/lib/rbac';
 import {
   getGuestDecrypted,
   deleteGuest,
+  cascadeDeleteGuest,
+  countGuestReferences,
 } from '@/lib/queries/guests';
 import type { DecryptedGuest } from '@/types/database';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +24,12 @@ export function GuestDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cascadeBusy, setCascadeBusy] = useState(false);
+  /** Set after the simple delete fails with FK so we can offer cascade. */
+  const [blockingRefs, setBlockingRefs] = useState<{
+    reservations: number;
+    ledgerEntries: number;
+  } | null>(null);
   const [showWhatsApp, setShowWhatsApp] = useState(false);
 
   useEffect(() => {
@@ -64,14 +72,34 @@ export function GuestDetailPage() {
     if (!id) return;
     setBusy(true);
     setDeleteError(null);
+    setBlockingRefs(null);
     try {
       await deleteGuest(id);
       navigate('/guests', { replace: true });
     } catch (e) {
-      // Keep the dialog open and surface the reason inside it — don't
-      // replace the whole page with a load-error card.
-      setDeleteError(e instanceof Error ? e.message : 'Silme başarısız');
+      const msg = e instanceof Error ? e.message : 'Silme başarısız';
+      setDeleteError(msg);
+      // If the error mentions a blocker, fetch counts so we can offer cascade.
+      if (msg.includes('cari hareket') || msg.includes('rezervasyon') || msg.includes('bağlı')) {
+        const refs = await countGuestReferences(id).catch(() => null);
+        if (refs && (refs.reservations > 0 || refs.ledgerEntries > 0)) {
+          setBlockingRefs(refs);
+        }
+      }
       setBusy(false);
+    }
+  };
+
+  const handleCascadeDelete = async () => {
+    if (!id) return;
+    setCascadeBusy(true);
+    setDeleteError(null);
+    try {
+      await cascadeDeleteGuest(id);
+      navigate('/guests', { replace: true });
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Toplu silme başarısız');
+      setCascadeBusy(false);
     }
   };
 
@@ -140,18 +168,40 @@ export function GuestDetailPage() {
           <>
             <p>Bu işlem geri alınamaz.</p>
             <p className="mt-2 font-medium">
-              Not: Rezervasyon kaydı bulunan misafirler silinemez.
+              Not: Rezervasyon veya cari hareket kaydı bulunan misafirler silinemez.
             </p>
           </>
         }
         confirmLabel="Sil"
         destructive
         loading={busy}
-        error={deleteError}
+        error={
+          deleteError && (
+            <>
+              <p>{deleteError}</p>
+              {blockingRefs && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-stone-700 dark:text-stone-300">
+                    Bağlı kayıtlar Çöp Kutusu'na taşınır (geri yüklenebilir), misafir kalıcı olarak silinir.
+                  </p>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={cascadeBusy}
+                    onClick={handleCascadeDelete}
+                  >
+                    Bağlı kayıtları Çöp Kutusu'na taşı ve misafiri sil
+                  </Button>
+                </div>
+              )}
+            </>
+          )
+        }
         onConfirm={handleDelete}
         onCancel={() => {
           setConfirmDelete(false);
           setDeleteError(null);
+          setBlockingRefs(null);
         }}
       />
 
