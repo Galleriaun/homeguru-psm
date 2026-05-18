@@ -258,7 +258,7 @@ export function ExpenseFormPage() {
       <ConfirmDialog
         open={confirmDelete}
         title="Gider silinsin mi?"
-        description="Bu işlem geri alınamaz."
+        description="Gider Çöp Kutusu'na taşınır ve oradan geri yüklenebilir."
         confirmLabel="Sil"
         destructive
         loading={deleting}

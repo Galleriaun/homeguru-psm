@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database } from '@/types/database';
 
 type ExpenseRow = Database['public']['Tables']['expenses']['Row'];
@@ -114,9 +115,9 @@ export async function updateExpense(
   return data;
 }
 
+/** Soft-delete an expense → lands in Çöp Kutusu (admin-restorable). */
 export async function deleteExpense(id: string): Promise<void> {
-  const { error } = await supabase.from('expenses').delete().eq('id', id);
-  if (error) throw wrapErr(error);
+  await softDeleteEntity('expenses', id);
 }
 
 /** Sum of amounts in the supplied list. Pure client-side reduction. */

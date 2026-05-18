@@ -66,6 +66,11 @@ export function Layout() {
                   Şablonlar
                 </NavLink>
               )}
+              {profile?.role === 'SUPER_ADMIN' && (
+                <NavLink to="/settings/trash" className={navLinkClasses}>
+                  Çöp Kutusu
+                </NavLink>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3">

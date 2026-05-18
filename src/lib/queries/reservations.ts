@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database, ReservationStatus } from '@/types/database';
 
 type ReservationRow = Database['public']['Tables']['reservations']['Row'];
@@ -92,17 +93,22 @@ export async function cancelReservation(id: string): Promise<void> {
   if (error) throw wrapErr(error);
 }
 
-/** Permanently deletes a reservation. Permitted for SUPER_ADMIN / PROPERTY_MANAGER / RECEPTION per RLS. */
+/**
+ * Soft-delete a reservation → lands in Çöp Kutusu. RLS gates the underlying
+ * delete to SUPER_ADMIN / PROPERTY_MANAGER / RECEPTION. If downstream rows
+ * (ledger entries, KBS, payments) reference it, the snapshot is rolled back
+ * by the RPC and an FK-flavored error surfaces.
+ */
 export async function deleteReservation(id: string): Promise<void> {
-  const { error } = await supabase.from('reservations').delete().eq('id', id);
-  if (error) {
-    // Foreign-key violation — reservation is still referenced by downstream
-    // records (ledger entries, KBS submissions, payments, housekeeping tasks)
-    if (error.code === '23503') {
+  try {
+    await softDeleteEntity('reservations', id);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '';
+    if (msg.includes('23503') || msg.toLowerCase().includes('foreign key')) {
       throw new Error(
         'Bu rezervasyon başka kayıtlara (ödeme, KBS, temizlik vb.) bağlı olduğu için silinemez. Önce ilgili kayıtları kaldırın.',
       );
     }
-    throw wrapErr(error);
+    throw e;
   }
 }

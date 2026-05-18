@@ -228,7 +228,7 @@ export function PropertyDetailPage() {
       <ConfirmDialog
         open={!!unitToDelete}
         title={unitToDelete ? `"${unitToDelete.name}" silinsin mi?` : ''}
-        description="Bu işlem geri alınamaz."
+        description="Birim Çöp Kutusu'na taşınır ve oradan geri yüklenebilir."
         confirmLabel="Sil"
         destructive
         loading={busy}

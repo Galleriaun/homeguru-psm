@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database } from '@/types/database';
 
 type TemplateRow = Database['public']['Tables']['message_templates']['Row'];
@@ -93,16 +94,9 @@ export async function updateTemplate(
   return data;
 }
 
+/** Soft-delete a template → lands in Çöp Kutusu (admin-restorable). */
 export async function deleteTemplate(id: string): Promise<void> {
-  const { data, error } = await supabase
-    .from('message_templates')
-    .delete()
-    .eq('id', id)
-    .select();
-  if (error) throw wrapErr(error);
-  if (!data || data.length === 0) {
-    throw new Error('Şablon silinemedi. Yetkiniz olmayabilir.');
-  }
+  await softDeleteEntity('message_templates', id);
 }
 
 /**

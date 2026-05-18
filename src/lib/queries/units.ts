@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database } from '@/types/database';
 
 type UnitRow = Database['public']['Tables']['units']['Row'];
@@ -56,9 +57,9 @@ export async function updateUnit(id: string, input: UnitUpdate) {
   return data;
 }
 
+/** Soft-delete a unit → lands in Çöp Kutusu (admin-restorable). */
 export async function deleteUnit(id: string) {
-  const { error } = await supabase.from('units').delete().eq('id', id);
-  if (error) throw error;
+  await softDeleteEntity('units', id);
 }
 
 /** How many units this property has — used to gate adding more for APARTMENT type. */

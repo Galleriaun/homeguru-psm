@@ -330,9 +330,9 @@ export function ReservationDetailPage() {
         title={`"${guestName || 'Rezervasyon'}" kaydı silinsin mi?`}
         description={
           <>
-            <p>Bu işlem geri alınamaz ve rezervasyon kalıcı olarak silinir.</p>
+            <p>Rezervasyon Çöp Kutusu'na taşınır ve oradan geri yüklenebilir.</p>
             <p className="mt-2">
-              Kaydı saklamak istiyorsanız bunun yerine “İptal Et” seçeneğini kullanın.
+              Rezervasyonu iptal statüsünde tutmak istiyorsanız bunun yerine “İptal Et” seçeneğini kullanın.
             </p>
           </>
         }
@@ -387,7 +387,7 @@ export function ReservationDetailPage() {
                 </strong>
                 {entryToDelete.note ? ` — ${entryToDelete.note}` : ''}
               </p>
-              <p className="mt-2">Bu işlem geri alınamaz. Bakiye yeniden hesaplanır.</p>
+              <p className="mt-2">Kayıt Çöp Kutusu'na taşınır ve oradan geri yüklenebilir. Bakiye yeniden hesaplanır.</p>
               {entryToDelete.payment_collection_id && (
                 <div className="mt-3 rounded border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200">
                   <p>

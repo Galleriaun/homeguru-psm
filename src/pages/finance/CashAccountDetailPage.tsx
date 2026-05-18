@@ -351,7 +351,7 @@ export function CashAccountDetailPage() {
                 {txToDelete.description ? ` — ${txToDelete.description}` : ''}
               </p>
               <p className="mt-2">
-                Bu işlem geri alınamaz. Bakiye yeniden hesaplanır.
+                Hareket Çöp Kutusu'na taşınır ve oradan geri yüklenebilir. Bakiye yeniden hesaplanır.
               </p>
               {txToDelete.payment_collection_id ? (
                 <div className="mt-3 rounded border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200">

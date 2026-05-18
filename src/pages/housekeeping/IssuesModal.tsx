@@ -392,7 +392,7 @@ export function IssuesModal({
         <ConfirmDialog
           open={toDelete !== null}
           title={toDelete ? 'Bu sorun silinsin mi?' : ''}
-          description="Bu işlem geri alınamaz. Bağlı fotoğraflar da silinir."
+          description="Bu sorun Çöp Kutusu'na taşınır ve oradan geri yüklenebilir."
           confirmLabel="Sil"
           destructive
           loading={deleting}

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database } from '@/types/database';
 
 type LedgerRow = Database['public']['Tables']['ledger_entries']['Row'];
@@ -48,26 +49,15 @@ export async function createLedgerEntry(input: LedgerInsert): Promise<LedgerRow>
 }
 
 /**
- * Deletes a single ledger entry. RLS allows this only for SUPER_ADMIN
- * (see migration 017). `.select()` ensures a silent zero-row outcome
- * surfaces as a thrown error instead of looking like success.
+ * Soft-delete a single ledger entry → lands in Çöp Kutusu. RLS gates the
+ * underlying delete to SUPER_ADMIN (migration 017).
  *
- * Callers should prefer `deletePaymentCollection` for entries that have
- * a payment_collection_id set — that path cascades and keeps the cash
- * drawer in sync.
+ * Callers should prefer `deletePaymentCollection` for entries that have a
+ * payment_collection_id set — that path cascades and keeps the cash drawer
+ * in sync (and bypasses trash because cascade can't be partially restored).
  */
 export async function deleteLedgerEntry(id: string): Promise<void> {
-  const { data, error } = await supabase
-    .from('ledger_entries')
-    .delete()
-    .eq('id', id)
-    .select();
-  if (error) throw wrapErr(error);
-  if (!data || data.length === 0) {
-    throw new Error(
-      'Kayıt silinemedi. Yetkiniz olmayabilir veya migration 017 henüz uygulanmamış olabilir.',
-    );
-  }
+  await softDeleteEntity('ledger_entries', id);
 }
 
 /** Balance = SUM(DEBT) − SUM(PAYMENT). Positive means the guest still owes. */

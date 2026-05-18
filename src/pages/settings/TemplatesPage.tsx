@@ -161,7 +161,7 @@ export function TemplatesPage() {
       <ConfirmDialog
         open={toDelete !== null}
         title={toDelete ? `"${toDelete.name}" şablonu silinsin mi?` : ''}
-        description="Bu işlem geri alınamaz."
+        description="Şablon Çöp Kutusu'na taşınır ve oradan geri yüklenebilir."
         confirmLabel="Sil"
         destructive
         loading={deleting}

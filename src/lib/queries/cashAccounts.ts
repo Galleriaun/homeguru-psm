@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database } from '@/types/database';
 
 type CashAccountRow = Database['public']['Tables']['cash_accounts']['Row'];
@@ -109,22 +110,12 @@ export async function createCashTransaction(input: CashTxInsert): Promise<CashTx
 }
 
 /**
- * Deletes a cash transaction. RLS allows this only for SUPER_ADMIN
- * (see migration 015). We `.select()` so a silent zero-row outcome
- * surfaces as a thrown error instead of looking like success.
+ * Soft-delete a cash transaction → lands in Çöp Kutusu. RLS gates the
+ * underlying delete to SUPER_ADMIN (migration 015). The RPC re-raises if
+ * permission is missing.
  */
 export async function deleteCashTransaction(id: string): Promise<void> {
-  const { data, error } = await supabase
-    .from('cash_transactions')
-    .delete()
-    .eq('id', id)
-    .select();
-  if (error) throw wrapErr(error);
-  if (!data || data.length === 0) {
-    throw new Error(
-      'Kayıt silinemedi. Yetkiniz olmayabilir veya migration 015 henüz uygulanmamış olabilir.',
-    );
-  }
+  await softDeleteEntity('cash_transactions', id);
 }
 
 /** Sum of IN minus sum of OUT. Pure client-side reduction. */

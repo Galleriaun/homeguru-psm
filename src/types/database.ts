@@ -375,6 +375,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      trash_entries: {
+        Row: {
+          id: string;
+          entity_type: string;
+          entity_id: string;
+          entity_label: string | null;
+          branch_id: string | null;
+          payload: Json;
+          deleted_by: string | null;
+          deleted_at: string;
+        };
+        Insert: {
+          id?: string;
+          entity_type: string;
+          entity_id: string;
+          entity_label?: string | null;
+          branch_id?: string | null;
+          payload: Json;
+          deleted_by?: string | null;
+          deleted_at?: string;
+        };
+        Update: {
+          id?: string;
+          entity_type?: string;
+          entity_id?: string;
+          entity_label?: string | null;
+          branch_id?: string | null;
+          payload?: Json;
+          deleted_by?: string | null;
+          deleted_at?: string;
+        };
+        Relationships: [];
+      };
       staff_advances: {
         Row: {
           id: string;
@@ -609,6 +642,14 @@ export type Database = {
       dispute_payment: {
         Args: { _payment_id: string };
         Returns: Database['public']['Tables']['payment_collections']['Row'];
+      };
+      soft_delete_entity: {
+        Args: { p_type: string; p_id: string };
+        Returns: string; // trash_entries.id
+      };
+      restore_trash: {
+        Args: { p_trash_id: string };
+        Returns: void;
       };
     };
     Enums: {

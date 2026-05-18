@@ -27,6 +27,7 @@ import { HousekeepingPage } from '@/pages/housekeeping/HousekeepingPage';
 import { StaffListPage } from '@/pages/finance/StaffListPage';
 import { StaffDetailPage } from '@/pages/finance/StaffDetailPage';
 import { TemplatesPage } from '@/pages/settings/TemplatesPage';
+import { TrashPage } from '@/pages/settings/TrashPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
 const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
@@ -227,6 +228,16 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
                 <TemplatesPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Çöp Kutusu — recoverable deletes (SUPER_ADMIN only; RLS-gated server-side too) */}
+          <Route
+            path="/settings/trash"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <TrashPage />
               </ProtectedRoute>
             }
           />

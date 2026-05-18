@@ -75,16 +75,53 @@ export async function updateGuest(id: string, input: GuestInput): Promise<GuestR
   return data;
 }
 
+/**
+ * Counts the rows that block a guest delete (FK RESTRICT on reservations
+ * and ledger_entries). Used to produce a helpful error message — the user
+ * may have already deleted the reservation but orphaned ledger entries
+ * (with reservation_id = NULL) still keep the guest pinned.
+ */
+export async function countGuestReferences(
+  id: string,
+): Promise<{ reservations: number; ledgerEntries: number }> {
+  const [r, l] = await Promise.all([
+    supabase
+      .from('reservations')
+      .select('id', { count: 'exact', head: true })
+      .eq('guest_id', id),
+    supabase
+      .from('ledger_entries')
+      .select('id', { count: 'exact', head: true })
+      .eq('guest_id', id),
+  ]);
+  return {
+    reservations: r.count ?? 0,
+    ledgerEntries: l.count ?? 0,
+  };
+}
+
 /** Deletes a guest. Only SUPER_ADMIN is permitted per RLS. */
 export async function deleteGuest(id: string): Promise<void> {
   const { error } = await supabase.from('guests').delete().eq('id', id);
-  if (error) {
-    // Foreign-key violation — guest is still referenced by one or more reservations
-    if (error.code === '23503') {
-      throw new Error(
-        'Bu misafir bir veya daha fazla rezervasyona bağlı olduğu için silinemez. Silmeden önce misafire ait rezervasyonları kaldırın.',
-      );
+  if (!error) return;
+
+  // FK violation: figure out exactly what's blocking so the user knows what to fix.
+  if (error.code === '23503') {
+    const refs = await countGuestReferences(id).catch(() => null);
+    if (refs) {
+      const parts: string[] = [];
+      if (refs.reservations > 0) parts.push(`${refs.reservations} rezervasyon`);
+      if (refs.ledgerEntries > 0) parts.push(`${refs.ledgerEntries} cari hareket`);
+      if (parts.length > 0) {
+        throw new Error(
+          `Bu misafire bağlı ${parts.join(' ve ')} bulunduğu için silinemez. Önce ilgili kayıtları kaldırın.`,
+        );
+      }
     }
-    throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+    throw new Error(
+      'Bu misafir başka kayıtlara bağlı olduğu için silinemez. Önce bağlı kayıtları kaldırın.',
+    );
   }
+
+  throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
 }

@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { deleteIssuePhotos } from '@/lib/photos';
+import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database } from '@/types/database';
 
 type IssueRow = Database['public']['Tables']['housekeeping_issues']['Row'];
@@ -73,21 +73,12 @@ export async function updateIssueStatus(
 }
 
 /**
- * Hard-delete an issue and best-effort remove its photos from storage.
- * RLS gates who can actually delete (SUPER_ADMIN or branch members per
- * `hk_issues_modify`); the UI gates this further to SUPER_ADMIN only.
- * Throws if RLS blocks the delete (no row returned).
+ * Soft-delete an issue → it lands in Çöp Kutusu. Photos are intentionally
+ * NOT cleaned up here so a restore can bring them back; permanent cleanup
+ * happens when an admin purges the trash entry.
+ *
+ * The `photoPaths` arg is kept for backwards-compatible callers but ignored.
  */
-export async function deleteIssue(id: string, photoPaths: string[]): Promise<void> {
-  const { data, error } = await supabase
-    .from('housekeeping_issues')
-    .delete()
-    .eq('id', id)
-    .select();
-  if (error) throw wrapErr(error);
-  if (!data || data.length === 0) {
-    throw new Error('Sorun silinemedi. Yetkiniz olmayabilir.');
-  }
-  // Photo cleanup is best-effort — row delete already succeeded.
-  await deleteIssuePhotos(photoPaths);
+export async function deleteIssue(id: string, _photoPaths?: string[]): Promise<void> {
+  await softDeleteEntity('housekeeping_issues', id);
 }
