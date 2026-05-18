@@ -4,14 +4,17 @@
  * Why semicolon + UTF-8 BOM:
  *  • Excel on Turkish-locale Windows defaults to ; as separator. Using ; instead
  *    of , means the user can double-click the file and columns are split correctly.
- *  • The BOM (﻿) tells Excel that the file is UTF-8 so Turkish characters
+ *  • A UTF-8 BOM (U+FEFF) tells Excel the file is UTF-8 so Turkish characters
  *    (ş ç ğ ı ö ü) render correctly. Without it Excel guesses Latin-1.
  *  • Numbers and Google Sheets also handle this format natively.
+ *
+ * The BOM is written via \uFEFF escape (not the literal character) so the
+ * source stays ASCII-safe and ESLint's no-irregular-whitespace rule is happy.
  */
 
 const SEP = ';';
 const ROW_END = '\r\n';
-const BOM = '﻿';
+const BOM = '\uFEFF';
 
 /**
  * Escape a single cell value for CSV. Wraps in double quotes when the value
