@@ -66,11 +66,6 @@ export function Layout() {
                   Şablonlar
                 </NavLink>
               )}
-              {profile?.role === 'SUPER_ADMIN' && (
-                <NavLink to="/settings/trash" className={navLinkClasses}>
-                  Çöp Kutusu
-                </NavLink>
-              )}
             </nav>
           </div>
           <div className="flex items-center gap-3">
@@ -80,6 +75,39 @@ export function Layout() {
                 {profile?.role.replace('_', ' ')}
               </span>
             </span>
+            {profile?.role === 'SUPER_ADMIN' && (
+              <NavLink
+                to="/settings/trash"
+                aria-label="Çöp Kutusu"
+                title="Çöp Kutusu"
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors',
+                    isActive
+                      ? 'border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                  )
+                }
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                  <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                </svg>
+              </NavLink>
+            )}
             <ThemeToggle />
             <button
               onClick={() => setConfirmSignOut(true)}
