@@ -3,12 +3,14 @@ import {
   listIssuesForUnit,
   createIssue,
   updateIssueStatus,
+  deleteIssue,
   type HousekeepingIssue,
   type IssueStatus,
 } from '@/lib/queries/housekeepingIssues';
 import { uploadIssuePhoto, issuePhotoUrl } from '@/lib/photos';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { cn } from '@/lib/utils';
 
 const MAX_PHOTOS = 5;
@@ -31,6 +33,8 @@ interface Props {
   propertyId: string;
   reportedByUserId: string;
   canWrite: boolean;
+  /** Gate destructive actions (delete). Pass true only for SUPER_ADMIN. */
+  canDelete?: boolean;
   onClose: () => void;
   /** Called whenever the open-issue count for this unit may have changed. */
   onChange: () => void;
@@ -42,6 +46,7 @@ export function IssuesModal({
   propertyId,
   reportedByUserId,
   canWrite,
+  canDelete = false,
   onClose,
   onChange,
 }: Props) {
@@ -57,6 +62,11 @@ export function IssuesModal({
 
   // Per-row resolve state
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+
+  // Delete confirm flow (SUPER_ADMIN only)
+  const [toDelete, setToDelete] = useState<HousekeepingIssue | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,6 +159,22 @@ export function IssuesModal({
       setCreateError(err instanceof Error ? err.message : 'Durum güncellenemedi');
     } finally {
       setResolvingId(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!toDelete) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteIssue(toDelete.id, toDelete.photo_paths);
+      setIssues((prev) => (prev ? prev.filter((i) => i.id !== toDelete.id) : prev));
+      setToDelete(null);
+      onChange();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Silinemedi');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -330,24 +356,53 @@ export function IssuesModal({
                   </div>
                 )}
 
-                <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-stone-600 dark:text-stone-300">
                     {new Date(issue.created_at).toLocaleString('tr-TR')}
                   </span>
-                  {canWrite && issue.status !== 'RESOLVED' && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      loading={resolvingId === issue.id}
-                      onClick={() => handleResolve(issue)}
-                    >
-                      Çözüldü olarak işaretle
-                    </Button>
-                  )}
+                  <div className="flex gap-2">
+                    {canWrite && issue.status !== 'RESOLVED' && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={resolvingId === issue.id}
+                        onClick={() => handleResolve(issue)}
+                      >
+                        Çözüldü olarak işaretle
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => {
+                          setDeleteError(null);
+                          setToDelete(issue);
+                        }}
+                      >
+                        Sil
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
         </div>
+
+        <ConfirmDialog
+          open={toDelete !== null}
+          title={toDelete ? 'Bu sorun silinsin mi?' : ''}
+          description="Bu işlem geri alınamaz. Bağlı fotoğraflar da silinir."
+          confirmLabel="Sil"
+          destructive
+          loading={deleting}
+          error={deleteError}
+          onConfirm={handleDelete}
+          onCancel={() => {
+            setToDelete(null);
+            setDeleteError(null);
+          }}
+        />
       </Card>
     </div>
   );

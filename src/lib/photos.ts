@@ -39,3 +39,16 @@ export function issuePhotoUrl(path: string): string {
   const { data } = supabase.storage.from(ISSUES_BUCKET).getPublicUrl(path);
   return data.publicUrl;
 }
+
+/**
+ * Best-effort cleanup of stored issue photos. Used when deleting an issue
+ * so we don't leave orphan files in the bucket. Failures are logged and
+ * swallowed — the caller can still proceed with the row delete.
+ */
+export async function deleteIssuePhotos(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const { error } = await supabase.storage.from(ISSUES_BUCKET).remove(paths);
+  if (error) {
+    console.warn('Sorun fotoğrafları silinemedi:', error.message);
+  }
+}

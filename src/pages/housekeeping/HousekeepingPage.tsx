@@ -65,6 +65,7 @@ export function HousekeepingPage() {
   const [issueModalUnit, setIssueModalUnit] = useState<Unit | null>(null);
 
   const canWrite = Boolean(profile && can(profile.role, 'housekeeping:write'));
+  const canDelete = profile?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     setLoading(true);
@@ -229,6 +230,7 @@ export function HousekeepingPage() {
           propertyId={issueModalUnit.property_id}
           reportedByUserId={user.id}
           canWrite={canWrite}
+          canDelete={canDelete}
           onClose={() => setIssueModalUnit(null)}
           onChange={refreshIssueCounts}
         />
