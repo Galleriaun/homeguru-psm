@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { formatTRY, formatRoomType } from '@/lib/utils';
+import { cn, formatTRY, formatRoomType } from '@/lib/utils';
 import {
   propertyPhotoUrl,
   unitPhotoUrl,
@@ -110,6 +110,25 @@ export function PropertyDetailPage() {
     }
   };
 
+  /**
+   * Promote a photo to position 0 → it becomes the card thumbnail on the
+   * Mülkler list. Persists the reordered array via updateProperty.
+   */
+  const handleSetCover = async (path: string) => {
+    if (!property) return;
+    if (property.photo_paths[0] === path) return; // already cover
+    const nextPaths = [path, ...property.photo_paths.filter((p) => p !== path)];
+    // Optimistic update so the star fills instantly.
+    const prev = property;
+    setProperty({ ...property, photo_paths: nextPaths });
+    try {
+      await updateProperty(property.id, { photo_paths: nextPaths });
+    } catch (e) {
+      setProperty(prev); // revert on failure
+      setError(e instanceof Error ? e.message : 'Kapak değiştirilemedi');
+    }
+  };
+
   const handleDeletePhoto = async () => {
     if (!photoToDelete || !property) return;
     setPhotoBusy(true);
@@ -189,37 +208,62 @@ export function PropertyDetailPage() {
             Fotoğraflar ({property.photo_paths.length})
           </h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-            {property.photo_paths.map((p) => (
-              <div key={p} className="relative aspect-square">
-                <a
-                  href={propertyPhotoUrl(p)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block h-full w-full overflow-hidden rounded"
-                >
-                  <img
-                    src={propertyPhotoUrl(p)}
-                    alt={`${property.name} fotoğrafı`}
-                    className="h-full w-full object-cover transition-opacity hover:opacity-80"
-                    loading="lazy"
-                  />
-                </a>
-                {canManageProperty && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhotoError(null);
-                      setPhotoToDelete({ scope: 'property', path: p });
-                    }}
-                    aria-label="Fotoğrafı sil"
-                    title="Fotoğrafı sil"
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600/90 text-xs text-white shadow hover:bg-red-700"
+            {property.photo_paths.map((p, i) => {
+              const isCover = i === 0;
+              return (
+                <div key={p} className="relative aspect-square">
+                  <a
+                    href={propertyPhotoUrl(p)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block h-full w-full overflow-hidden rounded"
                   >
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
+                    <img
+                      src={propertyPhotoUrl(p)}
+                      alt={`${property.name} fotoğrafı`}
+                      className="h-full w-full object-cover transition-opacity hover:opacity-80"
+                      loading="lazy"
+                    />
+                  </a>
+                  {canManageProperty && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleSetCover(p)}
+                        disabled={isCover}
+                        aria-label={isCover ? 'Kapak fotoğrafı' : 'Kapak yap'}
+                        title={isCover ? 'Kapak fotoğrafı' : 'Kapak yap'}
+                        className={cn(
+                          'absolute left-1 top-1 flex h-6 w-6 items-center justify-center rounded-full text-sm shadow',
+                          isCover
+                            ? 'cursor-default bg-amber-400 text-white'
+                            : 'bg-stone-900/60 text-white hover:bg-amber-500',
+                        )}
+                      >
+                        ★
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPhotoError(null);
+                          setPhotoToDelete({ scope: 'property', path: p });
+                        }}
+                        aria-label="Fotoğrafı sil"
+                        title="Fotoğrafı sil"
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600/90 text-xs text-white shadow hover:bg-red-700"
+                      >
+                        ×
+                      </button>
+                    </>
+                  )}
+                  {isCover && (
+                    <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white shadow">
+                      Kapak
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}
