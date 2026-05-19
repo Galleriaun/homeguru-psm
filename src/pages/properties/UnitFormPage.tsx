@@ -249,9 +249,9 @@ export function UnitFormPage() {
             type="url"
             value={catalogUrl}
             onChange={(e) => setCatalogUrl(e.target.value)}
-            placeholder="https://drive.google.com/..."
+            placeholder="https://wa.me/p/... veya istediğiniz başka link"
             maxLength={1000}
-            hint="WhatsApp şablonlarında {katalog_link} olarak kullanılır. İsteğe bağlı."
+            hint="Boş bırakırsanız bu birim için fotoğraflardan oluşan otomatik bir galeri linki oluşturulur. Doldurursanız WhatsApp şablonlarında {katalog_link} bu URL'i kullanır."
           />
 
           {/* Photo gallery */}

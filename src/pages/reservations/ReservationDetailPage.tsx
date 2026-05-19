@@ -26,6 +26,7 @@ import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { formatDate, formatTRY } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
+import { resolveKatalogLink } from '@/lib/gallery';
 
 type Reservation = Database['public']['Tables']['reservations']['Row'];
 
@@ -373,7 +374,7 @@ export function ReservationDetailPage() {
             toplam_tutar: formatTRY(Number(reservation.total_amount)),
             mulk_adi: property?.name ?? '',
             birim_adi: unit?.name ?? '',
-            katalog_link: unit?.catalog_url ?? '',
+            katalog_link: resolveKatalogLink(unit),
           }}
           onClose={() => setShowWhatsApp(false)}
         />

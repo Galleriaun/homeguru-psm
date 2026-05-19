@@ -29,6 +29,7 @@ import { StaffDetailPage } from '@/pages/finance/StaffDetailPage';
 import { TemplatesPage } from '@/pages/settings/TemplatesPage';
 import { TrashPage } from '@/pages/settings/TrashPage';
 import { AuditLogPage } from '@/pages/settings/AuditLogPage';
+import { UnitGalleryPage } from '@/pages/public/UnitGalleryPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
 const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
@@ -40,6 +41,9 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Public unit gallery — no auth, used by guests via {katalog_link} */}
+        <Route path="/g/u/:unitId" element={<UnitGalleryPage />} />
 
         <Route
           element={

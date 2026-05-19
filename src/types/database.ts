@@ -687,6 +687,21 @@ export type Database = {
         Args: { p_trash_id: string };
         Returns: void;
       };
+      get_public_unit_gallery: {
+        Args: { p_unit_id: string };
+        Returns: {
+          id: string;
+          name: string;
+          room_type: RoomType;
+          capacity: number;
+          base_price: number;
+          photo_paths: string[];
+          property_id: string;
+          property_name: string;
+          property_type: PropertyType;
+          property_address: string | null;
+        } | null;
+      };
     };
     Enums: {
       [_ in never]: never;

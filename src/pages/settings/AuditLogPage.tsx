@@ -144,8 +144,8 @@ export function AuditLogPage() {
           Denetim Kaydı
         </h1>
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-          KVKK gereği şifreli alanlara her erişim ve finansal durum değişiklikleri
-          burada kayıt altındadır. Sadece okuma — düzenleme veya silme yapılamaz.
+          Her erişim ve finansal durum değişiklikleri burada kayıt altındadır.
+          Sadece okuma — düzenleme veya silme yapılamaz.
         </p>
       </div>
 
