@@ -28,6 +28,7 @@ import { StaffListPage } from '@/pages/finance/StaffListPage';
 import { StaffDetailPage } from '@/pages/finance/StaffDetailPage';
 import { TemplatesPage } from '@/pages/settings/TemplatesPage';
 import { TrashPage } from '@/pages/settings/TrashPage';
+import { AuditLogPage } from '@/pages/settings/AuditLogPage';
 import { KbsListPage } from '@/pages/compliance/KbsListPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
@@ -239,6 +240,16 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
                 <TrashPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Denetim Kaydı — read-only audit log (SUPER_ADMIN only; RLS also allows PROPERTY_MANAGER but UI restricts further) */}
+          <Route
+            path="/settings/audit"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <AuditLogPage />
               </ProtectedRoute>
             }
           />

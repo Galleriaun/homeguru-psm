@@ -85,6 +85,39 @@ export function Layout() {
             </span>
             {profile?.role === 'SUPER_ADMIN' && (
               <NavLink
+                to="/settings/audit"
+                aria-label="Denetim Kaydı"
+                title="Denetim Kaydı"
+                className={({ isActive }) =>
+                  cn(
+                    'inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors',
+                    isActive
+                      ? 'border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                  )
+                }
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="9" y1="13" x2="15" y2="13" />
+                  <line x1="9" y1="17" x2="15" y2="17" />
+                </svg>
+              </NavLink>
+            )}
+            {profile?.role === 'SUPER_ADMIN' && (
+              <NavLink
                 to="/settings/trash"
                 aria-label="Çöp Kutusu"
                 title="Çöp Kutusu"
