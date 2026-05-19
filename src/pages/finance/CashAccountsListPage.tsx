@@ -85,7 +85,7 @@ export function CashAccountsListPage() {
             Mülk bazında nakit, banka ve kart hesaplarınız
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <FinanceTabs />
           {canWrite && (
             <Link to="/finance/cash/new">

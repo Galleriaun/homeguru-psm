@@ -35,15 +35,15 @@ export function GuestsListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Misafirler</h1>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
             Kayıtlı misafirlerinizin listesi
           </p>
         </div>
         {canCreate && (
-          <Link to="/guests/new">
+          <Link to="/guests/new" className="shrink-0">
             <Button>+ Yeni Misafir</Button>
           </Link>
         )}
@@ -77,43 +77,70 @@ export function GuestsListPage() {
       )}
 
       {guests && filtered.length > 0 && (
-        <Card className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                <tr>
-                  <th className="px-6 py-3 font-medium">Ad Soyad</th>
-                  <th className="px-6 py-3 font-medium">Telefon</th>
-                  <th className="px-6 py-3 font-medium">E-posta</th>
-                  <th className="px-6 py-3 font-medium">Uyruk</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                {filtered.map((g) => (
-                  <tr
-                    key={g.id}
-                    className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50"
-                  >
-                    <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
-                      <Link to={`/guests/${g.id}`} className="block">
-                        {g.full_name}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      {g.phone ?? '—'}
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      {g.email ?? '—'}
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      {g.nationality ?? '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2 sm:hidden">
+            {filtered.map((g) => (
+              <Link
+                key={g.id}
+                to={`/guests/${g.id}`}
+                className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
+              >
+                <p className="font-medium text-stone-900 dark:text-stone-100">
+                  {g.full_name}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-stone-600 dark:text-stone-300">
+                  {g.phone && <span>{g.phone}</span>}
+                  {g.email && <span className="truncate">{g.email}</span>}
+                  {g.nationality && (
+                    <span className="rounded bg-stone-200 px-1.5 py-0.5 text-[10px] uppercase text-stone-700 dark:bg-stone-700 dark:text-stone-200">
+                      {g.nationality}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
           </div>
-        </Card>
+
+          {/* Tablet+ : table */}
+          <Card className="hidden p-0 sm:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Ad Soyad</th>
+                    <th className="px-6 py-3 font-medium">Telefon</th>
+                    <th className="px-6 py-3 font-medium">E-posta</th>
+                    <th className="px-6 py-3 font-medium">Uyruk</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+                  {filtered.map((g) => (
+                    <tr
+                      key={g.id}
+                      className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                    >
+                      <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
+                        <Link to={`/guests/${g.id}`} className="block">
+                          {g.full_name}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {g.phone ?? '—'}
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {g.email ?? '—'}
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {g.nationality ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
     </div>
   );

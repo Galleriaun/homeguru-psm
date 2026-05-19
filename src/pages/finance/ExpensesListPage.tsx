@@ -87,7 +87,7 @@ export function ExpensesListPage() {
             Mülk bazında işletme giderlerinizin kaydı
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <FinanceTabs />
           {canWrite && (
             <Link to="/finance/expenses/new">

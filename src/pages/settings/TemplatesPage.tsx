@@ -48,8 +48,8 @@ export function TemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             WhatsApp Şablonları
           </h1>
@@ -59,6 +59,7 @@ export function TemplatesPage() {
         </div>
         {canWrite && (
           <Button
+            className="shrink-0"
             onClick={() => {
               setEditing(null);
               setShowForm(true);

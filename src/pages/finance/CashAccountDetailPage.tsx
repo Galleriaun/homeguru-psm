@@ -184,8 +184,8 @@ export function CashAccountDetailPage() {
       </div>
 
       {/* Balance card */}
-      <Card className="flex items-center justify-between">
-        <div>
+      <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
             Güncel Bakiye
           </p>
@@ -203,7 +203,9 @@ export function CashAccountDetailPage() {
           </p>
         </div>
         {canWrite && (
-          <Button onClick={() => setShowTxModal(true)}>+ İşlem Ekle</Button>
+          <Button className="w-full sm:w-auto" onClick={() => setShowTxModal(true)}>
+            + İşlem Ekle
+          </Button>
         )}
       </Card>
 

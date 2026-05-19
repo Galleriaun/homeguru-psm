@@ -186,37 +186,64 @@ export function StaffDetailPage() {
             </p>
           </Card>
         ) : (
-          <Card className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                  <tr>
-                    <th className="px-6 py-3 font-medium">Tarih</th>
-                    <th className="px-6 py-3 font-medium">Açıklama</th>
-                    <th className="px-6 py-3 text-right font-medium">Tutar</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                  {advances.map((a) => (
-                    <tr key={a.id}>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        <div>{formatDate(a.given_at)}</div>
-                        <div className="text-xs text-stone-600 dark:text-stone-300">
-                          {formatTime(a.given_at)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+          <>
+            {/* Mobile: stacked cards */}
+            <div className="space-y-2 sm:hidden">
+              {advances.map((a) => (
+                <div
+                  key={a.id}
+                  className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-stone-600 dark:text-stone-300">
+                        {formatDate(a.given_at)} · {formatTime(a.given_at)}
+                      </p>
+                      <p className="mt-0.5 break-words text-sm text-stone-700 dark:text-stone-300">
                         {a.note || '—'}
-                      </td>
-                      <td className="px-6 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
-                        {formatTRY(Number(a.amount))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-semibold text-amber-600 dark:text-amber-400">
+                      {formatTRY(Number(a.amount))}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </Card>
+
+            {/* Tablet+ : table */}
+            <Card className="hidden p-0 sm:block">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                    <tr>
+                      <th className="px-6 py-3 font-medium">Tarih</th>
+                      <th className="px-6 py-3 font-medium">Açıklama</th>
+                      <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+                    {advances.map((a) => (
+                      <tr key={a.id}>
+                        <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                          <div>{formatDate(a.given_at)}</div>
+                          <div className="text-xs text-stone-600 dark:text-stone-300">
+                            {formatTime(a.given_at)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                          {a.note || '—'}
+                        </td>
+                        <td className="px-6 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
+                          {formatTRY(Number(a.amount))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
         )}
       </section>
 

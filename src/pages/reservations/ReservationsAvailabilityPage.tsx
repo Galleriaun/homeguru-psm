@@ -326,7 +326,54 @@ function ResultSection({
         <p className="text-xs text-stone-600 dark:text-stone-300">{subtitle}</p>
       </div>
 
-      <Card className="p-0">
+      {/* Mobile: stacked cards */}
+      <div className="space-y-2 sm:hidden">
+        {results.map((r) => {
+          const total = Number(r.unit.base_price) * nights;
+          return (
+            <div
+              key={`${r.unit.id}_${r.shift}`}
+              className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-stone-900 dark:text-stone-100">
+                    {r.unit.name}
+                  </p>
+                  <p className="truncate text-xs text-stone-600 dark:text-stone-300">
+                    {r.property.name}
+                  </p>
+                </div>
+                <span
+                  className={
+                    r.shift === 0
+                      ? 'shrink-0 rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      : 'shrink-0 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  }
+                >
+                  {shiftLabel(r.shift)}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-stone-700 dark:text-stone-300">
+                {formatDate(r.start)} → {formatDate(r.end)}
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="font-semibold text-stone-900 dark:text-stone-100">
+                  {formatTRY(total)}
+                </p>
+                {canCreate && (
+                  <Button size="sm" onClick={() => onReserve(r)}>
+                    Rezerve Et
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tablet+ : table */}
+      <Card className="hidden p-0 sm:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">

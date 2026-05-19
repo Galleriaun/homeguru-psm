@@ -45,8 +45,8 @@ export function ReservationsListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             Rezervasyonlar
           </h1>
@@ -54,11 +54,11 @@ export function ReservationsListPage() {
             Tüm rezervasyonların listesi
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <ReservationsViewTabs />
           {canCreate && (
             <Link to="/reservations/new">
-              <Button>+ Yeni Rezervasyon</Button>
+              <Button>+ Yeni</Button>
             </Link>
           )}
         </div>
@@ -99,54 +99,90 @@ export function ReservationsListPage() {
       )}
 
       {reservations && filtered.length > 0 && (
-        <Card className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                <tr>
-                  <th className="px-6 py-3 font-medium">Misafir</th>
-                  <th className="px-6 py-3 font-medium">Mülk / Birim</th>
-                  <th className="px-6 py-3 font-medium">Tarih</th>
-                  <th className="px-6 py-3 font-medium">Tutar</th>
-                  <th className="px-6 py-3 font-medium">Durum</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                {filtered.map((r) => (
-                  <tr key={r.id} className="transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50">
-                    <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
-                      <Link to={`/reservations/${r.id}`} className="block">
-                        {r.guest?.full_name ?? '—'}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      <div className="text-base font-semibold text-stone-900 dark:text-stone-100">
-                        {r.unit?.name}
-                      </div>
-                      <div className="text-xs text-stone-600 dark:text-stone-400">
-                        {r.property?.name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      <div>{formatDate(r.stay_start)}</div>
-                      <div className="text-xs text-stone-600 dark:text-stone-400">
-                        → {formatDate(r.stay_end)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      {formatTRY(Number(r.total_amount))}
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}>
-                        {STATUS_LABELS[r.status]}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2 sm:hidden">
+            {filtered.map((r) => (
+              <Link
+                key={r.id}
+                to={`/reservations/${r.id}`}
+                className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
+                    {r.guest?.full_name ?? '—'}
+                  </p>
+                  <span
+                    className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}
+                  >
+                    {STATUS_LABELS[r.status]}
+                  </span>
+                </div>
+                <p className="mt-0.5 truncate text-xs text-stone-600 dark:text-stone-300">
+                  {r.property?.name} · {r.unit?.name}
+                </p>
+                <p className="mt-1 flex items-center justify-between gap-2 text-xs text-stone-700 dark:text-stone-300">
+                  <span>
+                    {formatDate(r.stay_start)} → {formatDate(r.stay_end)}
+                  </span>
+                  <span className="font-semibold text-stone-900 dark:text-stone-100">
+                    {formatTRY(Number(r.total_amount))}
+                  </span>
+                </p>
+              </Link>
+            ))}
           </div>
-        </Card>
+
+          {/* Tablet+ : table */}
+          <Card className="hidden p-0 sm:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Misafir</th>
+                    <th className="px-6 py-3 font-medium">Mülk / Birim</th>
+                    <th className="px-6 py-3 font-medium">Tarih</th>
+                    <th className="px-6 py-3 font-medium">Tutar</th>
+                    <th className="px-6 py-3 font-medium">Durum</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+                  {filtered.map((r) => (
+                    <tr key={r.id} className="transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50">
+                      <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
+                        <Link to={`/reservations/${r.id}`} className="block">
+                          {r.guest?.full_name ?? '—'}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        <div className="text-base font-semibold text-stone-900 dark:text-stone-100">
+                          {r.unit?.name}
+                        </div>
+                        <div className="text-xs text-stone-600 dark:text-stone-400">
+                          {r.property?.name}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        <div>{formatDate(r.stay_start)}</div>
+                        <div className="text-xs text-stone-600 dark:text-stone-400">
+                          → {formatDate(r.stay_end)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {formatTRY(Number(r.total_amount))}
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}>
+                          {STATUS_LABELS[r.status]}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
     </div>
   );

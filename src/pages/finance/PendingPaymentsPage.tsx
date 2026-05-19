@@ -97,85 +97,151 @@ export function PendingPaymentsPage() {
       )}
 
       {items && items.length > 0 && (
-        <Card className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                <tr>
-                  <th className="px-6 py-3 font-medium">Misafir</th>
-                  <th className="px-6 py-3 font-medium">Mülk / Birim</th>
-                  <th className="px-6 py-3 font-medium">Yöntem</th>
-                  <th className="px-6 py-3 text-right font-medium">Tutar</th>
-                  <th className="px-6 py-3 font-medium">Toplandı</th>
-                  <th className="px-6 py-3" aria-label="İşlemler" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                {items.map((it) => {
-                  const isConfirming =
-                    activeRow?.id === it.id && activeRow.action === 'confirm';
-                  const isDisputing =
-                    activeRow?.id === it.id && activeRow.action === 'dispute';
-                  const inFlight = isConfirming || isDisputing;
-                  return (
-                    <tr key={it.id}>
-                      <td className="px-6 py-3">
-                        <Link
-                          to={`/reservations/${it.reservation_id}`}
-                          className="text-base font-semibold text-stone-900 hover:underline dark:text-stone-100"
-                        >
-                          {it.reservation?.guest?.full_name ?? '—'}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        <div>{it.property?.name ?? '—'}</div>
-                        <div className="text-xs text-stone-600 dark:text-stone-300">
-                          {it.reservation?.unit?.name ?? ''}
-                        </div>
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        {METHOD_LABELS[it.method]}
-                      </td>
-                      <td className="px-6 py-3 text-right font-semibold text-stone-900 dark:text-stone-100">
-                        {formatTRY(Number(it.amount))}
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        {formatDate(it.created_at)}
-                      </td>
-                      <td className="px-6 py-3">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            loading={isConfirming}
-                            disabled={inFlight}
-                            onClick={() => {
-                              setDialogError(null);
-                              setPending({ item: it, action: 'confirm' });
-                            }}
-                          >
-                            Onayla
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            loading={isDisputing}
-                            disabled={inFlight}
-                            onClick={() => {
-                              setDialogError(null);
-                              setPending({ item: it, action: 'dispute' });
-                            }}
-                          >
-                            İtiraz
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <>
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2 sm:hidden">
+            {items.map((it) => {
+              const isConfirming =
+                activeRow?.id === it.id && activeRow.action === 'confirm';
+              const isDisputing =
+                activeRow?.id === it.id && activeRow.action === 'dispute';
+              const inFlight = isConfirming || isDisputing;
+              return (
+                <div
+                  key={it.id}
+                  className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <Link
+                      to={`/reservations/${it.reservation_id}`}
+                      className="min-w-0 flex-1 font-semibold text-stone-900 hover:underline dark:text-stone-100"
+                    >
+                      {it.reservation?.guest?.full_name ?? '—'}
+                    </Link>
+                    <p className="shrink-0 font-semibold text-stone-900 dark:text-stone-100">
+                      {formatTRY(Number(it.amount))}
+                    </p>
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-stone-600 dark:text-stone-300">
+                    {it.property?.name ?? '—'} ·{' '}
+                    {it.reservation?.unit?.name ?? ''}
+                  </p>
+                  <p className="mt-1 text-xs text-stone-700 dark:text-stone-300">
+                    {METHOD_LABELS[it.method]} · {formatDate(it.created_at)}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      loading={isConfirming}
+                      disabled={inFlight}
+                      onClick={() => {
+                        setDialogError(null);
+                        setPending({ item: it, action: 'confirm' });
+                      }}
+                    >
+                      Onayla
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      className="flex-1"
+                      loading={isDisputing}
+                      disabled={inFlight}
+                      onClick={() => {
+                        setDialogError(null);
+                        setPending({ item: it, action: 'dispute' });
+                      }}
+                    >
+                      İtiraz
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </Card>
+
+          {/* Tablet+ : table */}
+          <Card className="hidden p-0 sm:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Misafir</th>
+                    <th className="px-6 py-3 font-medium">Mülk / Birim</th>
+                    <th className="px-6 py-3 font-medium">Yöntem</th>
+                    <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                    <th className="px-6 py-3 font-medium">Toplandı</th>
+                    <th className="px-6 py-3" aria-label="İşlemler" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+                  {items.map((it) => {
+                    const isConfirming =
+                      activeRow?.id === it.id && activeRow.action === 'confirm';
+                    const isDisputing =
+                      activeRow?.id === it.id && activeRow.action === 'dispute';
+                    const inFlight = isConfirming || isDisputing;
+                    return (
+                      <tr key={it.id}>
+                        <td className="px-6 py-3">
+                          <Link
+                            to={`/reservations/${it.reservation_id}`}
+                            className="text-base font-semibold text-stone-900 hover:underline dark:text-stone-100"
+                          >
+                            {it.reservation?.guest?.full_name ?? '—'}
+                          </Link>
+                        </td>
+                        <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                          <div>{it.property?.name ?? '—'}</div>
+                          <div className="text-xs text-stone-600 dark:text-stone-300">
+                            {it.reservation?.unit?.name ?? ''}
+                          </div>
+                        </td>
+                        <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                          {METHOD_LABELS[it.method]}
+                        </td>
+                        <td className="px-6 py-3 text-right font-semibold text-stone-900 dark:text-stone-100">
+                          {formatTRY(Number(it.amount))}
+                        </td>
+                        <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                          {formatDate(it.created_at)}
+                        </td>
+                        <td className="px-6 py-3">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              loading={isConfirming}
+                              disabled={inFlight}
+                              onClick={() => {
+                                setDialogError(null);
+                                setPending({ item: it, action: 'confirm' });
+                              }}
+                            >
+                              Onayla
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              loading={isDisputing}
+                              disabled={inFlight}
+                              onClick={() => {
+                                setDialogError(null);
+                                setPending({ item: it, action: 'dispute' });
+                              }}
+                            >
+                              İtiraz
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
       )}
 
       <ConfirmDialog

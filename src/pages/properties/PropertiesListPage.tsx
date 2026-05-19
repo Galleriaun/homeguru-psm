@@ -31,15 +31,15 @@ export function PropertiesListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Mülkler</h1>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
             Otel ve dairelerinizin listesi
           </p>
         </div>
         {canCreate && (
-          <Link to="/properties/new">
+          <Link to="/properties/new" className="shrink-0">
             <Button>+ Yeni Mülk</Button>
           </Link>
         )}
