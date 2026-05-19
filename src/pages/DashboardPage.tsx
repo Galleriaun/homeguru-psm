@@ -112,7 +112,7 @@ export function DashboardPage() {
             <QuickAction
               to="/guests/new"
               label="+ Yeni Misafir"
-              description="Misafir kaydı oluştur ve KVKK açık rızasını al"
+              description="Misafir kaydı oluştur"
             />
           )}
           {canReadFinance && (

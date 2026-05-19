@@ -481,8 +481,12 @@ function LedgerSection({
       : balance < 0
         ? 'text-indigo-600 dark:text-indigo-400'
         : 'text-emerald-600 dark:text-emerald-400';
+  // Sign meaning:
+  //   positive → guest owes us (we collect)        → "Misafir borçlu"
+  //   negative → guest overpaid (we refund to them) → "Misafire İade"
+  //   zero     → settled                            → "Hesap kapalı"
   const balanceLabel =
-    balance > 0 ? 'Misafir borçlu' : balance < 0 ? 'Misafirden Alınacak' : 'Hesap kapalı';
+    balance > 0 ? 'Misafir borçlu' : balance < 0 ? 'Misafire İade' : 'Hesap kapalı';
 
   return (
     <section className="space-y-2">
@@ -572,7 +576,6 @@ function LedgerSection({
                     Bakiye
                   </span>
                   <span className={`text-2xl font-semibold ${balanceColor}`}>
-                    {balance < 0 ? '−' : ''}
                     {formatTRY(Math.abs(balance))}
                   </span>
                 </div>
