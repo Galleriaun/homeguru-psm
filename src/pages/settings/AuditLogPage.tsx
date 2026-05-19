@@ -16,6 +16,22 @@ import { cn, formatDateTime } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
 
+/**
+ * Turkish display labels for raw audit codes. The DB still stores English
+ * canonical strings ('DECRYPT', 'sensitive_field', etc.) so anything not
+ * mapped here renders as-is (fine for any future action we haven't translated).
+ */
+const ACTION_LABELS: Record<string, string> = {
+  DECRYPT: 'Okuma (Şifre Çözme)',
+};
+
+const ENTITY_TYPE_LABELS: Record<string, string> = {
+  sensitive_field: 'Hassas Alan',
+};
+
+const labelOr = (map: Record<string, string>, value: string): string =>
+  map[value] ?? value;
+
 export function AuditLogPage() {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'SUPER_ADMIN';
@@ -142,7 +158,7 @@ export function AuditLogPage() {
             onChange={setAction}
             options={[
               { value: '', label: 'Tümü' },
-              ...facets.actions.map((a) => ({ value: a, label: a })),
+              ...facets.actions.map((a) => ({ value: a, label: labelOr(ACTION_LABELS, a) })),
             ]}
           />
           <Select
@@ -152,7 +168,10 @@ export function AuditLogPage() {
             onChange={setEntityType}
             options={[
               { value: '', label: 'Tümü' },
-              ...facets.entityTypes.map((t) => ({ value: t, label: t })),
+              ...facets.entityTypes.map((t) => ({
+                value: t,
+                label: labelOr(ENTITY_TYPE_LABELS, t),
+              })),
             ]}
           />
           <DateInput
@@ -258,6 +277,7 @@ export function AuditLogPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span
+                            title={r.action}
                             className={cn(
                               'rounded px-2 py-0.5 text-xs font-medium',
                               r.action === 'DECRYPT'
@@ -265,12 +285,15 @@ export function AuditLogPage() {
                                 : 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200',
                             )}
                           >
-                            {r.action}
+                            {labelOr(ACTION_LABELS, r.action)}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="text-stone-900 dark:text-stone-100">
-                            {r.entity_type}
+                          <div
+                            className="text-stone-900 dark:text-stone-100"
+                            title={r.entity_type}
+                          >
+                            {labelOr(ENTITY_TYPE_LABELS, r.entity_type)}
                           </div>
                           {r.entity_id && (
                             <div
