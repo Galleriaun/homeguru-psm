@@ -11,6 +11,7 @@ import {
 } from '@/lib/queries/expenses';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { DateInput } from '@/components/ui/DateInput';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
@@ -209,13 +210,12 @@ export function ExpenseFormPage() {
             onChange={setAmount}
           />
 
-          <Input
+          <DateInput
             label="Tarih"
             name="expense_date"
-            type="date"
             required
             value={expenseDate}
-            onChange={(e) => setExpenseDate(e.target.value)}
+            onChange={setExpenseDate}
           />
 
           <Input

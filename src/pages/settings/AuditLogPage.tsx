@@ -10,7 +10,7 @@ import {
 } from '@/lib/queries/audit';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { Select } from '@/components/ui/Select';
 import { cn, formatDateTime } from '@/lib/utils';
 
@@ -155,19 +155,17 @@ export function AuditLogPage() {
               ...facets.entityTypes.map((t) => ({ value: t, label: t })),
             ]}
           />
-          <Input
+          <DateInput
             label="Başlangıç"
             name="filter_from"
-            type="date"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={setFrom}
           />
-          <Input
+          <DateInput
             label="Bitiş"
             name="filter_to"
-            type="date"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
+            onChange={setTo}
           />
         </div>
       </Card>

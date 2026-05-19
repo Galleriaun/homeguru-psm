@@ -10,7 +10,7 @@ import {
 } from '@/lib/queries/reservations';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
 import { ReservationsViewTabs } from './ViewTabs';
@@ -202,13 +202,12 @@ export function ReservationsAvailabilityPage() {
           />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Input
+            <DateInput
               label="Giriş"
               name="checkin"
-              type="date"
               required
               value={checkin}
-              onChange={(e) => setCheckin(e.target.value)}
+              onChange={setCheckin}
             />
             <NumberInput
               label="Gece"

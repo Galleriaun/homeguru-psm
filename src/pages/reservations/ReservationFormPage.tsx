@@ -12,6 +12,7 @@ import {
 import type { ReservationStatus } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { DateInput } from '@/components/ui/DateInput';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
@@ -321,13 +322,12 @@ export function ReservationFormPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Input
+            <DateInput
               label="Giriş"
               name="checkin"
-              type="date"
               required
               value={checkin}
-              onChange={(e) => setCheckin(e.target.value)}
+              onChange={setCheckin}
             />
             <NumberInput
               label="Gece"
