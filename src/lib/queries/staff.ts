@@ -60,6 +60,25 @@ export async function updateStaffSalary(userId: string, salary: number): Promise
   return data;
 }
 
+/**
+ * Assigns a staff member to a property (or unassigns when propertyId is null).
+ * Same RLS gate as salary edits — SUPER_ADMIN only. Used by the property
+ * assignment modal on StaffDetailPage after a new YETKILI signup.
+ */
+export async function updateStaffProperty(
+  userId: string,
+  propertyId: string | null,
+): Promise<StaffProfileRow> {
+  const { data, error } = await supabase
+    .from('staff_profiles')
+    .update({ property_id: propertyId })
+    .eq('user_id', userId)
+    .select()
+    .single();
+  if (error) throw wrapErr(error);
+  return data;
+}
+
 // =============================================================================
 // Staff advances
 // =============================================================================

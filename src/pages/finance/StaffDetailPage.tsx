@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { StaffAdvanceModal } from './StaffAdvanceModal';
 import { EditSalaryModal } from './EditSalaryModal';
+import { AssignPropertyModal } from './AssignPropertyModal';
 import { formatDate, formatTRY, formatRole } from '@/lib/utils';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', {
@@ -55,9 +56,11 @@ export function StaffDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showEditSalary, setShowEditSalary] = useState(false);
+  const [showAssignProperty, setShowAssignProperty] = useState(false);
 
-  // RLS (staff_profiles_modify) limits salary edits to SUPER_ADMIN.
+  // RLS (staff_profiles_modify) limits salary edits + property assignment to SUPER_ADMIN.
   const canEditSalary = profile?.role === 'SUPER_ADMIN';
+  const canAssignProperty = profile?.role === 'SUPER_ADMIN';
 
   const currentMonth = currentIstanbulYearMonth();
 
@@ -120,7 +123,7 @@ export function StaffDetailPage() {
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             {staff.full_name}
           </h1>
@@ -129,6 +132,15 @@ export function StaffDetailPage() {
             {staff.property?.name ? ` · ${staff.property.name}` : ''}
             {staff.hire_date ? ` · İşe giriş: ${formatDate(staff.hire_date)}` : ''}
           </p>
+          {canAssignProperty && (
+            <button
+              type="button"
+              onClick={() => setShowAssignProperty(true)}
+              className="mt-2 inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+            >
+              {staff.property?.name ? 'Şubeyi Değiştir' : 'Şube Ata'}
+            </button>
+          )}
         </div>
         <Button onClick={() => setShowAdvanceModal(true)}>+ Avans Ver</Button>
       </div>
@@ -268,6 +280,23 @@ export function StaffDetailPage() {
           onUpdated={(newSalary) => {
             setStaff((prev) => (prev ? { ...prev, salary: newSalary } : prev));
             setShowEditSalary(false);
+          }}
+        />
+      )}
+
+      {showAssignProperty && (
+        <AssignPropertyModal
+          staffUserId={staff.user_id}
+          staffName={staff.full_name}
+          currentPropertyId={staff.property_id}
+          onClose={() => setShowAssignProperty(false)}
+          onUpdated={(newPropertyId, newProperty) => {
+            setStaff((prev) =>
+              prev
+                ? { ...prev, property_id: newPropertyId, property: newProperty }
+                : prev,
+            );
+            setShowAssignProperty(false);
           }}
         />
       )}
