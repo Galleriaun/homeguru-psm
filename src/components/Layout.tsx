@@ -35,11 +35,20 @@ export function Layout() {
     navigate('/login', { replace: true });
   };
 
-  // Shared NavLink className builder — used by both the desktop bar and the
-  // mobile drawer (drawer just stacks them vertically via wrapping container).
+  // Desktop NavLink — inline horizontal pill.
   const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
     cn(
       'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+      isActive
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+        : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800',
+    );
+
+  // Mobile-drawer NavLink — full-width block, bigger tap target so each item
+  // lives on its own row instead of wrapping flow-style alongside neighbors.
+  const drawerLinkClasses = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      'block w-full rounded-md px-3 py-3 text-base font-medium transition-colors',
       isActive
         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
         : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800',
@@ -183,22 +192,24 @@ export function Layout() {
             </button>
           </div>
 
-          {/* Mobile hamburger — visible only on mobile */}
+          {/* Mobile hamburger — visible only on mobile.
+              Filled emerald to stand out against the white header and match
+              the brand logo on the left. */}
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
             aria-label="Menüyü aç"
             aria-expanded={mobileOpen}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800 md:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:focus:ring-offset-stone-900 md:hidden"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
+              width="24"
+              height="24"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth="2.25"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
@@ -254,14 +265,14 @@ export function Layout() {
               </button>
             </div>
 
-            {/* Drawer nav links — stacked, larger tap targets */}
+            {/* Drawer nav links — one per row */}
             <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-              <NavLink to="/dashboard" className={navLinkClasses} onClick={closeMobile}>
+              <NavLink to="/dashboard" className={drawerLinkClasses} onClick={closeMobile}>
                 Panel
               </NavLink>
               <NavLink
                 to="/reservations"
-                className={navLinkClasses}
+                className={drawerLinkClasses}
                 onClick={closeMobile}
               >
                 Rezervasyonlar
@@ -269,22 +280,22 @@ export function Layout() {
               {profile && can(profile.role, 'housekeeping:read') && (
                 <NavLink
                   to="/housekeeping"
-                  className={navLinkClasses}
+                  className={drawerLinkClasses}
                   onClick={closeMobile}
                 >
                   Temizlik
                 </NavLink>
               )}
-              <NavLink to="/guests" className={navLinkClasses} onClick={closeMobile}>
+              <NavLink to="/guests" className={drawerLinkClasses} onClick={closeMobile}>
                 Misafirler
               </NavLink>
-              <NavLink to="/properties" className={navLinkClasses} onClick={closeMobile}>
+              <NavLink to="/properties" className={drawerLinkClasses} onClick={closeMobile}>
                 Mülkler
               </NavLink>
               {profile && can(profile.role, 'finance:read') && (
                 <NavLink
                   to="/finance/cash"
-                  className={navLinkClasses}
+                  className={drawerLinkClasses}
                   onClick={closeMobile}
                 >
                   Finans
@@ -293,37 +304,41 @@ export function Layout() {
               {profile && can(profile.role, 'finance:read') && (
                 <NavLink
                   to="/settings/templates"
-                  className={navLinkClasses}
+                  className={drawerLinkClasses}
                   onClick={closeMobile}
                 >
                   Şablonlar
                 </NavLink>
               )}
-
-              {profile?.role === 'SUPER_ADMIN' && (
-                <>
-                  <div className="my-2 border-t border-stone-200 dark:border-stone-700" />
-                  <NavLink
-                    to="/settings/audit"
-                    className={navLinkClasses}
-                    onClick={closeMobile}
-                  >
-                    Denetim Kaydı
-                  </NavLink>
-                  <NavLink
-                    to="/settings/trash"
-                    className={navLinkClasses}
-                    onClick={closeMobile}
-                  >
-                    Çöp Kutusu
-                  </NavLink>
-                </>
-              )}
             </nav>
 
-            {/* Drawer footer: theme + sign out */}
+            {/* Drawer footer: admin shortcuts + theme + sign out */}
             <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-3 py-3 dark:border-stone-700">
-              <ThemeToggle />
+              <div className="flex items-center gap-2">
+                {profile?.role === 'SUPER_ADMIN' && (
+                  <NavLink
+                    to="/settings/audit"
+                    aria-label="Denetim Kaydı"
+                    title="Denetim Kaydı"
+                    onClick={closeMobile}
+                    className={iconLinkClasses}
+                  >
+                    {auditIcon}
+                  </NavLink>
+                )}
+                {profile?.role === 'SUPER_ADMIN' && (
+                  <NavLink
+                    to="/settings/trash"
+                    aria-label="Çöp Kutusu"
+                    title="Çöp Kutusu"
+                    onClick={closeMobile}
+                    className={iconLinkClasses}
+                  >
+                    {trashIcon}
+                  </NavLink>
+                )}
+                <ThemeToggle />
+              </div>
               <button
                 type="button"
                 onClick={() => {
