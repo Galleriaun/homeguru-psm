@@ -482,11 +482,11 @@ function LedgerSection({
         ? 'text-indigo-600 dark:text-indigo-400'
         : 'text-emerald-600 dark:text-emerald-400';
   // Sign meaning:
-  //   positive → guest owes us (we collect)        → "Misafir borçlu"
-  //   negative → guest overpaid (we refund to them) → "Misafire İade"
+  //   positive → guest owes us (we collect)         → "Misafir borçlu"
+  //   negative → guest has paid (full / over)       → "Misafirden Alındı"
   //   zero     → settled                            → "Hesap kapalı"
   const balanceLabel =
-    balance > 0 ? 'Misafir borçlu' : balance < 0 ? 'Misafire İade' : 'Hesap kapalı';
+    balance > 0 ? 'Misafir borçlu' : balance < 0 ? 'Misafirden Alındı' : 'Hesap kapalı';
 
   return (
     <section className="space-y-2">
