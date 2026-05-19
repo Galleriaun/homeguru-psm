@@ -167,12 +167,12 @@ export function PropertyDetailPage() {
         ← Mülkler
       </Link>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             {property.name}
           </h1>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <span
               className={
                 property.type === 'HOTEL'
@@ -225,70 +225,127 @@ export function PropertyDetailPage() {
             Henüz birim eklenmemiş.
           </p>
         ) : (
-          <div className="-mx-6 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-200 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                <tr>
-                  <th className="px-6 py-2 font-medium">Ad</th>
-                  <th className="px-6 py-2 font-medium">Tip</th>
-                  <th className="px-6 py-2 font-medium">Kapasite</th>
-                  <th className="px-6 py-2 font-medium">Gecelik Ücret</th>
-                  <th className="px-6 py-2 font-medium">Fotoğraflar</th>
-                  {canManageUnits && <th className="px-6 py-2"></th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-200 dark:divide-stone-700">
-                {units.map((u) => (
-                  <tr key={u.id}>
-                    <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
-                      {u.name}
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      {formatRoomType(u.room_type)}
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      {u.capacity} kişi
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+          <>
+            {/* Mobile: stacked cards */}
+            <div className="space-y-3 sm:hidden">
+              {units.map((u) => (
+                <div
+                  key={u.id}
+                  className="rounded-lg border border-stone-200 p-3 dark:border-stone-700"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-stone-900 dark:text-stone-100">{u.name}</p>
+                      <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-300">
+                        {formatRoomType(u.room_type)} · {u.capacity} kişi
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-semibold text-stone-900 dark:text-stone-100">
                       {formatTRY(u.base_price)}
-                    </td>
-                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                      {u.photo_paths && u.photo_paths.length > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => setGalleryUnit(u)}
-                          className="text-sm text-sky-700 hover:underline dark:text-sky-400"
-                        >
-                          🖼 {u.photo_paths.length}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-stone-400 dark:text-stone-500">—</span>
-                      )}
-                    </td>
-                    {canManageUnits && (
-                      <td className="px-6 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Link to={`/properties/${property.id}/units/${u.id}/edit`}>
-                            <Button variant="ghost" size="sm">
-                              Düzenle
-                            </Button>
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                            onClick={() => setUnitToDelete(u)}
-                          >
-                            Sil
-                          </Button>
-                        </div>
-                      </td>
+                    </p>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    {u.photo_paths && u.photo_paths.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setGalleryUnit(u)}
+                        className="text-sm text-sky-700 hover:underline dark:text-sky-400"
+                      >
+                        🖼 {u.photo_paths.length} fotoğraf
+                      </button>
+                    ) : (
+                      <span className="text-xs text-stone-400 dark:text-stone-500">
+                        Fotoğraf yok
+                      </span>
                     )}
+                    {canManageUnits && (
+                      <div className="flex gap-1">
+                        <Link to={`/properties/${property.id}/units/${u.id}/edit`}>
+                          <Button variant="ghost" size="sm">
+                            Düzenle
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                          onClick={() => setUnitToDelete(u)}
+                        >
+                          Sil
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tablet+ : table */}
+            <div className="-mx-6 hidden overflow-x-auto sm:block">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-stone-200 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                  <tr>
+                    <th className="px-6 py-2 font-medium">Ad</th>
+                    <th className="px-6 py-2 font-medium">Tip</th>
+                    <th className="px-6 py-2 font-medium">Kapasite</th>
+                    <th className="px-6 py-2 font-medium">Gecelik Ücret</th>
+                    <th className="px-6 py-2 font-medium">Fotoğraflar</th>
+                    {canManageUnits && <th className="px-6 py-2"></th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-stone-200 dark:divide-stone-700">
+                  {units.map((u) => (
+                    <tr key={u.id}>
+                      <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
+                        {u.name}
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {formatRoomType(u.room_type)}
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {u.capacity} kişi
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {formatTRY(u.base_price)}
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {u.photo_paths && u.photo_paths.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setGalleryUnit(u)}
+                            className="text-sm text-sky-700 hover:underline dark:text-sky-400"
+                          >
+                            🖼 {u.photo_paths.length}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-stone-400 dark:text-stone-500">—</span>
+                        )}
+                      </td>
+                      {canManageUnits && (
+                        <td className="px-6 py-3 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Link to={`/properties/${property.id}/units/${u.id}/edit`}>
+                              <Button variant="ghost" size="sm">
+                                Düzenle
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                              onClick={() => setUnitToDelete(u)}
+                            >
+                              Sil
+                            </Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
 

@@ -211,8 +211,8 @@ export function ReservationDetailPage() {
         ← Rezervasyonlar
       </Link>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             {guestName || '—'}
           </h1>
@@ -595,30 +595,19 @@ function LedgerSection({
               </p>
             </Card>
           ) : (
-            <Card className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                    <tr>
-                      <th className="px-6 py-3 font-medium">Tarih</th>
-                      <th className="px-6 py-3 font-medium">Tür</th>
-                      <th className="px-6 py-3 font-medium">Açıklama</th>
-                      <th className="px-6 py-3 text-right font-medium">Tutar</th>
-                      {canDelete && <th className="px-6 py-3" aria-label="Sil" />}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                    {ledger.map((e) => {
-                      const isDebt = e.type === 'DEBT';
-                      return (
-                        <tr key={e.id}>
-                          <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                            <div>{formatDate(e.created_at)}</div>
-                            <div className="text-xs text-stone-600 dark:text-stone-300">
-                              {formatTime(e.created_at)}
-                            </div>
-                          </td>
-                          <td className="px-6 py-3">
+            <>
+              {/* Mobile: stacked cards */}
+              <div className="space-y-2 sm:hidden">
+                {ledger.map((e) => {
+                  const isDebt = e.type === 'DEBT';
+                  return (
+                    <div
+                      key={e.id}
+                      className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
                             <span
                               className={
                                 isDebt
@@ -628,57 +617,132 @@ function LedgerSection({
                             >
                               {isDebt ? 'Ücret' : 'Ödeme'}
                             </span>
-                          </td>
-                          <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                            <span>{e.note || '—'}</span>
+                            <span className="text-xs text-stone-600 dark:text-stone-300">
+                              {formatDate(e.created_at)} · {formatTime(e.created_at)}
+                            </span>
+                          </div>
+                          <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
+                            {e.note || '—'}
                             {e.created_by === null && (
                               <span className="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-stone-600 dark:bg-stone-700 dark:text-stone-300">
                                 Sistem
                               </span>
                             )}
-                          </td>
-                          <td
-                            className={
-                              isDebt
-                                ? 'px-6 py-3 text-right font-semibold text-amber-600 dark:text-amber-400'
-                                : 'px-6 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400'
-                            }
+                          </p>
+                        </div>
+                        <p
+                          className={
+                            isDebt
+                              ? 'shrink-0 text-right font-semibold text-amber-600 dark:text-amber-400'
+                              : 'shrink-0 text-right font-semibold text-emerald-600 dark:text-emerald-400'
+                          }
+                        >
+                          {isDebt ? '+' : '−'}
+                          {formatTRY(Number(e.amount))}
+                        </p>
+                      </div>
+                      {canDelete && (
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => onDeleteClick(e)}
+                            className="text-xs text-red-600 hover:underline dark:text-red-400"
                           >
-                            {isDebt ? '+' : '−'}
-                            {formatTRY(Number(e.amount))}
-                          </td>
-                          {canDelete && (
-                            <td className="px-6 py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => onDeleteClick(e)}
-                                aria-label="Hareketi sil"
-                                className="rounded p-1 text-stone-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                              >
-                                <svg
-                                  className="h-4 w-4"
-                                  viewBox="0 0 20 20"
-                                  fill="none"
-                                  aria-hidden="true"
-                                >
-                                  <path
-                                    d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"
-                                    stroke="currentColor"
-                                    strokeWidth="1.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  />
-                                </svg>
-                              </button>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            Sil
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            </Card>
+
+              {/* Tablet+ : table */}
+              <Card className="hidden p-0 sm:block">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                      <tr>
+                        <th className="px-6 py-3 font-medium">Tarih</th>
+                        <th className="px-6 py-3 font-medium">Tür</th>
+                        <th className="px-6 py-3 font-medium">Açıklama</th>
+                        <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                        {canDelete && <th className="px-6 py-3" aria-label="Sil" />}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+                      {ledger.map((e) => {
+                        const isDebt = e.type === 'DEBT';
+                        return (
+                          <tr key={e.id}>
+                            <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                              <div>{formatDate(e.created_at)}</div>
+                              <div className="text-xs text-stone-600 dark:text-stone-300">
+                                {formatTime(e.created_at)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-3">
+                              <span
+                                className={
+                                  isDebt
+                                    ? 'rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                    : 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                }
+                              >
+                                {isDebt ? 'Ücret' : 'Ödeme'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                              <span>{e.note || '—'}</span>
+                              {e.created_by === null && (
+                                <span className="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-stone-600 dark:bg-stone-700 dark:text-stone-300">
+                                  Sistem
+                                </span>
+                              )}
+                            </td>
+                            <td
+                              className={
+                                isDebt
+                                  ? 'px-6 py-3 text-right font-semibold text-amber-600 dark:text-amber-400'
+                                  : 'px-6 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400'
+                              }
+                            >
+                              {isDebt ? '+' : '−'}
+                              {formatTRY(Number(e.amount))}
+                            </td>
+                            {canDelete && (
+                              <td className="px-6 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteClick(e)}
+                                  aria-label="Hareketi sil"
+                                  className="rounded p-1 text-stone-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                                >
+                                  <svg
+                                    className="h-4 w-4"
+                                    viewBox="0 0 20 20"
+                                    fill="none"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"
+                                      stroke="currentColor"
+                                      strokeWidth="1.5"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </>
           )}
         </>
       )}

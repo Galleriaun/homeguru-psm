@@ -151,8 +151,8 @@ export function CashAccountDetailPage() {
         ← Kasalar
       </Link>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             {account.name}
           </h1>
@@ -160,7 +160,7 @@ export function CashAccountDetailPage() {
             {property?.name} · {ACCOUNT_TYPE_LABEL[account.account_type]} · {account.currency}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canWrite && (
             <>
               <Link to={`/finance/cash/${account.id}/edit`}>
@@ -253,30 +253,19 @@ export function CashAccountDetailPage() {
             </p>
           </Card>
         ) : (
-          <Card className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                  <tr>
-                    <th className="px-6 py-3 font-medium">Tarih</th>
-                    <th className="px-6 py-3 font-medium">Yön</th>
-                    <th className="px-6 py-3 font-medium">Açıklama</th>
-                    <th className="px-6 py-3 text-right font-medium">Tutar</th>
-                    {canDeleteTx && <th className="px-6 py-3" aria-label="Sil" />}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                  {transactions.map((t) => {
-                    const positive = t.direction === 'IN';
-                    return (
-                      <tr key={t.id}>
-                        <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                          <div>{formatDate(t.created_at)}</div>
-                          <div className="text-xs text-stone-600 dark:text-stone-300">
-                            {formatTime(t.created_at)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-3">
+          <>
+            {/* Mobile: stacked cards */}
+            <div className="space-y-2 sm:hidden">
+              {transactions.map((t) => {
+                const positive = t.direction === 'IN';
+                return (
+                  <div
+                    key={t.id}
+                    className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
                           <span
                             className={
                               positive
@@ -286,55 +275,128 @@ export function CashAccountDetailPage() {
                           >
                             {DIRECTION_LABEL[t.direction]}
                           </span>
-                        </td>
-                        <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                          <span className="text-xs text-stone-600 dark:text-stone-300">
+                            {formatDate(t.created_at)} · {formatTime(t.created_at)}
+                          </span>
+                        </div>
+                        <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
                           {t.description || '—'}
-                        </td>
-                        <td
-                          className={
-                            positive
-                              ? 'px-6 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400'
-                              : 'px-6 py-3 text-right font-semibold text-red-600 dark:text-red-400'
-                          }
+                        </p>
+                      </div>
+                      <p
+                        className={
+                          positive
+                            ? 'shrink-0 font-semibold text-emerald-600 dark:text-emerald-400'
+                            : 'shrink-0 font-semibold text-red-600 dark:text-red-400'
+                        }
+                      >
+                        {positive ? '+' : '−'}
+                        {formatTRY(Number(t.amount))}
+                      </p>
+                    </div>
+                    {canDeleteTx && (
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTxDeleteError(null);
+                            setTxToDelete(t);
+                          }}
+                          className="text-xs text-red-600 hover:underline dark:text-red-400"
                         >
-                          {positive ? '+' : '−'}
-                          {formatTRY(Number(t.amount))}
-                        </td>
-                        {canDeleteTx && (
-                          <td className="px-6 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setTxDeleteError(null);
-                                setTxToDelete(t);
-                              }}
-                              aria-label="Hareketi sil"
-                              className="rounded p-1 text-stone-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                            >
-                              <svg
-                                className="h-4 w-4"
-                                viewBox="0 0 20 20"
-                                fill="none"
-                                aria-hidden="true"
-                              >
-                                <path
-                                  d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"
-                                  stroke="currentColor"
-                                  strokeWidth="1.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          Sil
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </Card>
+
+            {/* Tablet+ : table */}
+            <Card className="hidden p-0 sm:block">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                    <tr>
+                      <th className="px-6 py-3 font-medium">Tarih</th>
+                      <th className="px-6 py-3 font-medium">Yön</th>
+                      <th className="px-6 py-3 font-medium">Açıklama</th>
+                      <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                      {canDeleteTx && <th className="px-6 py-3" aria-label="Sil" />}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+                    {transactions.map((t) => {
+                      const positive = t.direction === 'IN';
+                      return (
+                        <tr key={t.id}>
+                          <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                            <div>{formatDate(t.created_at)}</div>
+                            <div className="text-xs text-stone-600 dark:text-stone-300">
+                              {formatTime(t.created_at)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-3">
+                            <span
+                              className={
+                                positive
+                                  ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                                  : 'rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400'
+                              }
+                            >
+                              {DIRECTION_LABEL[t.direction]}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                            {t.description || '—'}
+                          </td>
+                          <td
+                            className={
+                              positive
+                                ? 'px-6 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400'
+                                : 'px-6 py-3 text-right font-semibold text-red-600 dark:text-red-400'
+                            }
+                          >
+                            {positive ? '+' : '−'}
+                            {formatTRY(Number(t.amount))}
+                          </td>
+                          {canDeleteTx && (
+                            <td className="px-6 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTxDeleteError(null);
+                                  setTxToDelete(t);
+                                }}
+                                aria-label="Hareketi sil"
+                                className="rounded p-1 text-stone-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                              >
+                                <svg
+                                  className="h-4 w-4"
+                                  viewBox="0 0 20 20"
+                                  fill="none"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"
+                                    stroke="currentColor"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
         )}
       </section>
 

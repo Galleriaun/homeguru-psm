@@ -189,7 +189,48 @@ export function ExpensesListPage() {
             </div>
           </div>
 
-          <Card className="p-0">
+          {/* Mobile: stacked cards (each card is a tap-target linking to edit) */}
+          <div className="space-y-2 sm:hidden">
+            {expenses.map((e) => (
+              <Link
+                key={e.id}
+                to={`/finance/expenses/${e.id}/edit`}
+                className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200">
+                        {e.category}
+                      </span>
+                      {e.is_recurring && (
+                        <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                          Düzenli
+                        </span>
+                      )}
+                      <span className="text-xs text-stone-600 dark:text-stone-300">
+                        {formatDate(e.expense_date)}
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-sm text-stone-700 dark:text-stone-300">
+                      {e.property?.name ?? '—'}
+                    </p>
+                    {e.description && (
+                      <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+                        {e.description}
+                      </p>
+                    )}
+                  </div>
+                  <p className="shrink-0 font-semibold text-stone-900 dark:text-stone-100">
+                    {formatTRY(Number(e.amount))}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Tablet+ : table */}
+          <Card className="hidden p-0 sm:block">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">

@@ -236,7 +236,64 @@ export function AuditLogPage() {
             </div>
           </div>
 
-          <Card className="p-0">
+          {/* Mobile: stacked cards */}
+          <div className="space-y-2 sm:hidden">
+            {rows.map((r) => {
+              const isOpen = expanded.has(r.id);
+              const name = r.user_id ? (staffNames.get(r.user_id) ?? null) : null;
+              const meta = formatMetadata(r.metadata);
+              return (
+                <div
+                  key={r.id}
+                  className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      title={r.action}
+                      className={cn(
+                        'rounded px-2 py-0.5 text-xs font-medium',
+                        r.action === 'DECRYPT'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                          : 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200',
+                      )}
+                    >
+                      {labelOr(ACTION_LABELS, r.action)}
+                    </span>
+                    <span className="text-xs text-stone-600 dark:text-stone-300">
+                      {formatDateTime(r.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-sm text-stone-900 dark:text-stone-100">
+                    {name ?? (
+                      <span className="italic opacity-60">(bilinmiyor)</span>
+                    )}
+                    <span className="ml-1 text-xs text-stone-500 dark:text-stone-400">
+                      · {labelOr(ENTITY_TYPE_LABELS, r.entity_type)}
+                    </span>
+                  </p>
+                  {meta && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(r.id)}
+                        className="text-xs text-sky-700 hover:underline dark:text-sky-400"
+                      >
+                        {isOpen ? 'Detayı gizle' : 'Detayı göster'}
+                      </button>
+                      {isOpen && (
+                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded bg-stone-50 px-2 py-1 font-mono text-xs text-stone-700 dark:bg-stone-800/60 dark:text-stone-200">
+                          {meta}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Tablet+ : table */}
+          <Card className="hidden p-0 sm:block">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">

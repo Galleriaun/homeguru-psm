@@ -113,8 +113,8 @@ export function GuestDetailPage() {
         ← Misafirler
       </Link>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
             {guest.full_name}
           </h1>
