@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -24,6 +25,12 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  /**
+   * Re-fetch staff_profiles for the current user. Call this after the user
+   * edits their own profile so the header/drawer reflect the change without
+   * a full page reload.
+   */
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -57,32 +64,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (!session?.user) return;
-
-    let cancelled = false;
-    setLoading(true);
-
-    supabase
+  const loadProfile = useCallback(async (userId: string) => {
+    const { data, error } = await supabase
       .from('staff_profiles')
       .select('user_id, full_name, role, property_id')
-      .eq('user_id', session.user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error('Failed to load staff profile:', error);
-          setProfile(null);
-        } else {
-          setProfile(data);
-        }
-        setLoading(false);
-      });
+      .eq('user_id', userId)
+      .single();
+    if (error) {
+      console.error('Failed to load staff profile:', error);
+      setProfile(null);
+      return;
+    }
+    setProfile(data);
+  }, []);
 
+  useEffect(() => {
+    if (!session?.user) return;
+    let cancelled = false;
+    setLoading(true);
+    loadProfile(session.user.id).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
     return () => {
       cancelled = true;
     };
-  }, [session?.user]);
+  }, [session?.user, loadProfile]);
+
+  const refreshProfile = useCallback(async () => {
+    if (!session?.user) return;
+    await loadProfile(session.user.id);
+  }, [session?.user, loadProfile]);
 
   const value: AuthContextValue = {
     user: session?.user ?? null,
@@ -96,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOut: async () => {
       await supabase.auth.signOut();
     },
+    refreshProfile,
   };
 
   return createElement(AuthContext.Provider, { value }, children);

@@ -702,6 +702,10 @@ export type Database = {
           property_address: string | null;
         } | null;
       };
+      update_own_full_name: {
+        Args: { p_full_name: string };
+        Returns: Database['public']['Tables']['staff_profiles']['Row'];
+      };
     };
     Enums: {
       [_ in never]: never;
