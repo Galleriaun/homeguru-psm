@@ -35,8 +35,8 @@ function parseDisplay(text: string): string | null {
   if (!trimmed) return '';
   const m = trimmed.match(/^(\d{1,2})[./\-\s](\d{1,2})[./\-\s](\d{2,4})$/);
   if (!m) return null;
-  let [, d, mo, y] = m;
-  if (y.length === 2) y = '20' + y;
+  const [, d, mo, rawY] = m;
+  const y = rawY.length === 2 ? `20${rawY}` : rawY;
   const day = d.padStart(2, '0');
   const month = mo.padStart(2, '0');
   // Round-trip through Date so we reject impossible dates like 31/02 or 30/02.
