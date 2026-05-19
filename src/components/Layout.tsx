@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { cn } from '@/lib/utils';
+import { cn, formatRole } from '@/lib/utils';
 
 export function Layout() {
   const { profile, signOut } = useAuth();
@@ -155,7 +155,7 @@ export function Layout() {
             <span className="text-sm text-stone-700 dark:text-stone-300">
               {profile?.full_name}
               <span className="ml-2 rounded bg-stone-100 px-2 py-0.5 text-xs uppercase text-stone-700 dark:bg-stone-800 dark:text-stone-300">
-                {profile?.role.replace('_', ' ')}
+                {profile?.role ? formatRole(profile.role) : ''}
               </span>
             </span>
             {profile?.role === 'SUPER_ADMIN' && (
@@ -240,7 +240,7 @@ export function Layout() {
                   {profile?.full_name}
                 </p>
                 <span className="mt-1 inline-block rounded bg-stone-100 px-2 py-0.5 text-xs uppercase text-stone-700 dark:bg-stone-800 dark:text-stone-300">
-                  {profile?.role.replace('_', ' ')}
+                  {profile?.role ? formatRole(profile.role) : ''}
                 </span>
               </div>
               <button

@@ -30,8 +30,8 @@ export function formatDateTime(date: Date | string): string {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  SUPER_ADMIN: 'Süper Admin',
-  PROPERTY_MANAGER: 'Yönetici',
+  SUPER_ADMIN: 'Yönetici',
+  PROPERTY_MANAGER: 'Alt Yönetici',
   RECEPTION: 'Resepsiyon',
   HOUSEKEEPING: 'Temizlik',
   YETKILI: 'Yetkili',
