@@ -78,7 +78,8 @@ export function PropertyDetailPage() {
 
   const isAdmin = profile && can(profile.role, 'admin:*');
   const canManageProperty = isAdmin;
-  const canManageUnits = profile && (isAdmin || profile.role === 'PROPERTY_MANAGER');
+  const canManageUnits =
+    profile && (isAdmin || profile.role === 'PROPERTY_MANAGER' || profile.role === 'YETKILI');
   const isApartmentFull = property.type === 'APARTMENT' && units.length >= 1;
 
   const handleDeleteProperty = async () => {

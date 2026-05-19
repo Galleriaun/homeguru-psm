@@ -34,6 +34,7 @@ const ROLE_LABELS: Record<string, string> = {
   PROPERTY_MANAGER: 'Yönetici',
   RECEPTION: 'Resepsiyon',
   HOUSEKEEPING: 'Temizlik',
+  YETKILI: 'Yetkili',
 };
 
 /** Friendly label for a staff role. Falls back to the raw value for unknown roles. */

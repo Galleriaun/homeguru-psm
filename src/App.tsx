@@ -31,10 +31,11 @@ import { TrashPage } from '@/pages/settings/TrashPage';
 import { AuditLogPage } from '@/pages/settings/AuditLogPage';
 import { UnitGalleryPage } from '@/pages/public/UnitGalleryPage';
 
-const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
-const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
+const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION', 'YETKILI'] as const;
+const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION', 'YETKILI'] as const;
 const FINANCE_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER'] as const;
-const HOUSEKEEPING_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'HOUSEKEEPING'] as const;
+const HOUSEKEEPING_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'HOUSEKEEPING', 'YETKILI'] as const;
+const UNIT_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
 
 export default function App() {
   return (
@@ -77,7 +78,7 @@ export default function App() {
           <Route
             path="/properties/:id/units/new"
             element={
-              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PROPERTY_MANAGER']}>
+              <ProtectedRoute allowedRoles={[...UNIT_WRITERS]}>
                 <UnitFormPage />
               </ProtectedRoute>
             }
@@ -85,7 +86,7 @@ export default function App() {
           <Route
             path="/properties/:id/units/:unitId/edit"
             element={
-              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PROPERTY_MANAGER']}>
+              <ProtectedRoute allowedRoles={[...UNIT_WRITERS]}>
                 <UnitFormPage />
               </ProtectedRoute>
             }

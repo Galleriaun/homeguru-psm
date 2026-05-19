@@ -58,6 +58,23 @@ const BASE: Record<Role, Permission[]> = {
     'guest:update',
   ],
   HOUSEKEEPING: ['housekeeping:read', 'housekeeping:write'],
+  // Branch operator — full operations within own branch, no finance/staff/admin.
+  // Payment collection is allowed; the DB RPC creates UNCONFIRMED rows that a
+  // manager confirms (since YETKILI has no finance:write).
+  YETKILI: [
+    'reservation:create',
+    'reservation:read',
+    'reservation:update',
+    'reservation:cancel',
+    'reservation:delete',
+    'guest:read',
+    'guest:create',
+    'guest:update',
+    'housekeeping:read',
+    'housekeeping:write',
+    'payment:collect',
+    'report:property',
+  ],
 };
 
 export function can(role: Role, permission: Permission): boolean {
@@ -72,6 +89,7 @@ export function can(role: Role, permission: Permission): boolean {
  */
 export function canCollectPayment(role: Role, propertyType: PropertyType): boolean {
   if (role === 'SUPER_ADMIN' || role === 'PROPERTY_MANAGER') return true;
+  if (role === 'YETKILI') return true; // both property types
   if (role === 'RECEPTION' && propertyType === 'HOTEL') return true;
   if (role === 'HOUSEKEEPING' && propertyType === 'APARTMENT') return true;
   return false;

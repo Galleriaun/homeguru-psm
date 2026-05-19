@@ -18,7 +18,12 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type Role = 'SUPER_ADMIN' | 'PROPERTY_MANAGER' | 'RECEPTION' | 'HOUSEKEEPING';
+export type Role =
+  | 'SUPER_ADMIN'
+  | 'PROPERTY_MANAGER'
+  | 'RECEPTION'
+  | 'HOUSEKEEPING'
+  | 'YETKILI';
 export type PropertyType = 'HOTEL' | 'APARTMENT';
 export type RoomType =
   | '1+0' | '1+1' | '2+1'         // Apartment layouts

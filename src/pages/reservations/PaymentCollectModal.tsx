@@ -33,9 +33,11 @@ export function PaymentCollectModal({
   onCollected,
 }: Props) {
   const { profile } = useAuth();
-  // Housekeeping collections are recorded as UNCONFIRMED and need manager
-  // approval before money lands in the kasa / cari (Phase 3C-lite).
-  const requiresApproval = profile?.role === 'HOUSEKEEPING';
+  // Roles without finance:write submit UNCONFIRMED rows that a manager later
+  // approves before money lands in the kasa / cari. HOUSEKEEPING (Phase 3C-lite)
+  // and YETKILI (migration 028) both fall in this bucket.
+  const requiresApproval =
+    profile?.role === 'HOUSEKEEPING' || profile?.role === 'YETKILI';
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [amount, setAmount] = useState(0);
