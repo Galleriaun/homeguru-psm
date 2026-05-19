@@ -444,42 +444,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      kbs_submissions: {
-        Row: {
-          id: string;
-          reservation_id: string;
-          payload: Json;
-          status: KbsStatus;
-          response_code: string | null;
-          response_body: string | null;
-          retry_count: number;
-          submitted_at: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          reservation_id: string;
-          payload: Json;
-          status?: KbsStatus;
-          response_code?: string | null;
-          response_body?: string | null;
-          retry_count?: number;
-          submitted_at?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          reservation_id?: string;
-          payload?: Json;
-          status?: KbsStatus;
-          response_code?: string | null;
-          response_body?: string | null;
-          retry_count?: number;
-          submitted_at?: string | null;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
       staff_advances: {
         Row: {
           id: string;

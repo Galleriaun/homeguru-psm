@@ -29,7 +29,6 @@ import { StaffDetailPage } from '@/pages/finance/StaffDetailPage';
 import { TemplatesPage } from '@/pages/settings/TemplatesPage';
 import { TrashPage } from '@/pages/settings/TrashPage';
 import { AuditLogPage } from '@/pages/settings/AuditLogPage';
-import { KbsListPage } from '@/pages/compliance/KbsListPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
 const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION'] as const;
@@ -254,15 +253,6 @@ export default function App() {
             }
           />
 
-          {/* KBS Bildirim Listesi (Sprint 4A — manual flow) — visible to anyone who handles compliance */}
-          <Route
-            path="/kbs"
-            element={
-              <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION']}>
-                <KbsListPage />
-              </ProtectedRoute>
-            }
-          />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
