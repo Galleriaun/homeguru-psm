@@ -62,7 +62,7 @@ export function DashboardPage() {
           {canReadFinance && (
             <Tile
               to="/finance/pending"
-              label="Onay Bekleyen"
+              label="Onay Bekleyen Tahsilat"
               value={counts?.pendingPayments}
               watchTone="amber"
             />
@@ -187,7 +187,7 @@ function QuickAction({ to, label, description }: QuickActionProps) {
   return (
     <Link
       to={to}
-      className="block rounded-lg border border-stone-200 bg-white p-4 text-stone-900 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800/50"
+      className="block rounded-lg border border-emerald-300 bg-white p-4 text-stone-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-stone-900 dark:text-stone-100 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30"
     >
       <p className="text-base font-semibold">{label}</p>
       <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">{description}</p>

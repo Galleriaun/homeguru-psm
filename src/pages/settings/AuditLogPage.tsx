@@ -153,8 +153,7 @@ export function AuditLogPage() {
           Denetim Kaydı
         </h1>
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-          Misafirlerin hassas bilgilerine (TC kimlik / pasaport) her erişim KVKK
-          gereği burada kayıt altındadır. Sadece okunur.
+          Misafir bilgilerine kimlerin baktığının kaydı.
         </p>
       </div>
 

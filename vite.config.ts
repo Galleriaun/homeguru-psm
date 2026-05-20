@@ -33,7 +33,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['icons/icon-512.png'],
       manifest: {
         name: 'HomeGuru PMS',
         short_name: 'HomeGuru',
@@ -43,11 +43,12 @@ export default defineConfig({
         display: 'standalone',
         start_url: base,
         scope: base,
-        // Using the SVG favicon as the PWA icon — works for all sizes.
-        // Replace with proper PNG icons (192/512/maskable) before going to production.
+        // Single 512×512 PNG covers every icon slot — browsers + iOS downscale
+        // as needed. The logo has generous margin so it survives the Android
+        // circular maskable crop without clipping.
         icons: [
-          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-          { src: 'favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
