@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/hooks/useAuth';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Layout } from '@/components/Layout';
+import { PwaUpdatePrompt } from '@/components/PwaUpdatePrompt';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -41,6 +42,7 @@ const UNIT_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
 export default function App() {
   return (
     <AuthProvider>
+      <PwaUpdatePrompt />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 

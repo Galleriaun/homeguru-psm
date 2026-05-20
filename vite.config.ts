@@ -32,7 +32,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' — a new build does NOT silently swap in. The app shows a
+      // "Yeni sürüm hazır" banner (PwaUpdatePrompt) and the user taps Yenile.
+      registerType: 'prompt',
       includeAssets: ['icons/icon-512.png'],
       manifest: {
         name: 'HomeGuru PMS',
