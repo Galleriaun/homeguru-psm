@@ -100,7 +100,6 @@ export function DashboardPage() {
               to="/reservations/new"
               label="+ Yeni Rezervasyon"
               description="Müsait birim seçerek hızlıca rezervasyon oluştur"
-              primary
             />
           )}
           <QuickAction
@@ -178,36 +177,23 @@ function Tile({ to, label, value, accent, alert }: TileProps) {
 }
 
 // -----------------------------------------------------------------------------
-// QuickAction — big primary button-like card. `primary` floods the brand colour.
+// QuickAction — big neutral button-like card.
 // -----------------------------------------------------------------------------
 
 interface QuickActionProps {
   to: string;
   label: string;
   description: ReactNode;
-  primary?: boolean;
 }
 
-function QuickAction({ to, label, description, primary }: QuickActionProps) {
+function QuickAction({ to, label, description }: QuickActionProps) {
   return (
     <Link
       to={to}
-      className={cn(
-        'block rounded-lg border p-4 transition-colors',
-        primary
-          ? 'border-transparent bg-sky-700 text-white hover:bg-sky-800'
-          : 'border-stone-200 bg-white text-stone-900 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800/50',
-      )}
+      className="block rounded-lg border border-stone-200 bg-white p-4 text-stone-900 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800/50"
     >
       <p className="text-base font-semibold">{label}</p>
-      <p
-        className={cn(
-          'mt-1 text-xs',
-          primary ? 'text-sky-100' : 'text-stone-600 dark:text-stone-300',
-        )}
-      >
-        {description}
-      </p>
+      <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">{description}</p>
     </Link>
   );
 }
