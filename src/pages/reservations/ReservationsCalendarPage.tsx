@@ -16,7 +16,10 @@ import type { ReservationStatus } from '@/types/database';
 
 const WINDOW_DAYS = 28;
 const DAY_W = 44; // px per day column
-const LABEL_W = 180; // px for the sticky unit-name column
+// The sticky unit-name column is fixed-width. 180px is comfortable on a
+// tablet/desktop but swallows half a phone viewport, so it collapses below sm.
+const LABEL_W_MOBILE = 104;
+const LABEL_W_DESKTOP = 180;
 const ROW_H = 36; // px per unit row
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -59,6 +62,21 @@ function dayIndex(fromStr: string, toStr: string): number {
 
 const weekdayFmt = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
 const monthFmt = new Intl.DateTimeFormat('tr-TR', { month: 'short', timeZone: 'UTC' });
+const monthLongFmt = new Intl.DateTimeFormat('tr-TR', { month: 'long', timeZone: 'UTC' });
+const yearFmt = new Intl.DateTimeFormat('tr-TR', { year: 'numeric', timeZone: 'UTC' });
+
+// Human label for the visible window, which can straddle two months / years.
+function monthSpanLabel(startStr: string, endStr: string): string {
+  const s = new Date(startStr + 'T00:00:00Z');
+  const e = new Date(endStr + 'T00:00:00Z');
+  const sM = monthLongFmt.format(s);
+  const eM = monthLongFmt.format(e);
+  const sY = yearFmt.format(s);
+  const eY = yearFmt.format(e);
+  if (sM === eM && sY === eY) return `${sM} ${sY}`;
+  if (sY === eY) return `${sM} – ${eM} ${eY}`;
+  return `${sM} ${sY} – ${eM} ${eY}`;
+}
 
 export function ReservationsCalendarPage() {
   const { profile } = useAuth();
@@ -70,6 +88,20 @@ export function ReservationsCalendarPage() {
   const [reservations, setReservations] = useState<ReservationWithRefs[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Width of the sticky unit-name column — collapses on phones (see consts).
+  const [labelW, setLabelW] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 640
+      ? LABEL_W_MOBILE
+      : LABEL_W_DESKTOP,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 640px)');
+    const sync = () => setLabelW(mq.matches ? LABEL_W_DESKTOP : LABEL_W_MOBILE);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   const today = todayStr();
   const canCreate = Boolean(profile && can(profile.role, 'reservation:create'));
@@ -206,13 +238,18 @@ export function ReservationsCalendarPage() {
           small screens (a contained scroll region, not page-level scroll). */}
       {!error && properties.length > 0 && (
         <Card className="p-0">
+          {/* Month label for the visible window — sits outside the scroll
+              region so it stays put while the grid scrolls horizontally. */}
+          <div className="border-b border-stone-300 bg-stone-50 px-3 py-2 text-center text-sm font-semibold text-stone-700 dark:border-stone-600 dark:bg-stone-800/40 dark:text-stone-200">
+            {monthSpanLabel(windowStart, windowEndLabel)}
+          </div>
           <div className="overflow-x-auto">
-            <div style={{ width: LABEL_W + trackWidth }}>
+            <div style={{ width: labelW + trackWidth }}>
               {/* Header row */}
               <div className="flex border-b border-stone-300 dark:border-stone-600">
                 <div
                   className="sticky left-0 z-30 shrink-0 bg-white px-3 py-2 text-xs font-medium uppercase text-stone-600 dark:bg-stone-900 dark:text-stone-300"
-                  style={{ width: LABEL_W }}
+                  style={{ width: labelW }}
                 >
                   Birim
                 </div>
@@ -250,16 +287,16 @@ export function ReservationsCalendarPage() {
                   <Fragment key={p.id}>
                     <div className="flex border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40">
                       <div
-                        className="sticky left-0 z-20 shrink-0 bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-800 dark:bg-stone-800/40 dark:text-stone-200"
-                        style={{ width: LABEL_W }}
+                        className="sticky left-0 z-20 shrink-0 truncate bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-800 dark:bg-stone-800/40 dark:text-stone-200"
+                        style={{ width: labelW }}
                       >
                         {p.name}
                       </div>
                       <div
-                        className="py-1.5 text-xs text-stone-500 dark:text-stone-400"
+                        className="flex items-center py-1.5"
                         style={{ width: trackWidth }}
                       >
-                        <span className="px-3">
+                        <span className="ml-3 rounded bg-stone-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
                           {p.type === 'HOTEL' ? 'Otel' : 'Apart'}
                         </span>
                       </div>
@@ -269,7 +306,7 @@ export function ReservationsCalendarPage() {
                       <div className="flex border-b border-stone-200 dark:border-stone-700">
                         <div
                           className="sticky left-0 z-10 shrink-0 bg-white px-3 py-2 text-xs italic text-stone-400 dark:bg-stone-900"
-                          style={{ width: LABEL_W }}
+                          style={{ width: labelW }}
                         >
                           birim yok
                         </div>
@@ -286,7 +323,7 @@ export function ReservationsCalendarPage() {
                         >
                           <div
                             className="sticky left-0 z-10 flex shrink-0 items-center bg-white px-3 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200"
-                            style={{ width: LABEL_W, height: ROW_H }}
+                            style={{ width: labelW, height: ROW_H }}
                           >
                             <span className="truncate">{u.name}</span>
                           </div>
