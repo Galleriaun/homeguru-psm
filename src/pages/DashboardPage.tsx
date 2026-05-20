@@ -50,31 +50,21 @@ export function DashboardPage() {
           </Card>
         )}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Tile
-            to="/reservations"
-            label="Bugün Giriş"
-            value={counts?.checkInsToday}
-            accent="emerald"
-          />
-          <Tile
-            to="/reservations"
-            label="Bugün Çıkış"
-            value={counts?.checkOutsToday}
-            accent="sky"
-          />
+          {/* Informational counts — always neutral, no good/bad meaning. */}
+          <Tile to="/reservations" label="Bugün Giriş" value={counts?.checkInsToday} />
+          <Tile to="/reservations" label="Bugün Çıkış" value={counts?.checkOutsToday} />
           <Tile
             to="/reservations/calendar"
             label="Şu An Aktif"
             value={counts?.activeNow}
-            accent="stone"
           />
+          {/* Watch metrics — neutral at 0 (all good), warning tone only when > 0. */}
           {canReadFinance && (
             <Tile
               to="/finance/pending"
               label="Onay Bekleyen"
               value={counts?.pendingPayments}
-              accent="amber"
-              alert={(counts?.pendingPayments ?? 0) > 0}
+              watchTone="amber"
             />
           )}
           {canReadHousekeeping && (
@@ -82,8 +72,7 @@ export function DashboardPage() {
               to="/housekeeping"
               label="Açık Sorun"
               value={counts?.openIssues}
-              accent="red"
-              alert={(counts?.openIssues ?? 0) > 0}
+              watchTone="red"
             />
           )}
         </div>
@@ -131,33 +120,39 @@ export function DashboardPage() {
 // Tile — compact count card, tap to drill into the relevant page.
 // -----------------------------------------------------------------------------
 
-type Accent = 'emerald' | 'sky' | 'amber' | 'red' | 'stone';
+type WatchTone = 'amber' | 'red';
 
-const ACCENT_VALUE: Record<Accent, string> = {
-  emerald: 'text-emerald-700 dark:text-emerald-400',
-  sky: 'text-sky-700 dark:text-sky-400',
+// Per-tone classes applied ONLY when a watch metric is non-zero. At zero,
+// every tile is plain neutral — "0 açık sorun" should look calm, not alarming.
+const WATCH_NUMBER: Record<WatchTone, string> = {
   amber: 'text-amber-700 dark:text-amber-400',
   red: 'text-red-700 dark:text-red-400',
-  stone: 'text-stone-900 dark:text-stone-100',
+};
+const WATCH_BORDER: Record<WatchTone, string> = {
+  amber: 'border-amber-300 shadow-sm dark:border-amber-800',
+  red: 'border-red-300 shadow-sm dark:border-red-800',
 };
 
 interface TileProps {
   to: string;
   label: string;
   value: number | undefined;
-  accent: Accent;
-  /** Wraps the count in a soft glow if there's something needing attention. */
-  alert?: boolean;
+  /**
+   * Set only for "needs attention" metrics. When the value is > 0 the tile
+   * takes this warning tone; at 0 it stays neutral like an informational tile.
+   */
+  watchTone?: WatchTone;
 }
 
-function Tile({ to, label, value, accent, alert }: TileProps) {
+function Tile({ to, label, value, watchTone }: TileProps) {
+  const active = watchTone !== undefined && (value ?? 0) > 0;
   return (
     <Link
       to={to}
       className={cn(
         'block rounded-lg border bg-white p-4 transition-shadow hover:shadow-md dark:bg-stone-900',
-        alert
-          ? 'border-current shadow-sm ' + ACCENT_VALUE[accent]
+        active && watchTone
+          ? WATCH_BORDER[watchTone]
           : 'border-stone-200 dark:border-stone-700',
       )}
     >
@@ -167,7 +162,9 @@ function Tile({ to, label, value, accent, alert }: TileProps) {
       <p
         className={cn(
           'mt-1 text-3xl font-semibold tabular-nums',
-          alert ? ACCENT_VALUE[accent] : ACCENT_VALUE[accent],
+          active && watchTone
+            ? WATCH_NUMBER[watchTone]
+            : 'text-stone-900 dark:text-stone-100',
         )}
       >
         {value === undefined ? '…' : value}
