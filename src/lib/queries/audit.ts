@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Database, Json } from '@/types/database';
+import type { Database } from '@/types/database';
 
 type AuditRow = Database['public']['Tables']['audit_log']['Row'];
 export type AuditEntry = AuditRow;
@@ -111,14 +111,4 @@ export async function lookupStaffNames(userIds: string[]): Promise<Map<string, s
     map.set(row.user_id, row.full_name);
   }
   return map;
-}
-
-/** Pretty-print a metadata JSON value for the expandable detail block. */
-export function formatMetadata(meta: Json | null): string {
-  if (meta === null || meta === undefined) return '';
-  try {
-    return JSON.stringify(meta, null, 2);
-  } catch {
-    return String(meta);
-  }
 }
