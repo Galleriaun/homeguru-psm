@@ -14,12 +14,9 @@ import { DateInput } from '@/components/ui/DateInput';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
 import { ReservationsViewTabs } from './ViewTabs';
-import { formatTRY, formatDate } from '@/lib/utils';
+import { formatTRY, formatDate, istanbulToday } from '@/lib/utils';
 
 // --- date helpers (UTC-day space, matching how stay_start/stay_end are stored) ---
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 function addDaysStr(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
@@ -53,7 +50,7 @@ export function ReservationsAvailabilityPage() {
 
   // Search inputs
   const [propertyId, setPropertyId] = useState(''); // '' = all properties
-  const [checkin, setCheckin] = useState(todayStr());
+  const [checkin, setCheckin] = useState(istanbulToday());
   const [nights, setNights] = useState(1);
   const [flexDays, setFlexDays] = useState(3);
 

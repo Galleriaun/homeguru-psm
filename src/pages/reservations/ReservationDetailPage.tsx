@@ -221,6 +221,11 @@ export function ReservationDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canCollect && !isCancelled && (
+            <Button size="sm" onClick={() => setShowCollectModal(true)}>
+              Ödeme Topla
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -280,11 +285,9 @@ export function ReservationDetailPage() {
           ledger={ledger}
           error={ledgerError}
           canWrite={canWriteLedger}
-          canCollect={canCollect && !isCancelled}
           canDelete={canDeleteLedger}
           guestName={guestName}
           stayStart={reservation.stay_start}
-          onCollectClick={() => setShowCollectModal(true)}
           onAddClick={() => setShowLedgerModal(true)}
           onDeleteClick={(entry) => {
             setEntryDeleteError(null);
@@ -436,12 +439,10 @@ interface LedgerSectionProps {
   ledger: LedgerEntry[] | null;
   error: string | null;
   canWrite: boolean;
-  canCollect: boolean;
   canDelete: boolean;
   /** Used to build the CSV download filename. */
   guestName: string;
   stayStart: string;
-  onCollectClick: () => void;
   onAddClick: () => void;
   onDeleteClick: (entry: LedgerEntry) => void;
 }
@@ -450,11 +451,9 @@ function LedgerSection({
   ledger,
   error,
   canWrite,
-  canCollect,
   canDelete,
   guestName,
   stayStart,
-  onCollectClick,
   onAddClick,
   onDeleteClick,
 }: LedgerSectionProps) {
@@ -519,11 +518,6 @@ function LedgerSection({
                 }}
               >
                 CSV İndir
-              </Button>
-            )}
-            {canCollect && (
-              <Button size="sm" onClick={onCollectClick}>
-                + Ödeme Topla
               </Button>
             )}
             {canWrite && (

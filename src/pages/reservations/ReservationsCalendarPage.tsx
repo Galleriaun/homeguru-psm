@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ReservationsViewTabs } from './ViewTabs';
-import { cn, formatDate } from '@/lib/utils';
+import { cn, formatDate, istanbulToday } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
 const WINDOW_DAYS = 28;
@@ -38,10 +38,8 @@ const STATUS_LABELS: Record<ReservationStatus, string> = {
 };
 
 // --- date helpers: work purely in YYYY-MM-DD UTC-day space, matching how
-// stay_start / stay_end are stored (UTC midnight) ---
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+// stay_start / stay_end are stored (UTC midnight). "Today" comes from the
+// shared istanbulToday() helper so it never drifts past midnight Istanbul. ---
 function addDaysStr(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
@@ -82,7 +80,7 @@ export function ReservationsCalendarPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
-  const [windowStart, setWindowStart] = useState(() => mondayOf(todayStr()));
+  const [windowStart, setWindowStart] = useState(() => mondayOf(istanbulToday()));
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [reservations, setReservations] = useState<ReservationWithRefs[]>([]);
@@ -103,7 +101,7 @@ export function ReservationsCalendarPage() {
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  const today = todayStr();
+  const today = istanbulToday();
   const canCreate = Boolean(profile && can(profile.role, 'reservation:create'));
 
   // Properties + units load once

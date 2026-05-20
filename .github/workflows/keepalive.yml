@@ -1,11 +1,12 @@
 name: Supabase keepalive
 
 # Prevents the Supabase free-tier project from auto-pausing after 7 days
-# of inactivity. Pings the REST API every 6 days.
+# of inactivity. Pings the REST API daily — a wide margin so a delayed or
+# skipped GitHub-scheduled run can't let the project lapse.
 
 on:
   schedule:
-    - cron: '0 9 */6 * *'  # every 6 days at 09:00 UTC
+    - cron: '0 9 * * *'  # daily at 09:00 UTC
   workflow_dispatch:
 
 # Minimum permissions — keepalive only makes external HTTP calls,

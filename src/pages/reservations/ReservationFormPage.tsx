@@ -15,7 +15,7 @@ import { Card } from '@/components/ui/Card';
 import { DateInput } from '@/components/ui/DateInput';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
-import { formatTRY } from '@/lib/utils';
+import { formatTRY, istanbulToday } from '@/lib/utils';
 import { QuickAddGuestModal } from '@/components/QuickAddGuestModal';
 
 const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
@@ -24,10 +24,6 @@ const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
   { value: 'completed', label: 'Tamamlandı' },
   { value: 'cancelled', label: 'İptal' },
 ];
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00Z');
@@ -55,9 +51,12 @@ export function ReservationFormPage() {
   const [propertyId, setPropertyId] = useState('');
   const [unitId, setUnitId] = useState('');
   const [guestId, setGuestId] = useState('');
-  const [checkin, setCheckin] = useState(todayISO());
+  const [checkin, setCheckin] = useState(istanbulToday());
   const [nights, setNights] = useState(1);
   const [totalAmount, setTotalAmount] = useState(0);
+  // Tracks whether the operator has typed their own total. Once true, the
+  // unit×nights auto-fill stops overwriting it.
+  const [totalEdited, setTotalEdited] = useState(false);
   const [deposit, setDeposit] = useState(0);
   const [autoDebit, setAutoDebit] = useState(false);
   const [status, setStatus] = useState<ReservationStatus>('pending');
@@ -139,18 +138,22 @@ export function ReservationFormPage() {
     listUnitsForProperty(propertyId)
       .then((us) => {
         setUnits(us);
-        // If currently-selected unit isn't in this property, reset
-        if (us.length > 0 && !us.find((u) => u.id === unitId)) {
-          setUnitId(us[0].id);
+        // If the selected unit isn't in this property, switch to the first
+        // one — or clear it when the property has no units, so a stale id
+        // can't slip through validation into a mismatched reservation.
+        if (!us.find((u) => u.id === unitId)) {
+          setUnitId(us.length > 0 ? us[0].id : '');
         }
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Birimler yüklenemedi'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
-  // Auto-fill suggested total when unit/nights change (only if user hasn't customized)
+  // Auto-fill the suggested total as unit/nights change — but only while
+  // creating and only until the operator types their own value. On edit the
+  // saved total is authoritative and never auto-overwritten.
   useEffect(() => {
-    if (suggestedTotal > 0 && (totalAmount === 0 || !isEdit)) {
+    if (!isEdit && !totalEdited && suggestedTotal > 0) {
       setTotalAmount(suggestedTotal);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -355,7 +358,10 @@ export function ReservationFormPage() {
             step={50}
             required
             value={totalAmount}
-            onChange={setTotalAmount}
+            onChange={(v) => {
+              setTotalAmount(v);
+              setTotalEdited(true);
+            }}
           />
 
           <NumberInput

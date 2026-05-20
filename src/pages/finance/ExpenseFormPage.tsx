@@ -16,10 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { istanbulToday } from '@/lib/utils';
 
 export function ExpenseFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +30,7 @@ export function ExpenseFormPage() {
   const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState('');
-  const [expenseDate, setExpenseDate] = useState(todayStr());
+  const [expenseDate, setExpenseDate] = useState(istanbulToday());
   const [isRecurring, setIsRecurring] = useState(false);
 
   const [loading, setLoading] = useState(true);

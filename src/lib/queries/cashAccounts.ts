@@ -127,19 +127,17 @@ export function balanceOf(txs: CashTxRow[]): number {
 }
 
 /**
- * Fetch balances for many accounts in one round-trip.
- * Returns a Map<accountId, balance>. Accounts with no transactions are absent
+ * Fetch balances for every visible cash account in one round-trip — the SUM
+ * is computed server-side by the cash_account_balances RPC (migration 035).
+ * Returns a Map<accountId, balance>; accounts with no transactions are absent
  * from the map (callers should treat missing as 0).
  */
 export async function balancesByAccount(): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from('cash_transactions')
-    .select('cash_account_id, amount, direction');
+  const { data, error } = await supabase.rpc('cash_account_balances', {});
   if (error) throw wrapErr(error);
   const out = new Map<string, number>();
-  for (const t of data ?? []) {
-    const delta = t.direction === 'IN' ? Number(t.amount) : -Number(t.amount);
-    out.set(t.cash_account_id, (out.get(t.cash_account_id) ?? 0) + delta);
+  for (const row of data ?? []) {
+    out.set(row.cash_account_id, Number(row.balance));
   }
   return out;
 }

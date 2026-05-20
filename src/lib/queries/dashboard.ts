@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { istanbulToday } from '@/lib/utils';
 
 /**
  * Compact counts that the Panel renders as today's-at-a-glance tiles.
@@ -11,19 +12,6 @@ export interface DashboardCounts {
   activeNow: number;
   pendingPayments: number;
   openIssues: number;
-}
-
-/**
- * "Today" in the user's local time (Turkey is UTC+3 year-round).
- * stay_start / stay_end are stored as UTC-midnight timestamptz, so we
- * compare against `${date}T00:00:00Z` strings directly.
- */
-function localTodayStr(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 function addDaysStr(dateStr: string, days: number): string {
@@ -39,7 +27,7 @@ function addDaysStr(dateStr: string, days: number): string {
  * whole dashboard (a missing kasa permission shouldn't hide today's check-ins).
  */
 export async function loadDashboardCounts(): Promise<DashboardCounts> {
-  const today = localTodayStr();
+  const today = istanbulToday();
   const tomorrow = addDaysStr(today, 1);
   const todayISO = new Date(`${today}T00:00:00Z`).toISOString();
   const tomorrowISO = new Date(`${tomorrow}T00:00:00Z`).toISOString();

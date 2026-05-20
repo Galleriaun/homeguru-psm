@@ -23,14 +23,19 @@ const wrapErr = (e: { message: string; details?: string; hint?: string; code?: s
   );
 };
 
-/** List reservations with joined guest/unit/property names. */
+/**
+ * List reservations with joined guest/unit/property names. Capped at the
+ * 1000 most recent by stay_start so the query stays bounded as history grows
+ * — far beyond any realistic working set for this operation.
+ */
 export async function listReservations(): Promise<ReservationWithRefs[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
       'id, property_id, unit_id, guest_id, stay_start, stay_end, status, total_amount, deposit, auto_debit, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
-    .order('stay_start', { ascending: false });
+    .order('stay_start', { ascending: false })
+    .limit(1000);
   if (error) throw wrapErr(error);
   return (data as unknown as ReservationWithRefs[]) ?? [];
 }

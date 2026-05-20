@@ -717,6 +717,10 @@ export type Database = {
         Args: { p_full_name: string };
         Returns: Database['public']['Tables']['staff_profiles']['Row'];
       };
+      cash_account_balances: {
+        Args: Record<PropertyKey, never>;
+        Returns: { cash_account_id: string; balance: number }[];
+      };
     };
     Enums: {
       [_ in never]: never;

@@ -72,7 +72,7 @@ export function PendingPaymentsPage() {
             Onay Bekleyen Tahsilatlar
           </h1>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-            Temizlik personeli tarafından toplanmış, henüz onaylanmamış tahsilatlar.
+            Personel tarafından toplanmış, henüz yönetici onayı verilmemiş tahsilatlar.
           </p>
         </div>
         <FinanceTabs />

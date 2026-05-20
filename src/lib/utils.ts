@@ -29,6 +29,26 @@ export function formatDateTime(date: Date | string): string {
   }).format(d);
 }
 
+// Turkey is UTC+3 year-round. "Today" must be the Europe/Istanbul calendar
+// date — deriving it from UTC or browser-local time drifts by a day between
+// 00:00 and 03:00 Istanbul. This is the single source of truth for "today".
+const istanbulDayFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Istanbul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+/** Today's calendar date in Europe/Istanbul as 'YYYY-MM-DD'. */
+export function istanbulToday(): string {
+  // formatToParts gives locale-stable named parts regardless of join order.
+  const parts = istanbulDayFmt.formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')?.value ?? '1970';
+  const m = parts.find((p) => p.type === 'month')?.value ?? '01';
+  const d = parts.find((p) => p.type === 'day')?.value ?? '01';
+  return `${y}-${m}-${d}`;
+}
+
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Yönetici',
   PROPERTY_MANAGER: 'Alt Yönetici',
