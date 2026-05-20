@@ -87,8 +87,9 @@ export function LoginPage() {
     }
     if (data.session) {
       // Email confirmation is OFF — user is already signed in.
-      // The on_auth_user_created trigger (migration 029) has just inserted a
-      // staff_profiles row with role=YETKILI; useAuth picks it up momentarily.
+      // The on_auth_user_created trigger has just inserted a staff_profiles
+      // row with role=PENDING (migration 032); useAuth picks it up momentarily
+      // and the layout routes them to the pending-approval screen.
       navigate(from, { replace: true });
     } else {
       // Email confirmation is ON — user must verify before they can sign in.
@@ -191,8 +192,8 @@ export function LoginPage() {
 
         {isSignup && (
           <p className="mt-3 text-xs text-stone-500 dark:text-stone-400">
-            Yeni hesaplar varsayılan olarak Yetkili rolüyle açılır. Bir mülk yönetici
-            tarafından atanana kadar verileri göremezsiniz.
+            Yeni hesaplar onay bekleyen olarak açılır. Bir yönetici hesabınızı
+            onaylayıp rol atayana kadar uygulamadaki hiçbir veriye erişemezsiniz.
           </p>
         )}
 
