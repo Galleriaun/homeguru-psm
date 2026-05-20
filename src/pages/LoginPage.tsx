@@ -5,6 +5,26 @@ import { supabase } from '@/lib/supabase';
 
 type Mode = 'signin' | 'signup';
 
+// Supabase auth errors come back in English. Map the ones a staff member can
+// realistically hit to Turkish; fall back to the raw message for the rest.
+function translateAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials')) return 'E-posta veya şifre hatalı.';
+  if (m.includes('email not confirmed'))
+    return 'E-posta adresiniz henüz doğrulanmadı. Gelen kutunuzdaki doğrulama linkine tıklayın.';
+  if (m.includes('user already registered') || m.includes('already been registered'))
+    return 'Bu e-posta adresi zaten kayıtlı.';
+  if (m.includes('password should be at least'))
+    return 'Şifre en az 6 karakter olmalıdır.';
+  if (m.includes('unable to validate email address') || m.includes('invalid email'))
+    return 'Geçersiz e-posta adresi.';
+  if (m.includes('signups not allowed') || m.includes('signup is disabled'))
+    return 'Yeni kayıt şu anda kapalı.';
+  if (m.includes('email rate limit') || m.includes('over_email_send_rate_limit'))
+    return 'Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.';
+  return message;
+}
+
 export function LoginPage() {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
@@ -41,7 +61,7 @@ export function LoginPage() {
       const { error: signInError } = await signIn(email, password);
       setSubmitting(false);
       if (signInError) {
-        setError(signInError.message);
+        setError(translateAuthError(signInError.message));
       } else {
         navigate(from, { replace: true });
       }
@@ -62,7 +82,7 @@ export function LoginPage() {
     });
     setSubmitting(false);
     if (signUpError) {
-      setError(signUpError.message);
+      setError(translateAuthError(signUpError.message));
       return;
     }
     if (data.session) {
