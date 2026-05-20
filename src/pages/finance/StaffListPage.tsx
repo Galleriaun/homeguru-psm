@@ -3,11 +3,20 @@ import { Link } from 'react-router-dom';
 import { listStaff, type StaffProfileWithProperty } from '@/lib/queries/staff';
 import { Card } from '@/components/ui/Card';
 import { FinanceTabs } from './FinanceTabs';
-import { formatTRY, formatRole } from '@/lib/utils';
+import { formatTRY, formatRole, formatScope } from '@/lib/utils';
 
 // Role is a classification, not a status — single neutral stone palette
 // avoids implying that different roles are "better" or "worse".
 const ROLE_BADGE = 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200';
+
+// Group ordering: pending signups first (need an admin's attention), then by
+// access scope.
+const GROUP_ORDER: Record<string, number> = {
+  __pending__: 0,
+  ALL: 1,
+  HOTELS: 2,
+  APARTMENTS: 3,
+};
 
 export function StaffListPage() {
   const [staff, setStaff] = useState<StaffProfileWithProperty[] | null>(null);
@@ -19,33 +28,25 @@ export function StaffListPage() {
       .catch((e) => setError(e?.message ?? 'Personel yüklenemedi'));
   }, []);
 
-  // Group by property; HOTEL groups first, then APARTMENT, then unassigned.
+  // Group by access scope. PENDING signups get their own "Onay Bekleyenler"
+  // group up top — their scope is meaningless until an admin promotes them.
   const grouped = useMemo(() => {
     if (!staff) return [];
     const buckets = new Map<
       string,
-      {
-        key: string;
-        label: string;
-        propertyType: string; // 'HOTEL' | 'APARTMENT' | 'UNASSIGNED'
-        items: StaffProfileWithProperty[];
-      }
+      { key: string; label: string; items: StaffProfileWithProperty[] }
     >();
     for (const s of staff) {
-      const key = s.property_id ?? '__unassigned__';
-      const label = s.property?.name ?? 'Atanmamış';
-      const propertyType = s.property?.type ?? (s.property_id ? 'APARTMENT' : 'UNASSIGNED');
+      const key = s.role === 'PENDING' ? '__pending__' : s.access_scope;
+      const label =
+        key === '__pending__' ? 'Onay Bekleyenler' : formatScope(s.access_scope);
       const existing = buckets.get(key);
       if (existing) existing.items.push(s);
-      else buckets.set(key, { key, label, propertyType, items: [s] });
+      else buckets.set(key, { key, label, items: [s] });
     }
-    const typeOrder: Record<string, number> = { HOTEL: 0, APARTMENT: 1, UNASSIGNED: 2 };
-    return Array.from(buckets.values()).sort((g1, g2) => {
-      const t1 = typeOrder[g1.propertyType] ?? 1;
-      const t2 = typeOrder[g2.propertyType] ?? 1;
-      if (t1 !== t2) return t1 - t2;
-      return g1.label.localeCompare(g2.label, 'tr');
-    });
+    return Array.from(buckets.values()).sort(
+      (g1, g2) => (GROUP_ORDER[g1.key] ?? 9) - (GROUP_ORDER[g2.key] ?? 9),
+    );
   }, [staff]);
 
   return (

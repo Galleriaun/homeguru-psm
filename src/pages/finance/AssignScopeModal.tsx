@@ -1,33 +1,37 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { updateStaffProperty } from '@/lib/queries/staff';
-import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
+import { updateStaffScope } from '@/lib/queries/staff';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
+import type { AccessScope } from '@/types/database';
 
 interface Props {
   staffUserId: string;
   staffName: string;
-  currentPropertyId: string | null;
+  currentScope: AccessScope;
   onClose: () => void;
-  /** Called with full property info (or nulls for unassigned) after a save. */
-  onUpdated: (
-    newPropertyId: string | null,
-    newProperty: { name: string; type: string } | null,
-  ) => void;
+  onUpdated: (newScope: AccessScope) => void;
 }
 
-const UNASSIGNED = '__unassigned__';
+const SCOPE_OPTIONS: { value: AccessScope; label: string }[] = [
+  { value: 'ALL', label: 'Tüm Mülkler' },
+  { value: 'HOTELS', label: 'Oteller' },
+  { value: 'APARTMENTS', label: 'Daireler' },
+];
 
-export function AssignPropertyModal({
+/**
+ * Sets where a staff member works — the 3-way access scope. Replaces the old
+ * single-property assignment. Backed by `updateStaffScope` → migration 033's
+ * `auth_sees_property()` enforces it server-side.
+ */
+export function AssignScopeModal({
   staffUserId,
   staffName,
-  currentPropertyId,
+  currentScope,
   onClose,
   onUpdated,
 }: Props) {
-  const [properties, setProperties] = useState<Property[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string>(currentPropertyId ?? UNASSIGNED);
+  const [scope, setScope] = useState<AccessScope>(currentScope);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,40 +43,22 @@ export function AssignPropertyModal({
     return () => document.removeEventListener('keydown', handle);
   }, [onClose]);
 
-  useEffect(() => {
-    listProperties()
-      .then((data) => setProperties(sortHotelsFirst(data)))
-      .catch((e) => setError(e instanceof Error ? e.message : 'Mülkler yüklenemedi'));
-  }, []);
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    const nextId = selectedId === UNASSIGNED ? null : selectedId;
-    if (nextId === (currentPropertyId ?? null)) {
-      // No-op
+    if (scope === currentScope) {
       onClose();
       return;
     }
     setSaving(true);
     try {
-      await updateStaffProperty(staffUserId, nextId);
-      const found = nextId ? properties?.find((p) => p.id === nextId) : null;
-      const nextProperty = found ? { name: found.name, type: found.type } : null;
-      onUpdated(nextId, nextProperty);
+      await updateStaffScope(staffUserId, scope);
+      onUpdated(scope);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kaydedilemedi');
       setSaving(false);
     }
   };
-
-  const options = [
-    { value: UNASSIGNED, label: '(Atanmamış)' },
-    ...(properties ?? []).map((p) => ({
-      value: p.id,
-      label: `${p.name} (${p.type === 'HOTEL' ? 'Otel' : 'Daire'})`,
-    })),
-  ];
 
   return (
     <div
@@ -84,7 +70,7 @@ export function AssignPropertyModal({
       <Card className="w-full max-w-md">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Şube Ata
+            Nerede Çalışacak?
           </h2>
           <button
             type="button"
@@ -104,18 +90,18 @@ export function AssignPropertyModal({
         </div>
 
         <p className="mb-4 text-sm text-stone-600 dark:text-stone-300">
-          <strong className="text-stone-900 dark:text-stone-100">{staffName}</strong> hangi
-          mülkte çalışacak? "Atanmamış" seçilirse personel veriyi göremez.
+          <strong className="text-stone-900 dark:text-stone-100">{staffName}</strong>{' '}
+          hangi mülklerde çalışacak? Personel yalnızca seçilen tür mülklerin
+          verilerini görebilir.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <Select
-            label="Mülk"
-            name="property"
-            value={selectedId}
-            onChange={setSelectedId}
-            options={options}
-            placeholder={properties === null ? 'Yükleniyor…' : undefined}
+            label="Çalışma Alanı"
+            name="access_scope"
+            value={scope}
+            onChange={(v) => setScope(v as AccessScope)}
+            options={SCOPE_OPTIONS}
           />
 
           {error && (
@@ -128,7 +114,7 @@ export function AssignPropertyModal({
             <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
               İptal
             </Button>
-            <Button type="submit" loading={saving} disabled={properties === null}>
+            <Button type="submit" loading={saving}>
               Kaydet
             </Button>
           </div>

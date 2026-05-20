@@ -58,6 +58,9 @@ const BASE: Record<Role, Permission[]> = {
     'guest:update',
   ],
   HOUSEKEEPING: ['housekeeping:read', 'housekeeping:write'],
+  // New-signup holding role. Zero permissions and in no RLS allow-list — the
+  // account is inert until a SUPER_ADMIN promotes it to a real role.
+  PENDING: [],
   // Branch operator — full operations within own branch, no finance/staff/admin.
   // Payment collection is allowed; the DB RPC creates UNCONFIRMED rows that a
   // manager confirms (since YETKILI has no finance:write).

@@ -12,8 +12,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { StaffAdvanceModal } from './StaffAdvanceModal';
 import { EditSalaryModal } from './EditSalaryModal';
-import { AssignPropertyModal } from './AssignPropertyModal';
-import { formatDate, formatTRY, formatRole } from '@/lib/utils';
+import { AssignScopeModal } from './AssignScopeModal';
+import { formatDate, formatTRY, formatRole, formatScope } from '@/lib/utils';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', {
   timeZone: 'Europe/Istanbul',
@@ -56,11 +56,11 @@ export function StaffDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showEditSalary, setShowEditSalary] = useState(false);
-  const [showAssignProperty, setShowAssignProperty] = useState(false);
+  const [showAssignScope, setShowAssignScope] = useState(false);
 
-  // RLS (staff_profiles_modify) limits salary edits + property assignment to SUPER_ADMIN.
+  // RLS (staff_profiles_modify) limits salary edits + scope assignment to SUPER_ADMIN.
   const canEditSalary = profile?.role === 'SUPER_ADMIN';
-  const canAssignProperty = profile?.role === 'SUPER_ADMIN';
+  const canAssignScope = profile?.role === 'SUPER_ADMIN';
 
   const currentMonth = currentIstanbulYearMonth();
 
@@ -129,16 +129,16 @@ export function StaffDetailPage() {
           </h1>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
             {formatRole(staff.role)}
-            {staff.property?.name ? ` · ${staff.property.name}` : ''}
+            {` · ${formatScope(staff.access_scope)}`}
             {staff.hire_date ? ` · İşe giriş: ${formatDate(staff.hire_date)}` : ''}
           </p>
-          {canAssignProperty && (
+          {canAssignScope && (
             <button
               type="button"
-              onClick={() => setShowAssignProperty(true)}
+              onClick={() => setShowAssignScope(true)}
               className="mt-2 inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
             >
-              {staff.property?.name ? 'Şubeyi Değiştir' : 'Şube Ata'}
+              Çalışma Alanını Değiştir
             </button>
           )}
         </div>
@@ -284,19 +284,15 @@ export function StaffDetailPage() {
         />
       )}
 
-      {showAssignProperty && (
-        <AssignPropertyModal
+      {showAssignScope && (
+        <AssignScopeModal
           staffUserId={staff.user_id}
           staffName={staff.full_name}
-          currentPropertyId={staff.property_id}
-          onClose={() => setShowAssignProperty(false)}
-          onUpdated={(newPropertyId, newProperty) => {
-            setStaff((prev) =>
-              prev
-                ? { ...prev, property_id: newPropertyId, property: newProperty }
-                : prev,
-            );
-            setShowAssignProperty(false);
+          currentScope={staff.access_scope}
+          onClose={() => setShowAssignScope(false)}
+          onUpdated={(newScope) => {
+            setStaff((prev) => (prev ? { ...prev, access_scope: newScope } : prev));
+            setShowAssignScope(false);
           }}
         />
       )}

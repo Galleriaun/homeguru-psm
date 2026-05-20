@@ -35,11 +35,23 @@ const ROLE_LABELS: Record<string, string> = {
   RECEPTION: 'Resepsiyon',
   HOUSEKEEPING: 'Temizlik',
   YETKILI: 'Yetkili',
+  PENDING: 'Onay Bekliyor',
 };
 
 /** Friendly label for a staff role. Falls back to the raw value for unknown roles. */
 export function formatRole(role: string): string {
   return ROLE_LABELS[role] ?? role;
+}
+
+const SCOPE_LABELS: Record<string, string> = {
+  ALL: 'Tüm Mülkler',
+  HOTELS: 'Oteller',
+  APARTMENTS: 'Daireler',
+};
+
+/** Friendly label for a staff access scope (migration 033). */
+export function formatScope(scope: string): string {
+  return SCOPE_LABELS[scope] ?? scope;
 }
 
 const ROOM_TYPE_LABELS: Record<string, string> = {

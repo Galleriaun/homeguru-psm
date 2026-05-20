@@ -23,7 +23,10 @@ export type Role =
   | 'PROPERTY_MANAGER'
   | 'RECEPTION'
   | 'HOUSEKEEPING'
-  | 'YETKILI';
+  | 'YETKILI'
+  | 'PENDING';
+/** Which properties a staff member works across (branch isolation, migration 033). */
+export type AccessScope = 'ALL' | 'HOTELS' | 'APARTMENTS';
 export type PropertyType = 'HOTEL' | 'APARTMENT';
 export type RoomType =
   | '1+0' | '1+1' | '2+1'         // Apartment layouts
@@ -112,6 +115,7 @@ export type Database = {
           full_name: string;
           role: Role;
           property_id: string | null;
+          access_scope: AccessScope;
           salary: number | null;
           hire_date: string | null;
           created_at: string;
@@ -121,6 +125,7 @@ export type Database = {
           full_name: string;
           role: Role;
           property_id?: string | null;
+          access_scope?: AccessScope;
           salary?: number | null;
           hire_date?: string | null;
           created_at?: string;
@@ -130,6 +135,7 @@ export type Database = {
           full_name?: string;
           role?: Role;
           property_id?: string | null;
+          access_scope?: AccessScope;
           salary?: number | null;
           hire_date?: string | null;
           created_at?: string;

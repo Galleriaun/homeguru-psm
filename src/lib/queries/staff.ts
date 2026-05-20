@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Database } from '@/types/database';
+import type { AccessScope, Database } from '@/types/database';
 
 type StaffProfileRow = Database['public']['Tables']['staff_profiles']['Row'];
 type AdvanceRow = Database['public']['Tables']['staff_advances']['Row'];
@@ -26,7 +26,7 @@ export async function listStaff(): Promise<StaffProfileWithProperty[]> {
   const { data, error } = await supabase
     .from('staff_profiles')
     .select(
-      'user_id, full_name, role, property_id, salary, hire_date, created_at, property:properties(name, type)',
+      'user_id, full_name, role, property_id, access_scope, salary, hire_date, created_at, property:properties(name, type)',
     )
     .order('full_name');
   if (error) throw wrapErr(error);
@@ -37,7 +37,7 @@ export async function getStaff(userId: string): Promise<StaffProfileWithProperty
   const { data, error } = await supabase
     .from('staff_profiles')
     .select(
-      'user_id, full_name, role, property_id, salary, hire_date, created_at, property:properties(name, type)',
+      'user_id, full_name, role, property_id, access_scope, salary, hire_date, created_at, property:properties(name, type)',
     )
     .eq('user_id', userId)
     .maybeSingle();
@@ -61,17 +61,17 @@ export async function updateStaffSalary(userId: string, salary: number): Promise
 }
 
 /**
- * Assigns a staff member to a property (or unassigns when propertyId is null).
- * Same RLS gate as salary edits — SUPER_ADMIN only. Used by the property
- * assignment modal on StaffDetailPage after a new YETKILI signup.
+ * Sets which properties a staff member works across (Tüm Mülkler / Oteller /
+ * Daireler). RLS gates this to SUPER_ADMIN (staff_profiles_modify). Drives
+ * branch isolation via auth_sees_property() — see migration 033.
  */
-export async function updateStaffProperty(
+export async function updateStaffScope(
   userId: string,
-  propertyId: string | null,
+  scope: AccessScope,
 ): Promise<StaffProfileRow> {
   const { data, error } = await supabase
     .from('staff_profiles')
-    .update({ property_id: propertyId })
+    .update({ access_scope: scope })
     .eq('user_id', userId)
     .select()
     .single();
