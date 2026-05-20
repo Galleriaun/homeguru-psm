@@ -18,7 +18,6 @@ const PAGE_SIZE = 50;
 /** Turkish label for the raw `action` code (used in the filter dropdown). */
 const ACTION_LABELS: Record<string, string> = {
   GUEST_DECRYPT: 'Misafir bilgisi görüntüleme',
-  DECRYPT: 'Hassas alan erişimi (eski)',
 };
 
 const labelOr = (map: Record<string, string>, value: string): string =>
@@ -40,30 +39,18 @@ function metaString(entry: AuditEntry, key: string): string | null {
  * sentence, not decode JSON + raw enum codes.
  */
 function eventSentence(entry: AuditEntry): string {
-  switch (entry.action) {
-    case 'GUEST_DECRYPT': {
-      const name = metaString(entry, 'guest_name');
-      return name
-        ? `${name} adlı misafirin hassas bilgileri (TC kimlik / pasaport) görüntülendi`
-        : 'Bir misafirin hassas bilgileri görüntülendi';
-    }
-    case 'DECRYPT':
-      // Legacy rows from before migration 030 — no guest context was captured.
-      return 'Hassas alan şifresi çözüldü (eski kayıt — misafir bilgisi yok)';
-    default:
-      return labelOr(ACTION_LABELS, entry.action);
+  if (entry.action === 'GUEST_DECRYPT') {
+    const name = metaString(entry, 'guest_name');
+    return name
+      ? `${name} adlı misafirin hassas bilgileri (TC kimlik / pasaport) görüntülendi`
+      : 'Bir misafirin hassas bilgileri görüntülendi';
   }
+  return labelOr(ACTION_LABELS, entry.action);
 }
 
 /** Soft accent colour for the little category dot next to each event. */
 function eventAccent(action: string): string {
-  switch (action) {
-    case 'GUEST_DECRYPT':
-    case 'DECRYPT':
-      return 'bg-amber-500';
-    default:
-      return 'bg-stone-400';
-  }
+  return action === 'GUEST_DECRYPT' ? 'bg-amber-500' : 'bg-stone-400';
 }
 
 export function AuditLogPage() {
