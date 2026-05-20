@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import { listProperties, type Property } from '@/lib/queries/properties';
@@ -202,21 +202,10 @@ export function ReservationsCalendarPage() {
         </Card>
       )}
 
-      {/* Mobile (< md): agenda list of reservations in the window */}
+      {/* Gantt timeline — scrolls horizontally inside its own container on
+          small screens (a contained scroll region, not page-level scroll). */}
       {!error && properties.length > 0 && (
-        <div className="md:hidden">
-          <MobileAgenda
-            reservations={reservations}
-            windowStart={windowStart}
-            windowDays={WINDOW_DAYS}
-            today={today}
-          />
-        </div>
-      )}
-
-      {/* Desktop (md+): Gantt timeline */}
-      {!error && properties.length > 0 && (
-        <Card className="hidden p-0 md:block">
+        <Card className="p-0">
           <div className="overflow-x-auto">
             <div style={{ width: LABEL_W + trackWidth }}>
               {/* Header row */}
@@ -383,150 +372,10 @@ export function ReservationsCalendarPage() {
       )}
 
       {canCreate && (
-        <p className="hidden text-xs text-stone-500 dark:text-stone-400 md:block">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           Boş bir güne tıklayarak yeni rezervasyon oluşturabilirsiniz.
         </p>
       )}
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------------
-// MobileAgenda — list-style alternative shown below the `md` breakpoint.
-// Same data as the Gantt: reservations that overlap the active 28-day window.
-// Sorted by stay_start; cancelled reservations are filtered out to match the
-// Gantt's behavior. Grouped under a small date header so the user can scan by
-// arrival day. Tapping a card navigates to /reservations/<id>.
-// -----------------------------------------------------------------------------
-
-const longDateFmt = new Intl.DateTimeFormat('tr-TR', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  timeZone: 'UTC',
-});
-
-const STATUS_LIST_BADGE: Record<ReservationStatus, string> = {
-  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
-  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
-  completed: 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200',
-  cancelled: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300',
-};
-
-interface MobileAgendaProps {
-  reservations: ReservationWithRefs[];
-  windowStart: string;
-  windowDays: number;
-  today: string;
-}
-
-function MobileAgenda({ reservations, windowStart, windowDays, today }: MobileAgendaProps) {
-  const windowEndStr = addDaysStr(windowStart, windowDays);
-
-  // Filter to in-window + non-cancelled, then sort by stay_start.
-  const visible = useMemo(() => {
-    return reservations
-      .filter((r) => {
-        if (r.status === 'cancelled') return false;
-        const s = r.stay_start.slice(0, 10);
-        const e = r.stay_end.slice(0, 10);
-        // overlap: starts before window-end AND ends after window-start
-        return s < windowEndStr && e > windowStart;
-      })
-      .sort((a, b) => a.stay_start.localeCompare(b.stay_start));
-  }, [reservations, windowStart, windowEndStr]);
-
-  // Group by stay_start date (YYYY-MM-DD). Keeps insertion order via Map.
-  const groups = useMemo(() => {
-    const m = new Map<string, ReservationWithRefs[]>();
-    for (const r of visible) {
-      const k = r.stay_start.slice(0, 10);
-      const arr = m.get(k) ?? [];
-      arr.push(r);
-      m.set(k, arr);
-    }
-    return Array.from(m.entries());
-  }, [visible]);
-
-  if (visible.length === 0) {
-    return (
-      <Card>
-        <p className="text-center text-sm text-stone-600 dark:text-stone-300">
-          Bu zaman aralığında rezervasyon yok.
-        </p>
-      </Card>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      {groups.map(([dateStr, items]) => {
-        const d = new Date(dateStr + 'T00:00:00Z');
-        const headerLabel = longDateFmt.format(d);
-        const isToday = dateStr === today;
-        const isPast = dateStr < today;
-        return (
-          <section key={dateStr} className="space-y-2">
-            <div className="flex items-baseline gap-2">
-              <h2
-                className={cn(
-                  'text-sm font-semibold',
-                  isToday
-                    ? 'text-emerald-700 dark:text-emerald-400'
-                    : isPast
-                      ? 'text-stone-500 dark:text-stone-400'
-                      : 'text-stone-800 dark:text-stone-200',
-                )}
-              >
-                {headerLabel}
-              </h2>
-              {isToday && (
-                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                  Bugün
-                </span>
-              )}
-            </div>
-            <ul className="space-y-2">
-              {items.map((r) => {
-                const sStr = r.stay_start.slice(0, 10);
-                const eStr = r.stay_end.slice(0, 10);
-                const nights = Math.max(1, dayIndex(sStr, eStr));
-                return (
-                  <li key={r.id}>
-                    <Link
-                      to={`/reservations/${r.id}`}
-                      className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
-                          {r.guest?.full_name ?? '—'}
-                        </p>
-                        <span
-                          className={cn(
-                            'shrink-0 rounded px-2 py-0.5 text-xs font-medium',
-                            STATUS_LIST_BADGE[r.status],
-                          )}
-                        >
-                          {STATUS_LABELS[r.status]}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 truncate text-xs text-stone-600 dark:text-stone-300">
-                        {r.property?.name ?? '—'} · {r.unit?.name ?? '—'}
-                      </p>
-                      <p className="mt-1 text-xs text-stone-700 dark:text-stone-300">
-                        {formatDate(sStr)} → {formatDate(eStr)}{' '}
-                        <span className="text-stone-500 dark:text-stone-400">
-                          · {nights} gece
-                        </span>
-                      </p>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        );
-      })}
     </div>
   );
 }
