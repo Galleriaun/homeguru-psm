@@ -29,6 +29,7 @@ import { StaffDetailPage } from '@/pages/finance/StaffDetailPage';
 import { TemplatesPage } from '@/pages/settings/TemplatesPage';
 import { TrashPage } from '@/pages/settings/TrashPage';
 import { AuditLogPage } from '@/pages/settings/AuditLogPage';
+import { ProfilePage } from '@/pages/settings/ProfilePage';
 import { UnitGalleryPage } from '@/pages/public/UnitGalleryPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION', 'YETKILI'] as const;
@@ -55,6 +56,9 @@ export default function App() {
         >
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+
+          {/* Profile — any authenticated user can edit their own display name */}
+          <Route path="/settings/profile" element={<ProfilePage />} />
 
           {/* Properties */}
           <Route path="/properties" element={<PropertiesListPage />} />

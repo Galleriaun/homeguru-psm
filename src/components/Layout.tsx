@@ -152,12 +152,16 @@ export function Layout() {
 
           {/* Desktop right-side actions — hidden on mobile */}
           <div className="hidden items-center gap-3 md:flex">
-            <span className="text-sm text-stone-700 dark:text-stone-300">
+            <Link
+              to="/settings/profile"
+              title="Profili düzenle"
+              className="rounded px-1 text-sm text-stone-700 transition-colors hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"
+            >
               {profile?.full_name}
               <span className="ml-2 rounded bg-stone-100 px-2 py-0.5 text-xs uppercase text-stone-700 dark:bg-stone-800 dark:text-stone-300">
                 {profile?.role ? formatRole(profile.role) : ''}
               </span>
-            </span>
+            </Link>
             {profile?.role === 'SUPER_ADMIN' && (
               <NavLink
                 to="/settings/audit"
@@ -233,16 +237,20 @@ export function Layout() {
           <aside
             className="absolute right-0 top-0 flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-xl dark:bg-stone-900"
           >
-            {/* Drawer header: user + close */}
+            {/* Drawer header: user (tap → profile) + close */}
             <div className="flex items-start justify-between gap-3 border-b border-stone-200 px-4 py-3 dark:border-stone-700">
-              <div className="min-w-0">
+              <NavLink
+                to="/settings/profile"
+                onClick={closeMobile}
+                className="-mx-2 min-w-0 rounded px-2 py-1 hover:bg-stone-100 dark:hover:bg-stone-800"
+              >
                 <p className="truncate text-sm font-medium text-stone-900 dark:text-stone-100">
                   {profile?.full_name}
                 </p>
                 <span className="mt-1 inline-block rounded bg-stone-100 px-2 py-0.5 text-xs uppercase text-stone-700 dark:bg-stone-800 dark:text-stone-300">
                   {profile?.role ? formatRole(profile.role) : ''}
                 </span>
-              </div>
+              </NavLink>
               <button
                 type="button"
                 onClick={closeMobile}
