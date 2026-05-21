@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import {
@@ -8,6 +9,7 @@ import {
   balanceOf,
   type CashAccount,
   type CashTransaction,
+  type CashTransactionWithRefs,
 } from '@/lib/queries/cashAccounts';
 import { deletePaymentCollection } from '@/lib/queries/payments';
 import { Button } from '@/components/ui/Button';
@@ -39,7 +41,7 @@ export function CashPage() {
   const { profile, user } = useAuth();
 
   const [account, setAccount] = useState<CashAccount | null>(null);
-  const [transactions, setTransactions] = useState<CashTransaction[]>([]);
+  const [transactions, setTransactions] = useState<CashTransactionWithRefs[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTxModal, setShowTxModal] = useState(false);
@@ -166,6 +168,7 @@ export function CashPage() {
                       Tutar: Number(t.amount).toFixed(2),
                       'Para Birimi': account.currency,
                       Açıklama: t.description ?? '',
+                      Misafir: t.payment_collection?.reservation?.guest?.full_name ?? '',
                       Tip: t.ref_type ?? '',
                     }));
                     exportRowsToCsv(
@@ -178,6 +181,7 @@ export function CashPage() {
                         { key: 'Tutar', label: 'Tutar' },
                         { key: 'Para Birimi', label: 'Para Birimi' },
                         { key: 'Açıklama', label: 'Açıklama' },
+                        { key: 'Misafir', label: 'Misafir' },
                         { key: 'Tip', label: 'Tip' },
                       ],
                     );
@@ -225,6 +229,17 @@ export function CashPage() {
                             <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
                               {t.description || '—'}
                             </p>
+                            {t.payment_collection?.reservation && (
+                              <Link
+                                to={`/reservations/${t.payment_collection.reservation.id}`}
+                                className="mt-0.5 inline-block text-xs text-emerald-600 hover:underline dark:text-emerald-500"
+                              >
+                                {t.payment_collection.reservation.guest?.full_name ?? 'Misafir'}
+                                {t.payment_collection.reservation.unit?.name
+                                  ? ` · ${t.payment_collection.reservation.unit.name}`
+                                  : ''}
+                              </Link>
+                            )}
                           </div>
                           <p
                             className={
@@ -292,7 +307,18 @@ export function CashPage() {
                                 </span>
                               </td>
                               <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                                {t.description || '—'}
+                                <div>{t.description || '—'}</div>
+                                {t.payment_collection?.reservation && (
+                                  <Link
+                                    to={`/reservations/${t.payment_collection.reservation.id}`}
+                                    className="text-xs text-emerald-600 hover:underline dark:text-emerald-500"
+                                  >
+                                    {t.payment_collection.reservation.guest?.full_name ?? 'Misafir'}
+                                    {t.payment_collection.reservation.unit?.name
+                                      ? ` · ${t.payment_collection.reservation.unit.name}`
+                                      : ''}
+                                  </Link>
+                                )}
                               </td>
                               <td
                                 className={

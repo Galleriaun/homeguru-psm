@@ -34,15 +34,34 @@ export async function getGeneralKasa(): Promise<CashAccountRow | null> {
 // Cash transactions
 // =============================================================================
 
-/** Transactions for the kasa, newest first. */
-export async function listCashTransactions(accountId: string): Promise<CashTxRow[]> {
+/**
+ * A kasa transaction enriched with its source reservation + guest, for
+ * movements that came from a guest payment. Manual entries and expense
+ * movements have no payment_collection.
+ */
+export interface CashTransactionWithRefs extends CashTxRow {
+  payment_collection?: {
+    reservation: {
+      id: string;
+      guest: { full_name: string } | null;
+      unit: { name: string } | null;
+    } | null;
+  } | null;
+}
+
+/** Transactions for the kasa, newest first — guest-payment rows carry their reservation. */
+export async function listCashTransactions(
+  accountId: string,
+): Promise<CashTransactionWithRefs[]> {
   const { data, error } = await supabase
     .from('cash_transactions')
-    .select('*')
+    .select(
+      '*, payment_collection:payment_collections(reservation:reservations(id, guest:guests(full_name), unit:units(name)))',
+    )
     .eq('cash_account_id', accountId)
     .order('created_at', { ascending: false });
   if (error) throw wrapErr(error);
-  return data ?? [];
+  return (data as unknown as CashTransactionWithRefs[]) ?? [];
 }
 
 export async function createCashTransaction(input: CashTxInsert): Promise<CashTxRow> {
