@@ -2,6 +2,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -25,12 +26,27 @@ interface SelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  /** When true, the open dropdown shows a type-to-filter search box. */
+  searchable?: boolean;
+}
+
+// Case- and diacritic-insensitive folding for Turkish search so a fast typist
+// still matches: "Çetin", "cetin" and "çetın" all collapse to the same key.
+const TR_FOLD: Record<string, string> = {
+  ç: 'c', ş: 's', ğ: 'g', ı: 'i', ö: 'o', ü: 'u', â: 'a', î: 'i', û: 'u',
+};
+function searchNorm(s: string): string {
+  return s
+    .replace(/[İI]/g, 'i') // unify dotted/dotless capital I before folding
+    .toLowerCase()
+    .replace(/[çşğıöüâîû]/g, (c) => TR_FOLD[c] ?? c);
 }
 
 /**
  * Custom Select dropdown.
  * Replaces the native <select> so we control the appearance in all browsers.
  * Fully keyboard-accessible: arrow keys, Home/End, Enter/Space, Escape, Tab.
+ * Pass `searchable` to add a type-to-filter box — useful for long lists.
  */
 export const Select = forwardRef<HTMLButtonElement, SelectProps>(
   (
@@ -46,18 +62,25 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
       placeholder = 'Seçiniz…',
       disabled,
       className,
+      searchable,
     },
     ref,
   ) => {
     const selectId = id ?? name;
     const [open, setOpen] = useState(false);
-    const [highlighted, setHighlighted] = useState<number>(() => {
-      const idx = options.findIndex((o) => o.value === value);
-      return idx >= 0 ? idx : 0;
-    });
+    const [query, setQuery] = useState('');
+    const [highlighted, setHighlighted] = useState(0);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const optionRefs = useRef<(HTMLLIElement | null)[]>([]);
+    const searchRef = useRef<HTMLInputElement>(null);
+
+    // The options actually rendered — narrowed by the search query when searchable.
+    const visibleOptions = useMemo(() => {
+      if (!searchable || !query.trim()) return options;
+      const q = searchNorm(query);
+      return options.filter((o) => searchNorm(o.label).includes(q));
+    }, [searchable, query, options]);
 
     // Click outside → close
     useEffect(() => {
@@ -69,36 +92,45 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
       return () => document.removeEventListener('mousedown', handle);
     }, [open]);
 
-    // When opening, sync highlight to current selection
+    // On open: clear the search box, sync the highlight to the current
+    // selection, and focus the search field when searchable.
     useEffect(() => {
-      if (open) {
-        const idx = options.findIndex((o) => o.value === value);
-        setHighlighted(idx >= 0 ? idx : 0);
-      }
-    }, [open, value, options]);
+      if (!open) return;
+      setQuery('');
+      const idx = options.findIndex((o) => o.value === value);
+      setHighlighted(idx >= 0 ? idx : 0);
+      if (searchable) searchRef.current?.focus();
+    }, [open, value, options, searchable]);
 
-    // Keep the highlighted option visible if list scrolls
+    // Typing in the search box re-highlights the first match.
+    useEffect(() => {
+      if (open && searchable) setHighlighted(0);
+    }, [query, open, searchable]);
+
+    // Keep the highlighted option visible if the list scrolls
     useEffect(() => {
       if (open) optionRefs.current[highlighted]?.scrollIntoView({ block: 'nearest' });
     }, [open, highlighted]);
 
     const selectOption = useCallback(
       (index: number) => {
-        const opt = options[index];
+        const opt = visibleOptions[index];
         if (opt) {
           onChange(opt.value);
           setOpen(false);
         }
       },
-      [options, onChange],
+      [visibleOptions, onChange],
     );
 
-    const handleKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    // Arrow / Enter / Escape handling shared by the trigger button and,
+    // when searchable, the search input.
+    const handleKeyDown = (e: KeyboardEvent<HTMLElement>) => {
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
           if (!open) setOpen(true);
-          else setHighlighted((i) => Math.min(i + 1, options.length - 1));
+          else setHighlighted((i) => Math.min(i + 1, visibleOptions.length - 1));
           break;
         case 'ArrowUp':
           e.preventDefault();
@@ -114,14 +146,22 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
         case 'End':
           if (open) {
             e.preventDefault();
-            setHighlighted(options.length - 1);
+            setHighlighted(visibleOptions.length - 1);
           }
           break;
         case 'Enter':
-        case ' ':
           e.preventDefault();
           if (open) selectOption(highlighted);
           else setOpen(true);
+          break;
+        case ' ':
+          // In the search box a space is just text — only treat Space as
+          // select/open when we are not typing a query.
+          if (!(searchable && open)) {
+            e.preventDefault();
+            if (open) selectOption(highlighted);
+            else setOpen(true);
+          }
           break;
         case 'Escape':
           if (open) {
@@ -197,52 +237,73 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
         </button>
 
         {open && (
-          <ul
-            role="listbox"
-            tabIndex={-1}
-            className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-white py-1 shadow-lg
+          <div
+            className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border bg-white shadow-lg
                        border-stone-200 dark:border-stone-600 dark:bg-stone-900"
           >
-            {options.map((opt, i) => {
-              const isSelected = opt.value === value;
-              const isHighlighted = i === highlighted;
-              return (
-                <li
-                  key={opt.value}
-                  ref={(el) => {
-                    optionRefs.current[i] = el;
-                  }}
-                  role="option"
-                  aria-selected={isSelected}
-                  onMouseEnter={() => setHighlighted(i)}
-                  onClick={() => selectOption(i)}
-                  className={cn(
-                    'cursor-pointer px-3 py-2 text-sm transition-colors',
-                    isHighlighted
-                      ? 'bg-emerald-600 text-white'
-                      : isSelected
-                        ? 'bg-emerald-50 font-medium text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200'
-                        : 'text-stone-900 dark:text-stone-100',
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span>{opt.label}</span>
-                    {isSelected && (
-                      <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                        <path
-                          d="M4 10l4 4 8-8"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </div>
+            {searchable && (
+              <div className="border-b border-stone-200 p-2 dark:border-stone-700">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ara…"
+                  aria-label="Ara"
+                  className="w-full rounded border bg-white px-2 py-1.5 text-sm text-stone-900 placeholder-stone-400
+                             border-stone-300 focus:border-emerald-500 focus:outline-none
+                             dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+                />
+              </div>
+            )}
+            <ul role="listbox" tabIndex={-1} className="max-h-60 overflow-auto py-1">
+              {searchable && visibleOptions.length === 0 && (
+                <li className="px-3 py-2 text-sm text-stone-500 dark:text-stone-400">
+                  Sonuç bulunamadı
                 </li>
-              );
-            })}
-          </ul>
+              )}
+              {visibleOptions.map((opt, i) => {
+                const isSelected = opt.value === value;
+                const isHighlighted = i === highlighted;
+                return (
+                  <li
+                    key={opt.value}
+                    ref={(el) => {
+                      optionRefs.current[i] = el;
+                    }}
+                    role="option"
+                    aria-selected={isSelected}
+                    onMouseEnter={() => setHighlighted(i)}
+                    onClick={() => selectOption(i)}
+                    className={cn(
+                      'cursor-pointer px-3 py-2 text-sm transition-colors',
+                      isHighlighted
+                        ? 'bg-emerald-600 text-white'
+                        : isSelected
+                          ? 'bg-emerald-50 font-medium text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200'
+                          : 'text-stone-900 dark:text-stone-100',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span>{opt.label}</span>
+                      {isSelected && (
+                        <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                          <path
+                            d="M4 10l4 4 8-8"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
 
         {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}

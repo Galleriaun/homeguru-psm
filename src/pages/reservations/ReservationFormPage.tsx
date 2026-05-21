@@ -312,6 +312,7 @@ export function ReservationFormPage() {
             </div>
             <Select
               name="guest"
+              searchable
               required
               value={guestId}
               onChange={setGuestId}
