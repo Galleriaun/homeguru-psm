@@ -160,7 +160,7 @@ export function ExpensesListPage() {
                 onClick={() => {
                   const rows = expenses.map((e) => ({
                     Tarih: formatDate(e.expense_date),
-                    Mülk: e.property?.name ?? '',
+                    Mülk: e.property?.name ?? 'Genel',
                     Kategori: e.category,
                     Düzenli: e.is_recurring ? 'Evet' : 'Hayır',
                     Tutar: Number(e.amount).toFixed(2),
@@ -213,7 +213,7 @@ export function ExpensesListPage() {
                       </span>
                     </div>
                     <p className="mt-1 truncate text-sm text-stone-700 dark:text-stone-300">
-                      {e.property?.name ?? '—'}
+                      {e.property?.name ?? 'Genel'}
                     </p>
                     {e.description && (
                       <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
@@ -254,7 +254,7 @@ export function ExpensesListPage() {
                         </Link>
                       </td>
                       <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        {e.property?.name ?? '—'}
+                        {e.property?.name ?? 'Genel'}
                       </td>
                       <td className="px-6 py-3">
                         <span className="inline-flex items-center gap-1.5">

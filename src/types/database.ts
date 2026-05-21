@@ -486,7 +486,7 @@ export type Database = {
       expenses: {
         Row: {
           id: string;
-          property_id: string;
+          property_id: string | null;
           category: string;
           amount: number;
           description: string | null;
@@ -499,7 +499,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          property_id: string;
+          property_id?: string | null;
           category: string;
           amount: number;
           description?: string | null;
@@ -512,7 +512,7 @@ export type Database = {
         };
         Update: {
           id?: string;
-          property_id?: string;
+          property_id?: string | null;
           category?: string;
           amount?: number;
           description?: string | null;
@@ -729,7 +729,7 @@ export type Database = {
       };
       record_expense: {
         Args: {
-          _property_id: string;
+          _property_id: string | null;
           _category: string;
           _amount: number;
           _description: string | null;

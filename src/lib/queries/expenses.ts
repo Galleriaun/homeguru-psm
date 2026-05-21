@@ -92,7 +92,8 @@ export async function getExpense(id: string): Promise<ExpenseRow | null> {
 
 /** Fields needed to create an expense. */
 export interface NewExpenseInput {
-  propertyId: string;
+  /** null for a general expense not tied to any property. */
+  propertyId: string | null;
   category: string;
   amount: number;
   description: string | null;

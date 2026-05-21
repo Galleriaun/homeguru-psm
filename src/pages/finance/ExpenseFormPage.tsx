@@ -53,7 +53,7 @@ export function ExpenseFormPage() {
             setError('Gider bulunamadı');
             return;
           }
-          setPropertyId(e.property_id);
+          setPropertyId(e.property_id ?? '');
           setCategory(e.category);
           setAmount(Number(e.amount));
           setDescription(e.description ?? '');
@@ -73,10 +73,6 @@ export function ExpenseFormPage() {
     e.preventDefault();
     setError(null);
 
-    if (!propertyId) {
-      setError('Mülk seçilmelidir.');
-      return;
-    }
     if (!category) {
       setError('Kategori seçilmelidir.');
       return;
@@ -94,7 +90,7 @@ export function ExpenseFormPage() {
     try {
       if (isEdit && id) {
         await updateExpense(id, {
-          property_id: propertyId,
+          property_id: propertyId || null,
           category,
           amount,
           description: description.trim() || null,
@@ -103,7 +99,7 @@ export function ExpenseFormPage() {
         });
       } else {
         await createExpense({
-          propertyId,
+          propertyId: propertyId || null,
           category,
           amount,
           description: description.trim() || null,
@@ -180,11 +176,12 @@ export function ExpenseFormPage() {
           <Select
             label="Mülk"
             name="property"
-            required
             value={propertyId}
             onChange={setPropertyId}
-            options={sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name }))}
-            placeholder="Mülk seçin"
+            options={[
+              { value: '', label: 'Genel — belirli bir mülk değil' },
+              ...sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name })),
+            ]}
           />
 
           <Select
