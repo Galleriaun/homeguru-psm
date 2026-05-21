@@ -8,12 +8,15 @@ import {
   cascadeDeleteGuest,
   countGuestReferences,
 } from '@/lib/queries/guests';
-import type { DecryptedGuest } from '@/types/database';
+import { getCompanionsDecrypted, deleteCompanion } from '@/lib/queries/companions';
+import type { DecryptedGuest, DecryptedCompanion } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
+import { CompanionModal } from './CompanionModal';
+import { formatDate } from '@/lib/utils';
 
 export function GuestDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +36,17 @@ export function GuestDetailPage() {
   } | null>(null);
   const [showWhatsApp, setShowWhatsApp] = useState(false);
 
+  // Ek Misafir (companions)
+  const [companions, setCompanions] = useState<DecryptedCompanion[]>([]);
+  const [companionsError, setCompanionsError] = useState<string | null>(null);
+  // Bumping this re-runs the companions fetch (after add / edit / delete).
+  const [companionsVersion, setCompanionsVersion] = useState(0);
+  const [showCompanionModal, setShowCompanionModal] = useState(false);
+  const [editingCompanion, setEditingCompanion] = useState<DecryptedCompanion | null>(null);
+  const [companionToDelete, setCompanionToDelete] = useState<DecryptedCompanion | null>(null);
+  const [companionDeleteError, setCompanionDeleteError] = useState<string | null>(null);
+  const [companionDeleting, setCompanionDeleting] = useState(false);
+
   useEffect(() => {
     if (!id) return;
     setError(null);
@@ -46,6 +60,15 @@ export function GuestDetailPage() {
       })
       .catch((e) => setError(e?.message ?? 'Yüklenemedi'));
   }, [id]);
+
+  // Companions — re-runs when companionsVersion bumps after a change.
+  useEffect(() => {
+    if (!id) return;
+    setCompanionsError(null);
+    getCompanionsDecrypted(id)
+      .then(setCompanions)
+      .catch((e) => setCompanionsError(e?.message ?? 'Ek misafirler yüklenemedi'));
+  }, [id, companionsVersion]);
 
   if (error) {
     return (
@@ -104,6 +127,21 @@ export function GuestDetailPage() {
     }
   };
 
+  const handleDeleteCompanion = async () => {
+    if (!companionToDelete) return;
+    setCompanionDeleting(true);
+    setCompanionDeleteError(null);
+    try {
+      await deleteCompanion(companionToDelete.id);
+      setCompanionToDelete(null);
+      setCompanionDeleting(false);
+      setCompanionsVersion((v) => v + 1);
+    } catch (e) {
+      setCompanionDeleteError(e instanceof Error ? e.message : 'Silme başarısız');
+      setCompanionDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Link
@@ -123,11 +161,7 @@ export function GuestDetailPage() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowWhatsApp(true)}
-          >
+          <Button variant="secondary" size="sm" onClick={() => setShowWhatsApp(true)}>
             <WhatsAppIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
             WhatsApp
           </Button>
@@ -162,6 +196,100 @@ export function GuestDetailPage() {
           <Field label="Adres" value={guest.address} className="sm:col-span-2" />
         </dl>
       </Card>
+
+      {/* Ek Misafirler — family / companions travelling with this guest */}
+      <section className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Ek Misafirler
+          </h2>
+          {canEdit && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditingCompanion(null);
+                setShowCompanionModal(true);
+              }}
+            >
+              + Ek Misafir
+            </Button>
+          )}
+        </div>
+
+        {companionsError && (
+          <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
+            <p className="text-sm text-red-700 dark:text-red-400">{companionsError}</p>
+          </Card>
+        )}
+
+        {!companionsError && companions.length === 0 && (
+          <Card>
+            <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+              Henüz ek misafir eklenmemiş.
+            </p>
+          </Card>
+        )}
+
+        {companions.length > 0 && (
+          <Card className="p-0">
+            <ul className="divide-y divide-stone-200 dark:divide-stone-700">
+              {companions.map((c) => {
+                const details = [
+                  c.tc_kimlik ? `TC: ${c.tc_kimlik}` : null,
+                  c.passport ? `Pasaport: ${c.passport}` : null,
+                  c.birth_date ? `Doğum: ${formatDate(c.birth_date)}` : null,
+                  c.nationality,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                return (
+                  <li key={c.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-stone-900 dark:text-stone-100">
+                          {c.full_name}
+                        </span>
+                        {c.relationship && (
+                          <span className="rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200">
+                            {c.relationship}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 break-words text-xs text-stone-600 dark:text-stone-300">
+                        {details || '—'}
+                      </p>
+                    </div>
+                    {canEdit && (
+                      <div className="flex shrink-0 items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCompanion(c);
+                            setShowCompanionModal(true);
+                          }}
+                          className="text-xs text-emerald-600 hover:underline dark:text-emerald-500"
+                        >
+                          Düzenle
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCompanionDeleteError(null);
+                            setCompanionToDelete(c);
+                          }}
+                          className="text-xs text-red-600 hover:underline dark:text-red-400"
+                        >
+                          Sil
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        )}
+      </section>
 
       <ConfirmDialog
         open={confirmDelete}
@@ -206,6 +334,37 @@ export function GuestDetailPage() {
           setBlockingRefs(null);
         }}
       />
+
+      <ConfirmDialog
+        open={companionToDelete !== null}
+        title="Ek misafir silinsin mi?"
+        description={
+          companionToDelete
+            ? `"${companionToDelete.full_name}" kaydı kalıcı olarak silinecek.`
+            : ''
+        }
+        confirmLabel="Sil"
+        destructive
+        loading={companionDeleting}
+        error={companionDeleteError}
+        onConfirm={handleDeleteCompanion}
+        onCancel={() => {
+          setCompanionToDelete(null);
+          setCompanionDeleteError(null);
+        }}
+      />
+
+      {showCompanionModal && (
+        <CompanionModal
+          guestId={guest.id}
+          companion={editingCompanion}
+          onClose={() => setShowCompanionModal(false)}
+          onSaved={() => {
+            setShowCompanionModal(false);
+            setCompanionsVersion((v) => v + 1);
+          }}
+        />
+      )}
 
       {showWhatsApp && (
         <SendWhatsAppModal

@@ -188,6 +188,40 @@ export type Database = {
         };
         Relationships: [];
       };
+      guest_companions: {
+        Row: {
+          id: string;
+          guest_id: string;
+          full_name: string;
+          relationship: string | null;
+          birth_date: string | null;
+          nationality: string | null;
+          tc_kimlik_encrypted: string | null;
+          passport_encrypted: string | null;
+          created_at: string;
+        };
+        // Encrypted fields omitted from Insert/Update — use the
+        // create_companion / update_companion RPCs which encrypt server-side.
+        Insert: {
+          id?: string;
+          guest_id: string;
+          full_name: string;
+          relationship?: string | null;
+          birth_date?: string | null;
+          nationality?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          guest_id?: string;
+          full_name?: string;
+          relationship?: string | null;
+          birth_date?: string | null;
+          nationality?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       reservations: {
         Row: {
           id: string;
@@ -744,6 +778,44 @@ export type Database = {
         };
         Returns: Database['public']['Tables']['expenses']['Row'];
       };
+      create_companion: {
+        Args: {
+          _guest_id: string;
+          _full_name: string;
+          _relationship?: string | null;
+          _birth_date?: string | null;
+          _nationality?: string | null;
+          _tc_kimlik?: string | null;
+          _passport?: string | null;
+        };
+        Returns: Database['public']['Tables']['guest_companions']['Row'];
+      };
+      update_companion: {
+        Args: {
+          _id: string;
+          _full_name: string;
+          _relationship?: string | null;
+          _birth_date?: string | null;
+          _nationality?: string | null;
+          _tc_kimlik?: string | null;
+          _passport?: string | null;
+        };
+        Returns: Database['public']['Tables']['guest_companions']['Row'];
+      };
+      get_companions_decrypted: {
+        Args: { _guest_id: string };
+        Returns: {
+          id: string;
+          guest_id: string;
+          full_name: string;
+          relationship: string | null;
+          birth_date: string | null;
+          nationality: string | null;
+          tc_kimlik: string | null;
+          passport: string | null;
+          created_at: string;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -757,3 +829,5 @@ export type Database = {
 // Convenience exports — handy to import where Row/RPC return shapes are referenced
 export type GuestRow = Database['public']['Tables']['guests']['Row'];
 export type DecryptedGuest = Database['public']['Functions']['get_guest_decrypted']['Returns'][number];
+export type DecryptedCompanion =
+  Database['public']['Functions']['get_companions_decrypted']['Returns'][number];
