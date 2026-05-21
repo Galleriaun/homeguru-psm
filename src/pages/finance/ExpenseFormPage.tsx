@@ -30,7 +30,6 @@ export function ExpenseFormPage() {
   const [description, setDescription] = useState('');
   const [expenseDate, setExpenseDate] = useState(istanbulToday());
   const [isRecurring, setIsRecurring] = useState(false);
-  const [paidFromKasa, setPaidFromKasa] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -110,7 +109,8 @@ export function ExpenseFormPage() {
           description: description.trim() || null,
           expenseDate,
           isRecurring,
-          paidFromKasa,
+          // A recurring expense (kira, fatura…) is paid out of the general kasa.
+          paidFromKasa: isRecurring,
         });
       }
       navigate('/finance/expenses', { replace: true });
@@ -229,20 +229,8 @@ export function ExpenseFormPage() {
               onChange={(e) => setIsRecurring(e.target.checked)}
               className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
             />
-            Düzenli gider (örn. kira, fatura — her ay otomatik oluşturulur)
+            Düzenli gider (örn. kira, fatura — her ay oluşturulur, kasadan düşülür)
           </label>
-
-          {!isEdit && (
-            <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
-              <input
-                type="checkbox"
-                checked={paidFromKasa}
-                onChange={(e) => setPaidFromKasa(e.target.checked)}
-                className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
-              />
-              Kasadan ödendi (tutar genel kasadan düşülür)
-            </label>
-          )}
 
           {error && (
             <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
