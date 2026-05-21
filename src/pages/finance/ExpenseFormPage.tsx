@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { istanbulToday } from '@/lib/utils';
+import { cn, istanbulToday } from '@/lib/utils';
 
 export function ExpenseFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +25,8 @@ export function ExpenseFormPage() {
   const [properties, setProperties] = useState<Property[]>([]);
 
   const [propertyId, setPropertyId] = useState('');
+  // 'general' = not tied to a mülk; 'property' = pick a specific mülk below.
+  const [propertyMode, setPropertyMode] = useState<'general' | 'property'>('property');
   const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState('');
@@ -57,6 +59,7 @@ export function ExpenseFormPage() {
             return;
           }
           setPropertyId(e.property_id ?? '');
+          setPropertyMode(e.property_id ? 'property' : 'general');
           setCategory(e.category);
           setAmount(Number(e.amount));
           setDescription(e.description ?? '');
@@ -77,6 +80,10 @@ export function ExpenseFormPage() {
     e.preventDefault();
     setError(null);
 
+    if (propertyMode === 'property' && !propertyId) {
+      setError('Mülk seçilmelidir.');
+      return;
+    }
     if (!category) {
       setError('Kategori seçilmelidir.');
       return;
@@ -90,11 +97,13 @@ export function ExpenseFormPage() {
       return;
     }
 
+    const effectivePropertyId = propertyMode === 'general' ? null : propertyId;
+
     setSaving(true);
     try {
       if (isEdit && id) {
         await updateExpense(id, {
-          property_id: propertyId || null,
+          property_id: effectivePropertyId,
           category,
           amount,
           description: description.trim() || null,
@@ -103,7 +112,7 @@ export function ExpenseFormPage() {
         });
       } else {
         await createExpense({
-          propertyId: propertyId || null,
+          propertyId: effectivePropertyId,
           category,
           amount,
           description: description.trim() || null,
@@ -177,16 +186,50 @@ export function ExpenseFormPage() {
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <Select
-            label="Mülk"
-            name="property"
-            value={propertyId}
-            onChange={setPropertyId}
-            options={[
-              { value: '', label: 'Genel — belirli bir mülk değil' },
-              ...sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name })),
-            ]}
-          />
+          <div>
+            <label className="block text-sm font-medium text-stone-700 dark:text-stone-300">
+              Gider türü
+            </label>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {(
+                [
+                  ['general', 'Genel'],
+                  ['property', 'Mülke Ait'],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    setPropertyMode(mode);
+                    if (mode === 'property' && !propertyId && properties.length > 0) {
+                      setPropertyId(sortHotelsFirst(properties)[0].id);
+                    }
+                  }}
+                  className={cn(
+                    'rounded-md border px-3 py-2 text-sm font-medium transition-colors',
+                    propertyMode === mode
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {propertyMode === 'property' && (
+            <Select
+              label="Mülk"
+              name="property"
+              required
+              value={propertyId}
+              onChange={setPropertyId}
+              options={sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name }))}
+              placeholder="Mülk seçin"
+            />
+          )}
 
           <Select
             label="Kategori"
