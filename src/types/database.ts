@@ -492,6 +492,8 @@ export type Database = {
           description: string | null;
           expense_date: string; // DATE column → "YYYY-MM-DD"
           is_recurring: boolean;
+          paid_from_kasa: boolean;
+          recurring_source_id: string | null;
           created_by: string | null;
           created_at: string;
         };
@@ -503,6 +505,8 @@ export type Database = {
           description?: string | null;
           expense_date: string;
           is_recurring?: boolean;
+          paid_from_kasa?: boolean;
+          recurring_source_id?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -514,6 +518,8 @@ export type Database = {
           description?: string | null;
           expense_date?: string;
           is_recurring?: boolean;
+          paid_from_kasa?: boolean;
+          recurring_source_id?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -720,6 +726,18 @@ export type Database = {
       cash_account_balances: {
         Args: Record<PropertyKey, never>;
         Returns: { cash_account_id: string; balance: number }[];
+      };
+      record_expense: {
+        Args: {
+          _property_id: string;
+          _category: string;
+          _amount: number;
+          _description: string | null;
+          _expense_date: string;
+          _is_recurring: boolean;
+          _paid_from_kasa: boolean;
+        };
+        Returns: Database['public']['Tables']['expenses']['Row'];
       };
     };
     Enums: {

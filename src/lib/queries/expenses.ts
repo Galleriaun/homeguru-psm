@@ -3,7 +3,6 @@ import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database } from '@/types/database';
 
 type ExpenseRow = Database['public']['Tables']['expenses']['Row'];
-type ExpenseInsert = Database['public']['Tables']['expenses']['Insert'];
 type ExpenseUpdate = Database['public']['Tables']['expenses']['Update'];
 
 export type Expense = ExpenseRow;
@@ -53,7 +52,7 @@ export async function listExpenses(
   let q = supabase
     .from('expenses')
     .select(
-      'id, property_id, category, amount, description, expense_date, is_recurring, created_by, created_at, property:properties(name, type)',
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, created_by, created_at, property:properties(name, type)',
     )
     .order('expense_date', { ascending: false })
     .order('created_at', { ascending: false });
@@ -91,14 +90,34 @@ export async function getExpense(id: string): Promise<ExpenseRow | null> {
   return data;
 }
 
-export async function createExpense(input: ExpenseInsert): Promise<ExpenseRow> {
-  const { data, error } = await supabase
-    .from('expenses')
-    .insert(input)
-    .select()
-    .single();
+/** Fields needed to create an expense. */
+export interface NewExpenseInput {
+  propertyId: string;
+  category: string;
+  amount: number;
+  description: string | null;
+  expenseDate: string; // 'YYYY-MM-DD'
+  isRecurring: boolean;
+  paidFromKasa: boolean;
+}
+
+/**
+ * Create an expense via the record_expense RPC (migration 037) — atomically
+ * inserts the expense and, when paidFromKasa is set, a matching 'Gider'
+ * movement in the general kasa so the balance stays correct.
+ */
+export async function createExpense(input: NewExpenseInput): Promise<ExpenseRow> {
+  const { data, error } = await supabase.rpc('record_expense', {
+    _property_id: input.propertyId,
+    _category: input.category,
+    _amount: input.amount,
+    _description: input.description,
+    _expense_date: input.expenseDate,
+    _is_recurring: input.isRecurring,
+    _paid_from_kasa: input.paidFromKasa,
+  });
   if (error) throw wrapErr(error);
-  return data;
+  return data as ExpenseRow;
 }
 
 export async function updateExpense(
