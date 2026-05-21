@@ -30,6 +30,9 @@ export function ExpenseFormPage() {
   const [description, setDescription] = useState('');
   const [expenseDate, setExpenseDate] = useState(istanbulToday());
   const [isRecurring, setIsRecurring] = useState(false);
+  // Whether the expense being edited posted a kasa movement — drives the
+  // heads-up shown on the delete dialog.
+  const [loadedPaidFromKasa, setLoadedPaidFromKasa] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -59,6 +62,7 @@ export function ExpenseFormPage() {
           setDescription(e.description ?? '');
           setExpenseDate(e.expense_date);
           setIsRecurring(e.is_recurring);
+          setLoadedPaidFromKasa(e.paid_from_kasa);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Yüklenemedi');
@@ -251,7 +255,17 @@ export function ExpenseFormPage() {
       <ConfirmDialog
         open={confirmDelete}
         title="Gider silinsin mi?"
-        description="Gider Çöp Kutusu'na taşınır ve oradan geri yüklenebilir."
+        description={
+          <>
+            <p>Gider Çöp Kutusu'na taşınır ve oradan geri yüklenebilir.</p>
+            {loadedPaidFromKasa && (
+              <p className="mt-2">
+                <strong>Not:</strong> Bu giderin kasa hareketi otomatik
+                silinmez — gerekirse Kasa sayfasından ayrıca kaldırın.
+              </p>
+            )}
+          </>
+        }
         confirmLabel="Sil"
         destructive
         loading={deleting}
