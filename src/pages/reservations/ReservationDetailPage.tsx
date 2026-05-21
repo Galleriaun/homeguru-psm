@@ -32,6 +32,7 @@ type Reservation = Database['public']['Tables']['reservations']['Row'];
 
 const STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: 'Beklemede',
+  upcoming: 'Yakında',
   active: 'Aktif',
   completed: 'Tamamlandı',
   cancelled: 'İptal',

@@ -31,7 +31,12 @@ export type PropertyType = 'HOTEL' | 'APARTMENT';
 export type RoomType =
   | '1+0' | '1+1' | '2+1'         // Apartment layouts
   | 'SINGLE' | 'DOUBLE' | 'TRIPLE' | 'QUAD'; // Hotel rooms (capacity-named)
-export type ReservationStatus = 'pending' | 'active' | 'completed' | 'cancelled';
+export type ReservationStatus =
+  | 'pending'
+  | 'active'
+  | 'completed'
+  | 'cancelled'
+  | 'upcoming';
 export type LedgerEntryType = 'DEBT' | 'PAYMENT';
 export type PaymentMethod = 'CASH' | 'TRANSFER' | 'CARD';
 export type AccountType = 'CASH' | 'BANK' | 'CARD';

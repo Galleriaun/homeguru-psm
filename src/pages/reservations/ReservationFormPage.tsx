@@ -20,6 +20,7 @@ import { QuickAddGuestModal } from '@/components/QuickAddGuestModal';
 
 const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
   { value: 'pending', label: 'Beklemede' },
+  { value: 'upcoming', label: 'Yakında' },
   { value: 'active', label: 'Aktif' },
   { value: 'completed', label: 'Tamamlandı' },
   { value: 'cancelled', label: 'İptal' },
@@ -35,6 +36,18 @@ function daysBetween(start: string, end: string): number {
   const a = new Date(start + 'T00:00:00Z').getTime();
   const b = new Date(end + 'T00:00:00Z').getTime();
   return Math.max(1, Math.round((b - a) / (1000 * 60 * 60 * 24)));
+}
+
+/**
+ * Default status for a new reservation, from its dates: a future stay is
+ * 'upcoming', one in progress 'active', a fully-past one 'completed'.
+ * (A daily cron later promotes 'upcoming' → 'active' on the check-in day.)
+ */
+function deriveStatus(checkinStr: string, checkoutStr: string): ReservationStatus {
+  const today = istanbulToday();
+  if (checkinStr > today) return 'upcoming';
+  if (checkoutStr <= today) return 'completed';
+  return 'active';
 }
 
 export function ReservationFormPage() {
@@ -59,7 +72,9 @@ export function ReservationFormPage() {
   const [totalEdited, setTotalEdited] = useState(false);
   const [deposit, setDeposit] = useState(0);
   const [autoDebit, setAutoDebit] = useState(false);
-  const [status, setStatus] = useState<ReservationStatus>('completed');
+  const [status, setStatus] = useState<ReservationStatus>('active');
+  // Once the operator picks a status by hand, stop auto-deriving it from dates.
+  const [statusEdited, setStatusEdited] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -158,6 +173,16 @@ export function ReservationFormPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestedTotal]);
+
+  // New reservations take their status from the check-in date — future stay
+  // 'upcoming', current one 'active', past one 'completed' — until the
+  // operator picks a status by hand. Editing never auto-changes the status.
+  useEffect(() => {
+    if (!isEdit && !statusEdited) {
+      setStatus(deriveStatus(checkin, checkout));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkin, checkout]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -379,7 +404,10 @@ export function ReservationFormPage() {
             name="status"
             required
             value={status}
-            onChange={(v) => setStatus(v as ReservationStatus)}
+            onChange={(v) => {
+              setStatus(v as ReservationStatus);
+              setStatusEdited(true);
+            }}
             options={STATUS_OPTIONS}
           />
 

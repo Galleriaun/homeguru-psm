@@ -25,6 +25,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const STATUS_BAR: Record<ReservationStatus, string> = {
   pending: 'bg-amber-500 hover:bg-amber-600',
+  upcoming: 'bg-sky-500 hover:bg-sky-600',
   active: 'bg-emerald-600 hover:bg-emerald-700',
   completed: 'bg-stone-400 hover:bg-stone-500 dark:bg-stone-600 dark:hover:bg-stone-500',
   cancelled: 'bg-red-400',
@@ -32,6 +33,7 @@ const STATUS_BAR: Record<ReservationStatus, string> = {
 
 const STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: 'Beklemede',
+  upcoming: 'Yakında',
   active: 'Aktif',
   completed: 'Tamamlandı',
   cancelled: 'İptal',
@@ -209,7 +211,7 @@ export function ReservationsCalendarPage() {
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600 dark:text-stone-300">
-          {(['pending', 'active', 'completed'] as const).map((s) => (
+          {(['pending', 'upcoming', 'active', 'completed'] as const).map((s) => (
             <span key={s} className="flex items-center gap-1.5">
               <span className={cn('h-3 w-3 rounded-sm', STATUS_BAR[s].split(' ')[0])} />
               {STATUS_LABELS[s]}

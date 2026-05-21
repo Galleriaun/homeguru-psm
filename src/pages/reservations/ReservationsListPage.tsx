@@ -11,6 +11,7 @@ import type { ReservationStatus } from '@/types/database';
 
 const STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: 'Beklemede',
+  upcoming: 'Yakında',
   active: 'Aktif',
   completed: 'Tamamlandı',
   cancelled: 'İptal',
@@ -18,6 +19,7 @@ const STATUS_LABELS: Record<ReservationStatus, string> = {
 
 const STATUS_COLORS: Record<ReservationStatus, string> = {
   pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  upcoming: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
   active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   completed: 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200',
   cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
@@ -65,7 +67,7 @@ export function ReservationsListPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['ALL', 'pending', 'active', 'completed', 'cancelled'] as const).map((f) => (
+        {(['ALL', 'pending', 'upcoming', 'active', 'completed', 'cancelled'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
