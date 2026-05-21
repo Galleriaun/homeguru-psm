@@ -309,11 +309,9 @@ export function ReservationDetailPage() {
         />
       )}
 
-      {showCollectModal && property && (
+      {showCollectModal && (
         <PaymentCollectModal
           reservationId={reservation.id}
-          propertyId={property.id}
-          canSeeCashAccounts={canSeeLedger}
           onClose={() => setShowCollectModal(false)}
           onCollected={() => {
             setShowCollectModal(false);

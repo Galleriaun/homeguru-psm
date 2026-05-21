@@ -18,9 +18,7 @@ import { ReservationsCalendarPage } from '@/pages/reservations/ReservationsCalen
 import { ReservationsAvailabilityPage } from '@/pages/reservations/ReservationsAvailabilityPage';
 import { ReservationDetailPage } from '@/pages/reservations/ReservationDetailPage';
 import { ReservationFormPage } from '@/pages/reservations/ReservationFormPage';
-import { CashAccountsListPage } from '@/pages/finance/CashAccountsListPage';
-import { CashAccountFormPage } from '@/pages/finance/CashAccountFormPage';
-import { CashAccountDetailPage } from '@/pages/finance/CashAccountDetailPage';
+import { CashPage } from '@/pages/finance/CashPage';
 import { ExpensesListPage } from '@/pages/finance/ExpensesListPage';
 import { ExpenseFormPage } from '@/pages/finance/ExpenseFormPage';
 import { PendingPaymentsPage } from '@/pages/finance/PendingPaymentsPage';
@@ -140,36 +138,12 @@ export default function App() {
             }
           />
 
-          {/* Finance — Cash accounts (Phase 2A). Reception/Housekeeping are RLS-blocked anyway. */}
+          {/* Finance — general kasa (one cash pot). Reception/Housekeeping are RLS-blocked. */}
           <Route
             path="/finance/cash"
             element={
               <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
-                <CashAccountsListPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/finance/cash/new"
-            element={
-              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
-                <CashAccountFormPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/finance/cash/:id"
-            element={
-              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
-                <CashAccountDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/finance/cash/:id/edit"
-            element={
-              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
-                <CashAccountFormPage />
+                <CashPage />
               </ProtectedRoute>
             }
           />

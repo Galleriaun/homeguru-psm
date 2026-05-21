@@ -1,20 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { collectPayment } from '@/lib/queries/payments';
-import { listCashAccounts, type CashAccountWithProperty } from '@/lib/queries/cashAccounts';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
-import { Select } from '@/components/ui/Select';
 import { cn } from '@/lib/utils';
 import type { PaymentMethod } from '@/types/database';
 
 interface Props {
   reservationId: string;
-  propertyId: string;
-  /** If true, fetch + show the cash-account dropdown when method=CASH. RECEPTION/HOUSEKEEPING get the auto-pick path. */
-  canSeeCashAccounts: boolean;
   onClose: () => void;
   onCollected: () => void;
 }
@@ -25,25 +20,17 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   CARD: 'Kart',
 };
 
-export function PaymentCollectModal({
-  reservationId,
-  propertyId,
-  canSeeCashAccounts,
-  onClose,
-  onCollected,
-}: Props) {
+export function PaymentCollectModal({ reservationId, onClose, onCollected }: Props) {
   const { profile } = useAuth();
   // Roles without finance:write submit UNCONFIRMED rows that a manager later
-  // approves before money lands in the kasa / cari. HOUSEKEEPING (Phase 3C-lite)
-  // and YETKILI (migration 028) both fall in this bucket.
+  // approves before money lands in the kasa / cari. HOUSEKEEPING and YETKILI
+  // both fall in this bucket.
   const requiresApproval =
     profile?.role === 'HOUSEKEEPING' || profile?.role === 'YETKILI';
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [amount, setAmount] = useState(0);
   const [note, setNote] = useState('');
-  const [cashAccountId, setCashAccountId] = useState('');
-  const [cashAccounts, setCashAccounts] = useState<CashAccountWithProperty[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,24 +46,6 @@ export function PaymentCollectModal({
     return () => document.removeEventListener('keydown', handle);
   }, [onClose]);
 
-  // Load cash accounts when the user is allowed to see them.
-  // For RECEPTION/HOUSEKEEPING this skips entirely; the RPC auto-picks server-side.
-  useEffect(() => {
-    if (!canSeeCashAccounts) return;
-    listCashAccounts()
-      .then((all) => {
-        const forProperty = all.filter((a) => a.property_id === propertyId);
-        setCashAccounts(forProperty);
-        // Prefer a CASH-type account as default
-        const defaultPick =
-          forProperty.find((a) => a.account_type === 'CASH') ?? forProperty[0];
-        if (defaultPick) setCashAccountId(defaultPick.id);
-      })
-      .catch(() => {
-        // Non-fatal: dropdown stays empty, server-side auto-pick will run
-      });
-  }, [canSeeCashAccounts, propertyId]);
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -85,18 +54,14 @@ export function PaymentCollectModal({
       setError('Tutar sıfırdan büyük olmalıdır.');
       return;
     }
-    if (method === 'CASH' && canSeeCashAccounts && !cashAccountId) {
-      setError('Nakit ödeme için kasa seçilmelidir.');
-      return;
-    }
 
     setSaving(true);
     try {
+      // Cash payments land in the single general kasa — resolved server-side.
       await collectPayment({
         reservationId,
         amount,
         method,
-        cashAccountId: method === 'CASH' ? cashAccountId || null : null,
         note: note.trim() || null,
       });
       onCollected();
@@ -105,9 +70,6 @@ export function PaymentCollectModal({
       setSaving(false);
     }
   };
-
-  const showCashAccountSelect =
-    method === 'CASH' && canSeeCashAccounts && cashAccounts.length > 0;
 
   return (
     <div
@@ -179,21 +141,6 @@ export function PaymentCollectModal({
             value={amount}
             onChange={setAmount}
           />
-
-          {showCashAccountSelect && (
-            <Select
-              label="Kasa"
-              name="cash_account"
-              required
-              value={cashAccountId}
-              onChange={setCashAccountId}
-              options={cashAccounts.map((a) => ({
-                value: a.id,
-                label: a.name,
-              }))}
-              placeholder="Kasa seçin"
-            />
-          )}
 
           <Input
             label="Açıklama"

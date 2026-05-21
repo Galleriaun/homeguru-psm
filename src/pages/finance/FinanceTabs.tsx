@@ -90,7 +90,7 @@ export function FinanceTabs() {
       </NavLink>
       <NavLink to="/finance/cash" className={tabClass}>
         <CashIcon />
-        Kasalar
+        Kasa
       </NavLink>
       <NavLink to="/finance/pending" className={tabClass}>
         <CheckIcon />
