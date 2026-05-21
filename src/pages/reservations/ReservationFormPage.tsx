@@ -59,7 +59,7 @@ export function ReservationFormPage() {
   const [totalEdited, setTotalEdited] = useState(false);
   const [deposit, setDeposit] = useState(0);
   const [autoDebit, setAutoDebit] = useState(false);
-  const [status, setStatus] = useState<ReservationStatus>('pending');
+  const [status, setStatus] = useState<ReservationStatus>('completed');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
