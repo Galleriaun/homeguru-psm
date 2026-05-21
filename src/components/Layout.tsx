@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { PendingApprovalPage } from '@/pages/PendingApprovalPage';
 import { cn, formatRole } from '@/lib/utils';
 
 export function Layout() {
@@ -106,6 +107,12 @@ export function Layout() {
       <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
     </svg>
   );
+
+  // PENDING signups have no role permissions and are in no RLS allow-list —
+  // the app shell would just be empty. Show the holding screen instead.
+  if (profile?.role === 'PENDING') {
+    return <PendingApprovalPage />;
+  }
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
