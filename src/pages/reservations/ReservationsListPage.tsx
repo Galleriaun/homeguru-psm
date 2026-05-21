@@ -25,6 +25,16 @@ const STATUS_COLORS: Record<ReservationStatus, string> = {
   cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 };
 
+// The "Tümü" view groups reservations under one heading per status, in this
+// order — so Yakında, Aktif etc. each get their own section.
+const GROUP_ORDER: ReservationStatus[] = [
+  'active',
+  'upcoming',
+  'completed',
+  'pending',
+  'cancelled',
+];
+
 export function ReservationsListPage() {
   const { profile } = useAuth();
   const [reservations, setReservations] = useState<ReservationWithRefs[] | null>(null);
@@ -39,11 +49,29 @@ export function ReservationsListPage() {
 
   const canCreate = profile && can(profile.role, 'reservation:create');
 
+  // The flat list for a specific status filter — also drives the empty check.
   const filtered = useMemo(() => {
     if (!reservations) return [];
     if (filter === 'ALL') return reservations;
     return reservations.filter((r) => r.status === filter);
   }, [reservations, filter]);
+
+  // The "Tümü" view: one section per status. Yakında is sorted soonest-first
+  // (what's coming up next); every other group keeps most-recent-first.
+  const groups = useMemo(() => {
+    if (!reservations) return [];
+    return GROUP_ORDER.map((status) => ({
+      status,
+      label: STATUS_LABELS[status],
+      items: reservations
+        .filter((r) => r.status === status)
+        .sort((a, b) =>
+          status === 'upcoming'
+            ? a.stay_start.localeCompare(b.stay_start)
+            : b.stay_start.localeCompare(a.stay_start),
+        ),
+    })).filter((g) => g.items.length > 0);
+  }, [reservations]);
 
   return (
     <div className="space-y-6">
@@ -67,7 +95,7 @@ export function ReservationsListPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['ALL', 'pending', 'upcoming', 'active', 'completed', 'cancelled'] as const).map((f) => (
+        {(['ALL', 'active', 'upcoming', 'completed', 'pending', 'cancelled'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -100,92 +128,115 @@ export function ReservationsListPage() {
         </Card>
       )}
 
-      {reservations && filtered.length > 0 && (
-        <>
-          {/* Mobile: stacked cards */}
-          <div className="space-y-2 sm:hidden">
-            {filtered.map((r) => (
-              <Link
-                key={r.id}
-                to={`/reservations/${r.id}`}
-                className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
-                    {r.guest?.full_name ?? '—'}
-                  </p>
-                  <span
-                    className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}
-                  >
-                    {STATUS_LABELS[r.status]}
+      {reservations &&
+        filtered.length > 0 &&
+        (filter === 'ALL' ? (
+          <div className="space-y-6">
+            {groups.map((g) => (
+              <section key={g.status} className="space-y-2">
+                <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+                  {g.label}
+                  <span className="ml-2 text-sm font-normal text-stone-500 dark:text-stone-400">
+                    {g.items.length}
                   </span>
-                </div>
-                <p className="mt-0.5 truncate text-xs text-stone-600 dark:text-stone-300">
-                  {r.property?.name} · {r.unit?.name}
-                </p>
-                <p className="mt-1 flex items-center justify-between gap-2 text-xs text-stone-700 dark:text-stone-300">
-                  <span>
-                    {formatDate(r.stay_start)} → {formatDate(r.stay_end)}
-                  </span>
-                  <span className="font-semibold text-stone-900 dark:text-stone-100">
-                    {formatTRY(Number(r.total_amount))}
-                  </span>
-                </p>
-              </Link>
+                </h2>
+                <ReservationRows items={g.items} />
+              </section>
             ))}
           </div>
-
-          {/* Tablet+ : table */}
-          <Card className="hidden p-0 sm:block">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                  <tr>
-                    <th className="px-6 py-3 font-medium">Misafir</th>
-                    <th className="px-6 py-3 font-medium">Mülk / Birim</th>
-                    <th className="px-6 py-3 font-medium">Tarih</th>
-                    <th className="px-6 py-3 font-medium">Tutar</th>
-                    <th className="px-6 py-3 font-medium">Durum</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                  {filtered.map((r) => (
-                    <tr key={r.id} className="transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50">
-                      <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
-                        <Link to={`/reservations/${r.id}`} className="block">
-                          {r.guest?.full_name ?? '—'}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        <div className="text-base font-semibold text-stone-900 dark:text-stone-100">
-                          {r.unit?.name}
-                        </div>
-                        <div className="text-xs text-stone-600 dark:text-stone-400">
-                          {r.property?.name}
-                        </div>
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        <div>{formatDate(r.stay_start)}</div>
-                        <div className="text-xs text-stone-600 dark:text-stone-400">
-                          → {formatDate(r.stay_end)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        {formatTRY(Number(r.total_amount))}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}>
-                          {STATUS_LABELS[r.status]}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </>
-      )}
+        ) : (
+          <ReservationRows items={filtered} />
+        ))}
     </div>
+  );
+}
+
+/** The mobile cards + tablet table for a list of reservations. */
+function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
+  return (
+    <>
+      {/* Mobile: stacked cards */}
+      <div className="space-y-2 sm:hidden">
+        {items.map((r) => (
+          <Link
+            key={r.id}
+            to={`/reservations/${r.id}`}
+            className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
+                {r.guest?.full_name ?? '—'}
+              </p>
+              <span
+                className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}
+              >
+                {STATUS_LABELS[r.status]}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-xs text-stone-600 dark:text-stone-300">
+              {r.property?.name} · {r.unit?.name}
+            </p>
+            <p className="mt-1 flex items-center justify-between gap-2 text-xs text-stone-700 dark:text-stone-300">
+              <span>
+                {formatDate(r.stay_start)} → {formatDate(r.stay_end)}
+              </span>
+              <span className="font-semibold text-stone-900 dark:text-stone-100">
+                {formatTRY(Number(r.total_amount))}
+              </span>
+            </p>
+          </Link>
+        ))}
+      </div>
+
+      {/* Tablet+ : table */}
+      <Card className="hidden p-0 sm:block">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+              <tr>
+                <th className="px-6 py-3 font-medium">Misafir</th>
+                <th className="px-6 py-3 font-medium">Mülk / Birim</th>
+                <th className="px-6 py-3 font-medium">Tarih</th>
+                <th className="px-6 py-3 font-medium">Tutar</th>
+                <th className="px-6 py-3 font-medium">Durum</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+              {items.map((r) => (
+                <tr key={r.id} className="transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50">
+                  <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
+                    <Link to={`/reservations/${r.id}`} className="block">
+                      {r.guest?.full_name ?? '—'}
+                    </Link>
+                  </td>
+                  <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                    <div className="text-base font-semibold text-stone-900 dark:text-stone-100">
+                      {r.unit?.name}
+                    </div>
+                    <div className="text-xs text-stone-600 dark:text-stone-400">
+                      {r.property?.name}
+                    </div>
+                  </td>
+                  <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                    <div>{formatDate(r.stay_start)}</div>
+                    <div className="text-xs text-stone-600 dark:text-stone-400">
+                      → {formatDate(r.stay_end)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                    {formatTRY(Number(r.total_amount))}
+                  </td>
+                  <td className="px-6 py-3">
+                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}>
+                      {STATUS_LABELS[r.status]}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </>
   );
 }

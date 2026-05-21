@@ -17,6 +17,7 @@ import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
 import { formatTRY, istanbulToday } from '@/lib/utils';
 import { QuickAddGuestModal } from '@/components/QuickAddGuestModal';
+import { CompanionModal } from '@/pages/guests/CompanionModal';
 
 const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
   { value: 'pending', label: 'Beklemede' },
@@ -80,6 +81,7 @@ export function ReservationFormPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showGuestModal, setShowGuestModal] = useState(false);
+  const [showCompanionModal, setShowCompanionModal] = useState(false);
 
   const checkout = useMemo(() => addDays(checkin, nights), [checkin, nights]);
   const selectedUnit = units.find((u) => u.id === unitId);
@@ -285,6 +287,15 @@ export function ReservationFormPage() {
         />
       )}
 
+      {showCompanionModal && guestId && (
+        <CompanionModal
+          guestId={guestId}
+          companion={null}
+          onClose={() => setShowCompanionModal(false)}
+          onSaved={() => setShowCompanionModal(false)}
+        />
+      )}
+
       <Card>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <Select
@@ -312,28 +323,38 @@ export function ReservationFormPage() {
           />
 
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <label
                 htmlFor="guest"
                 className="block text-sm font-medium text-stone-700 dark:text-stone-300"
               >
                 Misafir<span className="ml-0.5 text-red-500">*</span>
               </label>
-              <button
-                type="button"
-                onClick={() => setShowGuestModal(true)}
-                className="inline-flex items-center gap-1 rounded-md bg-sky-700 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <path
-                    d="M10 4v12M4 10h12"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                Yeni Misafir
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCompanionModal(true)}
+                  disabled={!guestId}
+                  className="inline-flex items-center gap-1 rounded-md border border-stone-300 px-2.5 py-1 text-xs font-medium text-stone-700 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800"
+                >
+                  + Ek Misafir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGuestModal(true)}
+                  className="inline-flex items-center gap-1 rounded-md bg-sky-700 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path
+                      d="M10 4v12M4 10h12"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  Yeni Misafir
+                </button>
+              </div>
             </div>
             <Select
               name="guest"
