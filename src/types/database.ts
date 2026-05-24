@@ -37,6 +37,8 @@ export type ReservationStatus =
   | 'completed'
   | 'cancelled'
   | 'upcoming';
+/** OVERNIGHT (multi-night, midnight-aligned) vs. DAYUSE (same-day 2-4h). */
+export type StayType = 'OVERNIGHT' | 'DAYUSE';
 export type LedgerEntryType = 'DEBT' | 'PAYMENT';
 export type PaymentMethod = 'CASH' | 'TRANSFER' | 'CARD';
 export type AccountType = 'CASH' | 'BANK' | 'CARD';
@@ -157,6 +159,8 @@ export type Database = {
           email: string | null;
           address: string | null;
           nationality: string | null;
+          is_problematic: boolean;
+          problematic_note: string | null;
           consent_given_at: string | null;
           consent_version: string | null;
           created_at: string;
@@ -171,6 +175,8 @@ export type Database = {
           email?: string | null;
           address?: string | null;
           nationality?: string | null;
+          is_problematic?: boolean;
+          problematic_note?: string | null;
           consent_given_at?: string | null;
           consent_version?: string | null;
           created_at?: string;
@@ -182,6 +188,8 @@ export type Database = {
           email?: string | null;
           address?: string | null;
           nationality?: string | null;
+          is_problematic?: boolean;
+          problematic_note?: string | null;
           consent_given_at?: string | null;
           consent_version?: string | null;
           created_at?: string;
@@ -231,6 +239,7 @@ export type Database = {
           stay_start: string;
           stay_end: string;
           status: ReservationStatus;
+          stay_type: StayType;
           total_amount: number;
           deposit: number;
           auto_debit: boolean;
@@ -245,6 +254,7 @@ export type Database = {
           stay_start: string;
           stay_end: string;
           status: ReservationStatus;
+          stay_type?: StayType;
           total_amount: number;
           deposit?: number;
           auto_debit?: boolean;
@@ -259,10 +269,112 @@ export type Database = {
           stay_start?: string;
           stay_end?: string;
           status?: ReservationStatus;
+          stay_type?: StayType;
           total_amount?: number;
           deposit?: number;
           auto_debit?: boolean;
           created_by?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      property_nightly_prices: {
+        Row: {
+          id: string;
+          property_id: string;
+          unit_id: string;
+          price_date: string; // DATE column → "YYYY-MM-DD"
+          price: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          unit_id: string;
+          price_date: string;
+          price: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          property_id?: string;
+          unit_id?: string;
+          price_date?: string;
+          price?: number;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      property_date_notes: {
+        Row: {
+          id: string;
+          property_id: string;
+          unit_id: string;
+          note_date: string; // DATE column → "YYYY-MM-DD"
+          note: string;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          unit_id: string;
+          note_date: string;
+          note: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          property_id?: string;
+          unit_id?: string;
+          note_date?: string;
+          note?: string;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      property_blocks: {
+        Row: {
+          id: string;
+          property_id: string;
+          unit_id: string;
+          block_start: string;
+          block_end: string;
+          reason: string | null;
+          created_by: string | null;
+          created_at: string;
+          // block_range is a server-side generated tstzrange — not surfaced
+          // to JS callers, the start/end columns are the source of truth.
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          unit_id: string;
+          block_start: string;
+          block_end: string;
+          reason?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          property_id?: string;
+          unit_id?: string;
+          block_start?: string;
+          block_end?: string;
+          reason?: string | null;
+          created_by?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -661,20 +773,10 @@ export type Database = {
           _email?: string | null;
           _address?: string | null;
           _nationality?: string | null;
+          _is_problematic?: boolean;
+          _problematic_note?: string | null;
         };
-        Returns: {
-          id: string;
-          full_name: string;
-          tc_kimlik_encrypted: string | null;
-          passport_encrypted: string | null;
-          phone: string | null;
-          email: string | null;
-          address: string | null;
-          nationality: string | null;
-          consent_given_at: string | null;
-          consent_version: string | null;
-          created_at: string;
-        };
+        Returns: Database['public']['Tables']['guests']['Row'];
       };
       update_guest: {
         Args: {
@@ -686,20 +788,10 @@ export type Database = {
           _email?: string | null;
           _address?: string | null;
           _nationality?: string | null;
+          _is_problematic?: boolean;
+          _problematic_note?: string | null;
         };
-        Returns: {
-          id: string;
-          full_name: string;
-          tc_kimlik_encrypted: string | null;
-          passport_encrypted: string | null;
-          phone: string | null;
-          email: string | null;
-          address: string | null;
-          nationality: string | null;
-          consent_given_at: string | null;
-          consent_version: string | null;
-          created_at: string;
-        };
+        Returns: Database['public']['Tables']['guests']['Row'];
       };
       get_guest_decrypted: {
         Args: { _id: string };
@@ -712,10 +804,30 @@ export type Database = {
           email: string | null;
           address: string | null;
           nationality: string | null;
+          is_problematic: boolean;
+          problematic_note: string | null;
           consent_given_at: string | null;
           consent_version: string | null;
           created_at: string;
         }[];
+      };
+      set_guest_problematic: {
+        Args: {
+          _id: string;
+          _is_problematic: boolean;
+          _note?: string | null;
+        };
+        Returns: Database['public']['Tables']['guests']['Row'];
+      };
+      set_nightly_price_range: {
+        Args: {
+          _property_id: string;
+          _unit_id: string;
+          _start_date: string;
+          _end_date: string;
+          _price: number;
+        };
+        Returns: number; // count of nights upserted
       };
       collect_payment: {
         Args: {
