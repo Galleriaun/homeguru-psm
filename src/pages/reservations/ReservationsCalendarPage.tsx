@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
@@ -6,6 +6,8 @@ import { listProperties, type Property } from '@/lib/queries/properties';
 import { listAllUnits, type Unit } from '@/lib/queries/units';
 import {
   listReservationsInRange,
+  updateReservation,
+  cancelReservation,
   type ReservationWithRefs,
 } from '@/lib/queries/reservations';
 import {
@@ -26,9 +28,15 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ReservationsViewTabs } from './ViewTabs';
 import { CellActionSheet, type CellAction } from './CellActionSheet';
+import {
+  ReservationActionSheet,
+  type ReservationAction,
+} from './ReservationActionSheet';
+import { RangeActionSheet, type RangeAction } from './RangeActionSheet';
 import { BlockDatesModal } from './BlockDatesModal';
 import { DateNoteModal } from './DateNoteModal';
 import { NightlyPriceModal } from './NightlyPriceModal';
+import { MoveReservationModal } from './MoveReservationModal';
 import { cn, formatDate, istanbulToday } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
@@ -132,6 +140,57 @@ export function ReservationsCalendarPage() {
   /** Bumping this re-runs the load effect after a price change (the RPC
       returns a count, not the new rows, so we need to re-fetch). */
   const [priceVersion, setPriceVersion] = useState(0);
+  /** Same trick for reservation moves/extends/cancels — bump → reload. */
+  const [reservationVersion, setReservationVersion] = useState(0);
+
+  // ---- existing-reservation action sheet (Task 9) ----
+  /** Reservation tapped on the calendar — drives ReservationActionSheet. */
+  const [pickedReservation, setPickedReservation] = useState<ReservationWithRefs | null>(
+    null,
+  );
+  /** Whether the move-reservation modal is open after picking "Taşı". */
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  /** Reservation pending an "İptal Et" confirmation. */
+  const [resvToCancel, setResvToCancel] = useState<ReservationWithRefs | null>(null);
+  const [resvCancelError, setResvCancelError] = useState<string | null>(null);
+  const [resvCancelLoading, setResvCancelLoading] = useState(false);
+  /** Toast for inline +1/-1 night results — kept lightweight, auto-dismiss. */
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // ---- range-select (Task 9) ----
+  /** Mobile-friendly toggle — when on, the next two cell taps form a range. */
+  const [rangeMode, setRangeMode] = useState(false);
+  /** First cell of an in-progress range select. Cleared on completion / cancel. */
+  const [rangeAnchor, setRangeAnchor] = useState<{
+    propertyId: string;
+    unitId: string;
+    unitName: string;
+    dateStr: string;
+  } | null>(null);
+  /** Completed range — drives RangeActionSheet. */
+  const [rangePick, setRangePick] = useState<{
+    propertyId: string;
+    unitId: string;
+    unitName: string;
+    startDate: string;
+    endDate: string;
+  } | null>(null);
+  /** When 'block' / 'price' fires from RangeActionSheet, the source range
+      flows into the corresponding modal as initialEnd / dateEnd. */
+  const [rangeBlockPick, setRangeBlockPick] = useState<{
+    propertyId: string;
+    unitId: string;
+    unitName: string;
+    startDate: string;
+    endDate: string;
+  } | null>(null);
+  const [rangePricePick, setRangePricePick] = useState<{
+    propertyId: string;
+    unitId: string;
+    unitName: string;
+    startDate: string;
+    endDate: string;
+  } | null>(null);
   /** Block pending delete (the user clicked an existing block bar). */
   const [blockToDelete, setBlockToDelete] = useState<PropertyBlock | null>(null);
   const [blockDeleteError, setBlockDeleteError] = useState<string | null>(null);
@@ -188,7 +247,7 @@ export function ReservationsCalendarPage() {
       })
       .catch((e) => setError(e?.message ?? 'Takvim yüklenemedi'))
       .finally(() => setLoading(false));
-  }, [windowStart, priceVersion]);
+  }, [windowStart, priceVersion, reservationVersion]);
 
   const days = useMemo(
     () =>
@@ -266,13 +325,118 @@ export function ReservationsCalendarPage() {
     unitId: string,
     unitName: string,
     dateStr: string,
+    e: MouseEvent,
   ) => {
     if (!canCreate) return;
-    // Replaces the old "click cell → straight to /reservations/new" flow.
-    // Now we open the action sheet so the operator can pick from {new
-    // reservation, block dates, add note, set price}. Routing each pick is
-    // handled in handleActionPick once the user chooses.
+    // Two paths off a cell click:
+    //   - Normal click → single-cell action sheet (Yeni rez / Blokla / Not / Fiyat)
+    //   - Shift+click OR "Aralık modu" on → range-select. The first such
+    //     click sets the anchor; the second on the same unit completes the
+    //     range and opens RangeActionSheet for bulk block / price.
+    const wantRange = e.shiftKey || rangeMode;
+    if (wantRange) {
+      if (rangeAnchor && rangeAnchor.unitId === unitId) {
+        // Complete the range — normalize so startDate ≤ endDate.
+        const a = rangeAnchor.dateStr;
+        const b = dateStr;
+        const [startDate, endDate] = a <= b ? [a, b] : [b, a];
+        setRangePick({
+          propertyId,
+          unitId,
+          unitName,
+          startDate,
+          endDate,
+        });
+        setRangeAnchor(null);
+        setRangeMode(false);
+        return;
+      }
+      // New anchor (or replacing one from a different unit).
+      setRangeAnchor({ propertyId, unitId, unitName, dateStr });
+      return;
+    }
     setPickedCell({ propertyId, unitId, unitName, dateStr });
+  };
+
+  const handleReservationBarClick = (r: ReservationWithRefs) => {
+    // Replaces the old "click bar → straight to /reservations/:id". Now opens
+    // the action sheet whose "Detayı aç" option does the original nav.
+    setPickedReservation(r);
+  };
+
+  /** +1 / -1 night via direct updateReservation; the EXCLUDE constraint
+      catches collisions and wrapErr surfaces the Turkish message. */
+  const shiftStayEnd = async (r: ReservationWithRefs, deltaDays: number) => {
+    setActionError(null);
+    try {
+      const newEnd = new Date(
+        new Date(r.stay_end).getTime() + deltaDays * DAY_MS,
+      ).toISOString();
+      await updateReservation(r.id, { stay_end: newEnd });
+      setReservationVersion((v) => v + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'İşlem başarısız');
+    }
+  };
+
+  const handleReservationActionPick = (action: ReservationAction) => {
+    const r = pickedReservation;
+    if (!r) return;
+    switch (action) {
+      case 'detail':
+        setPickedReservation(null);
+        navigate(`/reservations/${r.id}`);
+        return;
+      case 'edit':
+        setPickedReservation(null);
+        navigate(`/reservations/${r.id}/edit`);
+        return;
+      case 'move':
+        // Keep pickedReservation set so MoveReservationModal can read from it.
+        setShowMoveModal(true);
+        return;
+      case 'extend':
+        setPickedReservation(null);
+        void shiftStayEnd(r, +1);
+        return;
+      case 'shorten':
+        setPickedReservation(null);
+        void shiftStayEnd(r, -1);
+        return;
+      case 'cancel':
+        setResvCancelError(null);
+        setResvToCancel(r);
+        setPickedReservation(null);
+        return;
+      default:
+        return;
+    }
+  };
+
+  const handleConfirmCancelReservation = async () => {
+    if (!resvToCancel) return;
+    setResvCancelLoading(true);
+    setResvCancelError(null);
+    try {
+      await cancelReservation(resvToCancel.id);
+      setResvToCancel(null);
+      setReservationVersion((v) => v + 1);
+    } catch (err) {
+      setResvCancelError(err instanceof Error ? err.message : 'İptal başarısız');
+    } finally {
+      setResvCancelLoading(false);
+    }
+  };
+
+  const handleRangeActionPick = (action: RangeAction) => {
+    const range = rangePick;
+    if (!range) return;
+    setRangePick(null);
+    if (action === 'block') {
+      setRangeBlockPick(range);
+    } else if (action === 'price') {
+      setRangePricePick(range);
+    }
   };
 
   const handleActionPick = (action: CellAction) => {
@@ -337,7 +501,7 @@ export function ReservationsCalendarPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="secondary"
             onClick={() => setWindowStart((w) => addDaysStr(w, -7))}
@@ -353,6 +517,19 @@ export function ReservationsCalendarPage() {
           >
             Sonraki ›
           </Button>
+          {canCreate && (
+            <Button
+              variant={rangeMode ? 'primary' : 'secondary'}
+              onClick={() => {
+                // Toggle "Aralık modu" — same effect as holding shift, but
+                // works on touch where Shift isn't a thing.
+                setRangeMode((m) => !m);
+                setRangeAnchor(null);
+              }}
+            >
+              {rangeMode ? '⨯ Aralık modunu kapat' : '⟷ Aralık seç'}
+            </Button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600 dark:text-stone-300">
           {(['pending', 'upcoming', 'active', 'completed'] as const).map((s) => (
@@ -363,6 +540,52 @@ export function ReservationsCalendarPage() {
           ))}
         </div>
       </div>
+
+      {/* Range-select status banner — shown while the user is in the middle
+          of an aralık seç flow so they know what the next click will do. */}
+      {(rangeMode || rangeAnchor) && (
+        <Card className="border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/40">
+          <p className="text-sm text-sky-800 dark:text-sky-300">
+            {rangeAnchor ? (
+              <>
+                Aralık başlangıcı: <strong>{rangeAnchor.unitName}</strong> ·{' '}
+                <strong>{rangeAnchor.dateStr}</strong> seçildi. Bitiş hücresine tıkla.
+                <button
+                  type="button"
+                  className="ml-3 underline hover:no-underline"
+                  onClick={() => {
+                    setRangeAnchor(null);
+                    setRangeMode(false);
+                  }}
+                >
+                  vazgeç
+                </button>
+              </>
+            ) : (
+              <>
+                Aralık modu açık — başlangıç hücresine tıkla, ardından bitişe.
+                Tek tıklamayla normal moda dönmek için yukarıdan kapat.
+              </>
+            )}
+          </p>
+        </Card>
+      )}
+
+      {/* Inline +1/-1 night / extend error toast. */}
+      {actionError && (
+        <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-red-700 dark:text-red-400">{actionError}</p>
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              className="text-xs text-red-700 underline hover:no-underline dark:text-red-400"
+            >
+              kapat
+            </button>
+          </div>
+        </Card>
+      )}
 
       {error && (
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
@@ -476,26 +699,37 @@ export function ReservationsCalendarPage() {
                             className="relative"
                             style={{ width: trackWidth, height: ROW_H }}
                           >
-                            {/* Clickable day-cell background */}
+                            {/* Clickable day-cell background. Shift-click (or
+                                "Aralık modu" on) routes through the same
+                                handler — see handleCellClick. */}
                             <div className="absolute inset-0 flex">
-                              {days.map((d) => (
-                                <button
-                                  key={d.dateStr}
-                                  type="button"
-                                  disabled={!canCreate}
-                                  onClick={() => handleCellClick(p.id, u.id, u.name, d.dateStr)}
-                                  aria-label={`${u.name} ${d.dateStr} işlemler`}
-                                  className={cn(
-                                    'shrink-0 border-l border-stone-200 dark:border-stone-700',
-                                    d.isWeekend && 'bg-stone-100/60 dark:bg-stone-800/30',
-                                    d.isToday && 'bg-emerald-50/70 dark:bg-emerald-950/30',
-                                    canCreate &&
-                                      'hover:bg-emerald-100/60 dark:hover:bg-emerald-900/30',
-                                    !canCreate && 'cursor-default',
-                                  )}
-                                  style={{ width: DAY_W }}
-                                />
-                              ))}
+                              {days.map((d) => {
+                                const isAnchor =
+                                  rangeAnchor !== null &&
+                                  rangeAnchor.unitId === u.id &&
+                                  rangeAnchor.dateStr === d.dateStr;
+                                return (
+                                  <button
+                                    key={d.dateStr}
+                                    type="button"
+                                    disabled={!canCreate}
+                                    onClick={(e) =>
+                                      handleCellClick(p.id, u.id, u.name, d.dateStr, e)
+                                    }
+                                    aria-label={`${u.name} ${d.dateStr} işlemler`}
+                                    className={cn(
+                                      'shrink-0 border-l border-stone-200 dark:border-stone-700',
+                                      d.isWeekend && 'bg-stone-100/60 dark:bg-stone-800/30',
+                                      d.isToday && 'bg-emerald-50/70 dark:bg-emerald-950/30',
+                                      isAnchor && 'bg-sky-100 ring-2 ring-inset ring-sky-500 dark:bg-sky-900/50',
+                                      canCreate && !isAnchor &&
+                                        'hover:bg-emerald-100/60 dark:hover:bg-emerald-900/30',
+                                      !canCreate && 'cursor-default',
+                                    )}
+                                    style={{ width: DAY_W }}
+                                  />
+                                );
+                              })}
                             </div>
 
                             {/* Date-block bars — render below reservations
@@ -598,7 +832,7 @@ export function ReservationsCalendarPage() {
                                 <button
                                   key={r.id}
                                   type="button"
-                                  onClick={() => navigate(`/reservations/${r.id}`)}
+                                  onClick={() => handleReservationBarClick(r)}
                                   title={`${r.guest?.full_name ?? '—'} · ${r.stay_start.slice(
                                     0,
                                     10,
@@ -707,6 +941,142 @@ export function ReservationsCalendarPage() {
           }}
         />
       )}
+
+      {/* ===== Existing-reservation action sheet (Task 9) ===== */}
+      {pickedReservation && !showMoveModal && (() => {
+        const r = pickedReservation;
+        // Nights = days between stay_start and stay_end. Day-use stays
+        // collapse to ≤1 which is fine (Uzat/Kısalt are hidden for them).
+        const nights = Math.max(
+          1,
+          Math.round(
+            (new Date(r.stay_end).getTime() - new Date(r.stay_start).getTime()) /
+              DAY_MS,
+          ),
+        );
+        return (
+          <ReservationActionSheet
+            guestName={r.guest?.full_name ?? '—'}
+            unitName={r.unit?.name ?? '—'}
+            status={r.status}
+            stayType={r.stay_type}
+            nights={nights}
+            canEdit={Boolean(profile && can(profile.role, 'reservation:update'))}
+            canCancel={Boolean(profile && can(profile.role, 'reservation:cancel'))}
+            onPick={handleReservationActionPick}
+            onClose={() => setPickedReservation(null)}
+          />
+        );
+      })()}
+
+      {showMoveModal && pickedReservation && (
+        <MoveReservationModal
+          reservationId={pickedReservation.id}
+          currentStayStart={pickedReservation.stay_start}
+          currentStayEnd={pickedReservation.stay_end}
+          stayType={pickedReservation.stay_type}
+          guestName={pickedReservation.guest?.full_name ?? '—'}
+          unitName={pickedReservation.unit?.name ?? '—'}
+          onClose={() => {
+            setShowMoveModal(false);
+            setPickedReservation(null);
+          }}
+          onMoved={() => {
+            setShowMoveModal(false);
+            setPickedReservation(null);
+            setReservationVersion((v) => v + 1);
+          }}
+        />
+      )}
+
+      <ConfirmDialog
+        open={resvToCancel !== null}
+        title="Rezervasyon iptal edilsin mi?"
+        description={
+          resvToCancel ? (
+            <>
+              <p>
+                <strong>{resvToCancel.guest?.full_name ?? '—'}</strong> —{' '}
+                {resvToCancel.stay_start.slice(0, 10)} →{' '}
+                {resvToCancel.stay_end.slice(0, 10)}
+              </p>
+              <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
+                İptal edilen rezervasyonlar tekrar aktif edilemez.
+              </p>
+            </>
+          ) : null
+        }
+        confirmLabel="İptal Et"
+        destructive
+        loading={resvCancelLoading}
+        error={resvCancelError}
+        onConfirm={handleConfirmCancelReservation}
+        onCancel={() => {
+          setResvToCancel(null);
+          setResvCancelError(null);
+        }}
+      />
+
+      {/* ===== Range-select action sheet + range-flavored modals (Task 9) ===== */}
+      {rangePick && (() => {
+        const nights = Math.max(
+          1,
+          Math.round(
+            (new Date(rangePick.endDate + 'T00:00:00Z').getTime() -
+              new Date(rangePick.startDate + 'T00:00:00Z').getTime()) /
+              DAY_MS,
+          ) + 1,
+        );
+        return (
+          <RangeActionSheet
+            unitName={rangePick.unitName}
+            startDate={rangePick.startDate}
+            endDate={rangePick.endDate}
+            nights={nights}
+            onPick={handleRangeActionPick}
+            onClose={() => setRangePick(null)}
+          />
+        );
+      })()}
+
+      {rangeBlockPick && (
+        <BlockDatesModal
+          propertyId={rangeBlockPick.propertyId}
+          unitId={rangeBlockPick.unitId}
+          unitName={rangeBlockPick.unitName}
+          initialStart={rangeBlockPick.startDate}
+          // RangeActionSheet's range is inclusive (start..end), but block_end
+          // is exclusive (half-open tstzrange). Bump one day so the operator
+          // sees the same end-date they picked.
+          initialEnd={addDaysStr(rangeBlockPick.endDate, 1)}
+          onClose={() => setRangeBlockPick(null)}
+          onCreated={(b) => {
+            setBlocks((prev) => [...prev, b]);
+            setRangeBlockPick(null);
+          }}
+        />
+      )}
+
+      {rangePricePick && (() => {
+        const unit = units.find((u) => u.id === rangePricePick.unitId);
+        return (
+          <NightlyPriceModal
+            propertyId={rangePricePick.propertyId}
+            unitId={rangePricePick.unitId}
+            unitName={rangePricePick.unitName}
+            dateStr={rangePricePick.startDate}
+            dateEnd={rangePricePick.endDate}
+            existingId={null}
+            existingPrice={null}
+            unitBasePrice={unit ? Number(unit.base_price) : 0}
+            onClose={() => setRangePricePick(null)}
+            onSaved={() => {
+              setRangePricePick(null);
+              setPriceVersion((v) => v + 1);
+            }}
+          />
+        );
+      })()}
 
       {/* Gecelik Fiyat modal — single-day or range price override. The bulk
           RPC returns just a count, so we bump priceVersion to re-fetch. */}

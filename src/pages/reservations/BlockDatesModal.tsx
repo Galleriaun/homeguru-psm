@@ -11,6 +11,10 @@ interface Props {
   unitName: string;
   /** Pre-fill the start date (typically the cell that was clicked). */
   initialStart: string;
+  /** Pre-fill the end date — used by the range-select flow (Task 9). When
+      omitted we default to initialStart + 1 so a single click gives a 1-day
+      block, preserving the original single-cell behaviour. */
+  initialEnd?: string;
   onClose: () => void;
   onCreated: (block: PropertyBlock) => void;
 }
@@ -32,13 +36,15 @@ export function BlockDatesModal({
   unitId,
   unitName,
   initialStart,
+  initialEnd,
   onClose,
   onCreated,
 }: Props) {
   const { user } = useAuth();
   const [start, setStart] = useState(initialStart);
-  // Default to next-day end so a single click gives a 1-day block.
-  const [end, setEnd] = useState(() => addDaysStr(initialStart, 1));
+  // Default to next-day end so a single click gives a 1-day block; when a
+  // range was pre-selected, honour it instead.
+  const [end, setEnd] = useState(() => initialEnd ?? addDaysStr(initialStart, 1));
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

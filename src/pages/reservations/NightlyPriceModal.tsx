@@ -11,6 +11,8 @@ interface Props {
   unitName: string;
   /** YYYY-MM-DD that was clicked — defaults to both start and end of the range. */
   dateStr: string;
+  /** Optional end-of-range when the modal is opened from a range-select. */
+  dateEnd?: string;
   /** Existing override id at the clicked cell, if any — surfaces a Sil button. */
   existingId: string | null;
   /** Existing price at the clicked cell, if any — pre-fills the input. */
@@ -33,6 +35,7 @@ export function NightlyPriceModal({
   unitId,
   unitName,
   dateStr,
+  dateEnd,
   existingId,
   existingPrice,
   unitBasePrice,
@@ -40,7 +43,7 @@ export function NightlyPriceModal({
   onSaved,
 }: Props) {
   const [start, setStart] = useState(dateStr);
-  const [end, setEnd] = useState(dateStr);
+  const [end, setEnd] = useState(dateEnd ?? dateStr);
   const [price, setPrice] = useState<number>(existingPrice ?? unitBasePrice);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
