@@ -10,20 +10,26 @@ import {
   MagnifyingGlassIcon,
   UserIcon,
   CheckCircleIcon,
+  ExclamationCircleIcon,
 } from '@/components/icons/ActionIcons';
+import { QuickIssueModal } from '@/components/QuickIssueModal';
 
 export function DashboardPage() {
   const { profile } = useAuth();
 
   const [counts, setCounts] = useState<DashboardCounts | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Sorunlar quick-action modal — file an issue against an active stay. */
+  const [showIssueModal, setShowIssueModal] = useState(false);
+  /** Bumping this re-runs the count loader after a successful issue create. */
+  const [countsVersion, setCountsVersion] = useState(0);
 
   useEffect(() => {
     setError(null);
     loadDashboardCounts()
       .then(setCounts)
       .catch((e) => setError(e instanceof Error ? e.message : 'Veriler yüklenemedi'));
-  }, []);
+  }, [countsVersion]);
 
   if (!profile) {
     return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
@@ -90,6 +96,14 @@ export function DashboardPage() {
           Hızlı İşlemler
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {canReadHousekeeping && (
+            <QuickAction
+              onClick={() => setShowIssueModal(true)}
+              icon={<ExclamationCircleIcon className="h-5 w-5" />}
+              label="Sorunlar"
+              description="Aktif konaklaması olan bir birime hızlıca sorun bildir"
+            />
+          )}
           {canCreateReservation && (
             <QuickAction
               to="/reservations/new"
@@ -122,6 +136,13 @@ export function DashboardPage() {
           )}
         </div>
       </section>
+
+      {showIssueModal && (
+        <QuickIssueModal
+          onClose={() => setShowIssueModal(false)}
+          onCreated={() => setCountsVersion((v) => v + 1)}
+        />
+      )}
     </div>
   );
 }
@@ -188,19 +209,24 @@ function Tile({ to, label, value, watchTone }: TileProps) {
 // -----------------------------------------------------------------------------
 
 interface QuickActionProps {
-  to: string;
+  /** Navigates to this route when set. Mutually exclusive with onClick. */
+  to?: string;
+  /** Runs in place of navigation when set (e.g. to open a modal). */
+  onClick?: () => void;
   /** Optional leading icon, rendered in a circular well on the left. */
   icon?: ReactNode;
   label: string;
   description: ReactNode;
 }
 
-function QuickAction({ to, icon, label, description }: QuickActionProps) {
-  return (
-    <Link
-      to={to}
-      className="flex items-center gap-3 rounded-lg border border-emerald-300 bg-white p-4 text-stone-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-stone-900 dark:text-stone-100 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30"
-    >
+function QuickAction({ to, onClick, icon, label, description }: QuickActionProps) {
+  // Shared styling between the Link and button modes so the grid stays
+  // visually uniform whichever shape the action takes.
+  const className =
+    'flex items-center gap-3 rounded-lg border border-emerald-300 bg-white p-4 text-left text-stone-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-stone-900 dark:text-stone-100 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30';
+
+  const body = (
+    <>
       {icon && (
         <span
           aria-hidden="true"
@@ -215,6 +241,19 @@ function QuickAction({ to, icon, label, description }: QuickActionProps) {
           {description}
         </span>
       </span>
-    </Link>
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link to={to} className={className}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={`${className} w-full`}>
+      {body}
+    </button>
   );
 }
