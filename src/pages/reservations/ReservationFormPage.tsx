@@ -9,7 +9,8 @@ import {
   getReservation,
   updateReservation,
 } from '@/lib/queries/reservations';
-import type { ReservationStatus } from '@/types/database';
+import { listPricesInRange } from '@/lib/queries/property_nightly_prices';
+import type { ReservationStatus, StayType } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { DateInput } from '@/components/ui/DateInput';
@@ -40,12 +41,37 @@ function daysBetween(start: string, end: string): number {
 }
 
 /**
+ * Convert a UTC ISO timestamp to Istanbul-local YYYY-MM-DD + HH:MM. Used to
+ * surface day-use start/end times back into the form when editing — Istanbul
+ * is fixed UTC+3, no DST since 2016 (see CLAUDE.md).
+ */
+function toIstanbulDateAndTime(iso: string): { date: string; time: string } {
+  const shifted = new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000);
+  const s = shifted.toISOString();
+  return { date: s.slice(0, 10), time: s.slice(11, 16) };
+}
+
+/**
  * Default status for a new reservation, from its dates: a future stay is
  * 'upcoming', one in progress 'active', a fully-past one 'completed'.
  * (A daily cron later promotes 'upcoming' → 'active' on the check-in day.)
+ *
+ * Day-use stays are single-day, so checkout-date equals checkin-date: the
+ * overnight rule "checkoutStr <= today → completed" would wrongly mark a
+ * day-use booking on today as already finished. Treat day-use as active for
+ * its single day and let the operator flip it to completed manually.
  */
-function deriveStatus(checkinStr: string, checkoutStr: string): ReservationStatus {
+function deriveStatus(
+  checkinStr: string,
+  checkoutStr: string,
+  stayType: StayType,
+): ReservationStatus {
   const today = istanbulToday();
+  if (stayType === 'DAYUSE') {
+    if (checkinStr > today) return 'upcoming';
+    if (checkinStr < today) return 'completed';
+    return 'active';
+  }
   if (checkinStr > today) return 'upcoming';
   if (checkoutStr <= today) return 'completed';
   return 'active';
@@ -67,6 +93,11 @@ export function ReservationFormPage() {
   const [guestId, setGuestId] = useState('');
   const [checkin, setCheckin] = useState(istanbulToday());
   const [nights, setNights] = useState(1);
+  /** OVERNIGHT (default) | DAYUSE — drives whether we collect nights or HH:MM. */
+  const [stayType, setStayType] = useState<StayType>('OVERNIGHT');
+  /** Istanbul-local start/end times — only used when stayType === 'DAYUSE'. */
+  const [startTime, setStartTime] = useState('14:00');
+  const [endTime, setEndTime] = useState('16:00');
   const [totalAmount, setTotalAmount] = useState(0);
   // Tracks whether the operator has typed their own total. Once true, the
   // unit×nights auto-fill stops overwriting it.
@@ -83,9 +114,27 @@ export function ReservationFormPage() {
   const [showGuestModal, setShowGuestModal] = useState(false);
   const [showCompanionModal, setShowCompanionModal] = useState(false);
 
-  const checkout = useMemo(() => addDays(checkin, nights), [checkin, nights]);
+  // For overnight: checkout = checkin + nights. For day-use, the stay starts
+  // and ends on the same calendar date.
+  const checkout = useMemo(
+    () => (stayType === 'DAYUSE' ? checkin : addDays(checkin, nights)),
+    [checkin, nights, stayType],
+  );
   const selectedUnit = units.find((u) => u.id === unitId);
-  const suggestedTotal = selectedUnit ? Number(selectedUnit.base_price) * nights : 0;
+  /**
+   * Recommended total — the sum of each night's price, where any night that
+   * has a per-date override (migration 047) uses its override and every other
+   * night falls back to unit.base_price. Day-use uses 0 (operator types the
+   * total manually because nightly pricing doesn't apply).
+   *
+   * Updated asynchronously by the effect below; reset to a synchronous
+   * baseline (base_price × nights) before the fetch lands so the field
+   * never reads stale on a unit/date change.
+   */
+  const [suggestedTotal, setSuggestedTotal] = useState(0);
+  /** How many of the booked nights pulled a custom override price — drives
+      the "(N gece özel fiyat)" hint next to the total. */
+  const [overrideNightsCount, setOverrideNightsCount] = useState(0);
 
   // Where "← Geri" / "İptal" should return to. When editing, go back to the
   // reservation. When creating, honour a ?from= param (e.g. the calendar) so
@@ -115,10 +164,22 @@ export function ReservationFormPage() {
           setPropertyId(r.property_id);
           setUnitId(r.unit_id);
           setGuestId(r.guest_id);
-          const start = r.stay_start.slice(0, 10);
-          const end = r.stay_end.slice(0, 10);
-          setCheckin(start);
-          setNights(daysBetween(start, end));
+          setStayType(r.stay_type);
+          if (r.stay_type === 'DAYUSE') {
+            // Day-use: surface the Istanbul-local times back into the form
+            // so editing a 14:00-17:00 stay shows 14:00 and 17:00.
+            const startLocal = toIstanbulDateAndTime(r.stay_start);
+            const endLocal = toIstanbulDateAndTime(r.stay_end);
+            setCheckin(startLocal.date);
+            setStartTime(startLocal.time);
+            setEndTime(endLocal.time);
+            setNights(1);
+          } else {
+            const start = r.stay_start.slice(0, 10);
+            const end = r.stay_end.slice(0, 10);
+            setCheckin(start);
+            setNights(daysBetween(start, end));
+          }
           setTotalAmount(Number(r.total_amount));
           setDeposit(Number(r.deposit));
           setAutoDebit(r.auto_debit);
@@ -166,6 +227,57 @@ export function ReservationFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId]);
 
+  // Recompute the suggested total when the unit / dates / stay-type change.
+  // Sets a synchronous baseline (base × nights) immediately so the field
+  // never reads stale; then fetches per-date overrides for the stay window
+  // and refines the total. Cancellation flag protects against stale-fetch
+  // races when the user spins the nights counter quickly.
+  useEffect(() => {
+    if (stayType === 'DAYUSE' || !selectedUnit) {
+      setSuggestedTotal(0);
+      setOverrideNightsCount(0);
+      return;
+    }
+    const base = Number(selectedUnit.base_price);
+    setSuggestedTotal(base * nights);
+    setOverrideNightsCount(0);
+
+    let cancelled = false;
+    const endDateExclusive = addDays(checkin, nights);
+    listPricesInRange(checkin, endDateExclusive)
+      .then((rows) => {
+        if (cancelled) return;
+        // listPricesInRange returns every visible unit in the window — filter
+        // to our selected unit before building the lookup map.
+        const byDate = new Map(
+          rows
+            .filter((r) => r.unit_id === selectedUnit.id)
+            .map((r) => [r.price_date, Number(r.price)] as const),
+        );
+        let sum = 0;
+        let used = 0;
+        for (let i = 0; i < nights; i++) {
+          const d = addDays(checkin, i);
+          const override = byDate.get(d);
+          const nightly = override !== undefined ? override : base;
+          sum += nightly;
+          // Only count it as "özel fiyat" when the override actually differs
+          // from the unit's baseline — an override that equals the base is a
+          // no-op from the operator's perspective.
+          if (override !== undefined && override !== base) used++;
+        }
+        setSuggestedTotal(sum);
+        setOverrideNightsCount(used);
+      })
+      .catch(() => {
+        // Network / RLS failure: keep the synchronous baseline so the form
+        // still functions even if the price-override fetch breaks.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [stayType, selectedUnit, checkin, nights]);
+
   // Auto-fill the suggested total as unit/nights change — but only while
   // creating and only until the operator types their own value. On edit the
   // saved total is authoritative and never auto-overwritten.
@@ -181,10 +293,10 @@ export function ReservationFormPage() {
   // operator picks a status by hand. Editing never auto-changes the status.
   useEffect(() => {
     if (!isEdit && !statusEdited) {
-      setStatus(deriveStatus(checkin, checkout));
+      setStatus(deriveStatus(checkin, checkout, stayType));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkin, checkout]);
+  }, [checkin, checkout, stayType]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -199,10 +311,29 @@ export function ReservationFormPage() {
       return;
     }
 
+    // Day-use sanity: end must be strictly after start (DB CHECK reasserts
+    // this, but a friendlier message here saves a round-trip).
+    if (stayType === 'DAYUSE' && endTime <= startTime) {
+      setError('Günübirlik konaklamada çıkış saati, giriş saatinden sonra olmalıdır.');
+      return;
+    }
+
     setSaving(true);
     try {
-      const stay_start = new Date(checkin + 'T00:00:00Z').toISOString();
-      const stay_end = new Date(checkout + 'T00:00:00Z').toISOString();
+      let stay_start: string;
+      let stay_end: string;
+      if (stayType === 'DAYUSE') {
+        // Istanbul-local times → UTC ISO. Istanbul is fixed UTC+3.
+        stay_start = new Date(`${checkin}T${startTime}:00+03:00`).toISOString();
+        stay_end = new Date(`${checkin}T${endTime}:00+03:00`).toISOString();
+      } else {
+        stay_start = new Date(checkin + 'T00:00:00Z').toISOString();
+        stay_end = new Date(checkout + 'T00:00:00Z').toISOString();
+      }
+
+      // Day-use stays don't get the nightly auto-debit cron; force off so a
+      // checkbox toggled before flipping to day-use doesn't leak through.
+      const effectiveAutoDebit = stayType === 'DAYUSE' ? false : autoDebit;
 
       if (isEdit && id) {
         await updateReservation(id, {
@@ -211,9 +342,10 @@ export function ReservationFormPage() {
           guest_id: guestId,
           stay_start,
           stay_end,
+          stay_type: stayType,
           total_amount: totalAmount,
           deposit,
-          auto_debit: autoDebit,
+          auto_debit: effectiveAutoDebit,
           status,
         });
         navigate(`/reservations/${id}`, { replace: true });
@@ -224,9 +356,10 @@ export function ReservationFormPage() {
           guest_id: guestId,
           stay_start,
           stay_end,
+          stay_type: stayType,
           total_amount: totalAmount,
           deposit,
-          auto_debit: autoDebit,
+          auto_debit: effectiveAutoDebit,
           status,
           created_by: user.id,
         });
@@ -370,33 +503,109 @@ export function ReservationFormPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <DateInput
-              label="Giriş"
-              name="checkin"
-              required
-              value={checkin}
-              onChange={setCheckin}
+          {/* Günübirlik (day-use) toggle. When on, replace nights with start/end
+              times on a single calendar date. Stays under ~4 hours typical. */}
+          <label className="flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:text-stone-300">
+            <input
+              type="checkbox"
+              checked={stayType === 'DAYUSE'}
+              onChange={(e) => setStayType(e.target.checked ? 'DAYUSE' : 'OVERNIGHT')}
+              className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500"
             />
-            <NumberInput
-              label="Gece"
-              name="nights"
-              min={1}
-              max={365}
-              required
-              value={nights}
-              onChange={setNights}
-            />
-          </div>
+            Günübirlik konaklama (saatlik)
+          </label>
 
-          <p className="text-xs text-stone-600 dark:text-stone-300">
-            Çıkış tarihi: <strong>{checkout}</strong>
-            {selectedUnit && (
-              <>
-                {' · '}Önerilen tutar: <strong>{formatTRY(suggestedTotal)}</strong>
-              </>
-            )}
-          </p>
+          {stayType === 'OVERNIGHT' ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <DateInput
+                  label="Giriş"
+                  name="checkin"
+                  required
+                  value={checkin}
+                  onChange={setCheckin}
+                />
+                <NumberInput
+                  label="Gece"
+                  name="nights"
+                  min={1}
+                  max={365}
+                  required
+                  value={nights}
+                  onChange={setNights}
+                />
+              </div>
+
+              <p className="text-xs text-stone-600 dark:text-stone-300">
+                Çıkış tarihi: <strong>{checkout}</strong>
+                {selectedUnit && (
+                  <>
+                    {' · '}Önerilen tutar: <strong>{formatTRY(suggestedTotal)}</strong>
+                    {overrideNightsCount > 0 && (
+                      <>
+                        {' '}
+                        <span className="text-emerald-700 dark:text-emerald-400">
+                          ({overrideNightsCount} gece özel fiyat)
+                        </span>
+                      </>
+                    )}
+                  </>
+                )}
+              </p>
+            </>
+          ) : (
+            <>
+              <DateInput
+                label="Tarih"
+                name="dayuse_date"
+                required
+                value={checkin}
+                onChange={setCheckin}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label
+                    htmlFor="start_time"
+                    className="block text-sm font-medium text-stone-700 dark:text-stone-300"
+                  >
+                    Başlangıç saati<span className="ml-0.5 text-red-500">*</span>
+                  </label>
+                  <input
+                    id="start_time"
+                    name="start_time"
+                    type="time"
+                    required
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="end_time"
+                    className="block text-sm font-medium text-stone-700 dark:text-stone-300"
+                  >
+                    Bitiş saati<span className="ml-0.5 text-red-500">*</span>
+                  </label>
+                  <input
+                    id="end_time"
+                    name="end_time"
+                    type="time"
+                    required
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-stone-600 dark:text-stone-300">
+                Süre: <strong>{startTime}–{endTime}</strong>{' '}
+                <span className="text-stone-500 dark:text-stone-400">
+                  · Tutarı manuel giriniz.
+                </span>
+              </p>
+            </>
+          )}
 
           <NumberInput
             label="Toplam Tutar (₺)"
@@ -432,15 +641,19 @@ export function ReservationFormPage() {
             options={STATUS_OPTIONS}
           />
 
-          <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
-            <input
-              type="checkbox"
-              checked={autoDebit}
-              onChange={(e) => setAutoDebit(e.target.checked)}
-              className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
-            />
-            Otomatik borçlandır (her gece 00:05'te günlük ücreti carisine işler)
-          </label>
+          {/* Auto-debit charges the nightly fee at 00:05 — day-use stays
+              aren't nightly so the checkbox is hidden in that mode. */}
+          {stayType === 'OVERNIGHT' && (
+            <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
+              <input
+                type="checkbox"
+                checked={autoDebit}
+                onChange={(e) => setAutoDebit(e.target.checked)}
+                className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              Otomatik borçlandır (her gece 00:05'te günlük ücreti carisine işler)
+            </label>
+          )}
 
           {error && (
             <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
