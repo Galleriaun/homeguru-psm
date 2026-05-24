@@ -90,7 +90,7 @@ export function GuestsListPage() {
                 <div className="flex items-center gap-1.5">
                   {g.is_problematic && (
                     <WarningTriangleIcon
-                      className="h-4 w-4 shrink-0 text-amber-500"
+                      className="h-4 w-4 shrink-0 text-red-500"
                       aria-label="Sorunlu misafir"
                     />
                   )}

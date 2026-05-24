@@ -69,7 +69,7 @@ export function ProblematicFlagModal({
       <Card className="w-full max-w-md">
         <div className="mb-4 flex items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-stone-900 dark:text-stone-100">
-            <WarningTriangleIcon className="h-5 w-5 text-amber-500" />
+            <WarningTriangleIcon className="h-5 w-5 text-red-500" />
             Sorunlu Misafir
           </h2>
           <button
@@ -100,7 +100,7 @@ export function ProblematicFlagModal({
               type="checkbox"
               checked={isProblematic}
               onChange={(e) => setIsProblematic(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-stone-300 text-amber-600 focus:ring-amber-500 dark:border-stone-600 dark:bg-stone-800"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-stone-300 text-red-600 focus:ring-red-500 dark:border-stone-600 dark:bg-stone-800"
             />
             <span>Bu misafiri <strong>sorunlu</strong> olarak işaretle</span>
           </label>
@@ -121,7 +121,7 @@ export function ProblematicFlagModal({
               maxLength={500}
               rows={4}
               placeholder="Örn: Önceki konaklamada lamba kırdı, depozito alın."
-              className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder-stone-500 dark:disabled:bg-stone-800"
+              className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder-stone-500 dark:disabled:bg-stone-800"
             />
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
               En fazla 500 karakter.
