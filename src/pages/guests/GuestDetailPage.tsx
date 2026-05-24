@@ -161,29 +161,27 @@ export function GuestDetailPage() {
             <h1 className="truncate text-2xl font-semibold text-stone-900 dark:text-stone-100">
               {guest.full_name}
             </h1>
-            {/* Sorunlu Misafir — persistent warning flag (migration 043). */}
+            {/* Sorunlu Misafir — persistent warning flag (migration 043).
+                Text pill instead of a bare icon so it reads at a glance. */}
             {(guest.is_problematic || canEdit) && (
               <button
                 type="button"
                 onClick={canEdit ? () => setShowProblematicModal(true) : undefined}
                 disabled={!canEdit}
-                aria-label={
-                  guest.is_problematic ? 'Sorunlu misafir uyarısı' : 'Sorunlu misafir işaretle'
-                }
                 title={
-                  guest.is_problematic
-                    ? guest.problematic_note
-                      ? `Sorunlu Misafir — ${guest.problematic_note}`
-                      : 'Sorunlu Misafir'
-                    : 'Sorunlu misafir olarak işaretle'
+                  guest.is_problematic && guest.problematic_note
+                    ? `Sorunlu Misafir — ${guest.problematic_note}`
+                    : guest.is_problematic
+                      ? 'Sorunlu Misafir'
+                      : 'Sorunlu misafir olarak işaretle'
                 }
                 className={
                   guest.is_problematic
-                    ? 'shrink-0 rounded-full p-1 text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-amber-950/40'
-                    : 'shrink-0 rounded-full p-1 text-stone-300 hover:text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-stone-600 dark:hover:bg-amber-950/40'
+                    ? 'shrink-0 rounded-md bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 transition-colors hover:bg-red-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-default disabled:hover:bg-red-100 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60'
+                    : 'shrink-0 rounded-md border border-dashed border-red-300 px-2.5 py-0.5 text-xs font-medium text-red-600 transition-colors hover:border-red-400 hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 dark:border-red-800 dark:text-red-400 dark:hover:border-red-700 dark:hover:bg-red-950/40'
                 }
               >
-                <WarningTriangleIcon className="h-5 w-5" />
+                {guest.is_problematic ? 'Sorunlu Misafir' : '+ Sorunlu işaretle'}
               </button>
             )}
           </div>
@@ -191,7 +189,7 @@ export function GuestDetailPage() {
             <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{guest.nationality}</p>
           )}
           {guest.is_problematic && guest.problematic_note && (
-            <p className="mt-1 flex items-start gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+            <p className="mt-1 flex items-start gap-1.5 text-sm text-red-700 dark:text-red-400">
               <WarningTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span className="break-words">{guest.problematic_note}</span>
             </p>

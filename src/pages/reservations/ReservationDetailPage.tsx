@@ -230,30 +230,27 @@ export function ReservationDetailPage() {
               {guestName || '—'}
             </h1>
             {/* Sorunlu Misafir — persistent warning flag (migration 043).
-                Always visible to flagged guests (housekeeping needs the signal);
-                also clickable for users with guest:update so they can edit. */}
+                Text pill: amber when flagged, dashed outline "işaretle"
+                affordance otherwise. Both states open the same modal. */}
             {(guestIsProblematic || canEditGuest) && (
               <button
                 type="button"
                 onClick={canEditGuest ? () => setShowProblematicModal(true) : undefined}
                 disabled={!canEditGuest}
-                aria-label={
-                  guestIsProblematic ? 'Sorunlu misafir uyarısı' : 'Sorunlu misafir işaretle'
-                }
                 title={
-                  guestIsProblematic
-                    ? guestProblematicNote
-                      ? `Sorunlu Misafir — ${guestProblematicNote}`
-                      : 'Sorunlu Misafir'
-                    : 'Sorunlu misafir olarak işaretle'
+                  guestIsProblematic && guestProblematicNote
+                    ? `Sorunlu Misafir — ${guestProblematicNote}`
+                    : guestIsProblematic
+                      ? 'Sorunlu Misafir'
+                      : 'Sorunlu misafir olarak işaretle'
                 }
                 className={
                   guestIsProblematic
-                    ? 'shrink-0 rounded-full p-1 text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-amber-950/40'
-                    : 'shrink-0 rounded-full p-1 text-stone-300 hover:text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-stone-600 dark:hover:bg-amber-950/40'
+                    ? 'shrink-0 rounded-md bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 transition-colors hover:bg-red-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 disabled:cursor-default disabled:hover:bg-red-100 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60'
+                    : 'shrink-0 rounded-md border border-dashed border-red-300 px-2.5 py-0.5 text-xs font-medium text-red-600 transition-colors hover:border-red-400 hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 dark:border-red-800 dark:text-red-400 dark:hover:border-red-700 dark:hover:bg-red-950/40'
                 }
               >
-                <WarningTriangleIcon className="h-5 w-5" />
+                {guestIsProblematic ? 'Sorunlu Misafir' : '+ Sorunlu işaretle'}
               </button>
             )}
           </div>
@@ -261,9 +258,9 @@ export function ReservationDetailPage() {
             {property?.name} · {unit?.name}
           </p>
           {/* Surface the warning note inline so housekeeping doesn't have to
-              click the icon to read it. */}
+              click the pill to read it. */}
           {guestIsProblematic && guestProblematicNote && (
-            <p className="mt-1 flex items-start gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+            <p className="mt-1 flex items-start gap-1.5 text-sm text-red-700 dark:text-red-400">
               <WarningTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span className="break-words">{guestProblematicNote}</span>
             </p>
