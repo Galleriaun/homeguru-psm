@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/Card';
 import { StaffAdvanceModal } from './StaffAdvanceModal';
 import { EditSalaryModal } from './EditSalaryModal';
 import { AssignScopeModal } from './AssignScopeModal';
+import { EditRoleModal } from './EditRoleModal';
 import { formatDate, formatTRY, formatRole, formatScope } from '@/lib/utils';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', {
@@ -57,10 +58,13 @@ export function StaffDetailPage() {
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showEditSalary, setShowEditSalary] = useState(false);
   const [showAssignScope, setShowAssignScope] = useState(false);
+  const [showEditRole, setShowEditRole] = useState(false);
 
-  // RLS (staff_profiles_modify) limits salary edits + scope assignment to SUPER_ADMIN.
+  // RLS (staff_profiles_modify) limits salary edits, scope, and role changes
+  // to SUPER_ADMIN.
   const canEditSalary = profile?.role === 'SUPER_ADMIN';
   const canAssignScope = profile?.role === 'SUPER_ADMIN';
+  const canChangeRole = profile?.role === 'SUPER_ADMIN';
 
   const currentMonth = currentIstanbulYearMonth();
 
@@ -132,14 +136,27 @@ export function StaffDetailPage() {
             {` · ${formatScope(staff.access_scope)}`}
             {staff.hire_date ? ` · İşe giriş: ${formatDate(staff.hire_date)}` : ''}
           </p>
-          {canAssignScope && (
-            <button
-              type="button"
-              onClick={() => setShowAssignScope(true)}
-              className="mt-2 inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
-            >
-              Çalışma Alanını Değiştir
-            </button>
+          {(canChangeRole || canAssignScope) && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {canChangeRole && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditRole(true)}
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                >
+                  Rolü Değiştir
+                </button>
+              )}
+              {canAssignScope && (
+                <button
+                  type="button"
+                  onClick={() => setShowAssignScope(true)}
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                >
+                  Çalışma Alanını Değiştir
+                </button>
+              )}
+            </div>
           )}
         </div>
         <Button onClick={() => setShowAdvanceModal(true)}>+ Avans Ver</Button>
@@ -293,6 +310,19 @@ export function StaffDetailPage() {
           onUpdated={(newScope) => {
             setStaff((prev) => (prev ? { ...prev, access_scope: newScope } : prev));
             setShowAssignScope(false);
+          }}
+        />
+      )}
+
+      {showEditRole && (
+        <EditRoleModal
+          staffUserId={staff.user_id}
+          staffName={staff.full_name}
+          currentRole={staff.role}
+          onClose={() => setShowEditRole(false)}
+          onUpdated={(newRole) => {
+            setStaff((prev) => (prev ? { ...prev, role: newRole } : prev));
+            setShowEditRole(false);
           }}
         />
       )}

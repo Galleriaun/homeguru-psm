@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { AccessScope, Database } from '@/types/database';
+import type { AccessScope, Database, Role } from '@/types/database';
 
 type StaffProfileRow = Database['public']['Tables']['staff_profiles']['Row'];
 type AdvanceRow = Database['public']['Tables']['staff_advances']['Row'];
@@ -72,6 +72,24 @@ export async function updateStaffScope(
   const { data, error } = await supabase
     .from('staff_profiles')
     .update({ access_scope: scope })
+    .eq('user_id', userId)
+    .select()
+    .single();
+  if (error) throw wrapErr(error);
+  return data;
+}
+
+/**
+ * Promotes / changes a staff member's role (typically PENDING → a real role).
+ * RLS gates this to SUPER_ADMIN (staff_profiles_modify).
+ */
+export async function updateStaffRole(
+  userId: string,
+  role: Role,
+): Promise<StaffProfileRow> {
+  const { data, error } = await supabase
+    .from('staff_profiles')
+    .update({ role })
     .eq('user_id', userId)
     .select()
     .single();
