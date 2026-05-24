@@ -8,20 +8,44 @@ import {
   listReservationsInRange,
   type ReservationWithRefs,
 } from '@/lib/queries/reservations';
+import {
+  listBlocksInRange,
+  deleteBlock,
+  type PropertyBlock,
+} from '@/lib/queries/property_blocks';
+import {
+  listNotesInRange,
+  type PropertyDateNote,
+} from '@/lib/queries/property_date_notes';
+import {
+  listPricesInRange,
+  type NightlyPrice,
+} from '@/lib/queries/property_nightly_prices';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ReservationsViewTabs } from './ViewTabs';
+import { CellActionSheet, type CellAction } from './CellActionSheet';
+import { BlockDatesModal } from './BlockDatesModal';
+import { DateNoteModal } from './DateNoteModal';
+import { NightlyPriceModal } from './NightlyPriceModal';
 import { cn, formatDate, istanbulToday } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
 const WINDOW_DAYS = 28;
-const DAY_W = 44; // px per day column
-// The sticky unit-name column is fixed-width. 180px is comfortable on a
+// Roomier layout (Sprint 2): wider cells + taller rows for tactile feel and to
+// make room for per-date note/price indicators that land in Tasks 6–7. These
+// were 44 / 36 in v1 — bumping them ~30% gives the Airbnb-ish density the
+// operator asked for without overflowing a tablet viewport.
+const DAY_W = 56; // px per day column
+// The sticky unit-name column is fixed-width. 200px is comfortable on a
 // tablet/desktop but swallows half a phone viewport, so it collapses below sm.
-const LABEL_W_MOBILE = 104;
-const LABEL_W_DESKTOP = 180;
-const ROW_H = 36; // px per unit row
+const LABEL_W_MOBILE = 112;
+const LABEL_W_DESKTOP = 200;
+const ROW_H = 48; // px per unit row
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Vertical inset for reservation bars so two-line cell content can fit below. */
+const BAR_INSET = 6;
 
 const STATUS_BAR: Record<ReservationStatus, string> = {
   pending: 'bg-amber-500 hover:bg-amber-600',
@@ -86,8 +110,32 @@ export function ReservationsCalendarPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [reservations, setReservations] = useState<ReservationWithRefs[]>([]);
+  const [blocks, setBlocks] = useState<PropertyBlock[]>([]);
+  const [notes, setNotes] = useState<PropertyDateNote[]>([]);
+  const [prices, setPrices] = useState<NightlyPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  /** Cell-action-sheet state: which cell was clicked, if any. */
+  const [pickedCell, setPickedCell] = useState<{
+    propertyId: string;
+    unitId: string;
+    unitName: string;
+    dateStr: string;
+  } | null>(null);
+  /** Whether we're currently showing the Tarihi Blokla modal. */
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  /** Whether we're currently showing the Tarih Notu modal. */
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  /** Whether we're currently showing the Gecelik Fiyat modal. */
+  const [showPriceModal, setShowPriceModal] = useState(false);
+  /** Bumping this re-runs the load effect after a price change (the RPC
+      returns a count, not the new rows, so we need to re-fetch). */
+  const [priceVersion, setPriceVersion] = useState(0);
+  /** Block pending delete (the user clicked an existing block bar). */
+  const [blockToDelete, setBlockToDelete] = useState<PropertyBlock | null>(null);
+  const [blockDeleteError, setBlockDeleteError] = useState<string | null>(null);
+  const [blockDeleting, setBlockDeleting] = useState(false);
 
   // Width of the sticky unit-name column — collapses on phones (see consts).
   const [labelW, setLabelW] = useState(() =>
@@ -116,16 +164,31 @@ export function ReservationsCalendarPage() {
       .catch((e) => setError(e?.message ?? 'Yüklenemedi'));
   }, []);
 
-  // Reservations reload whenever the window shifts
+  // Reservations + blocks + notes + price overrides reload whenever the
+  // window shifts. All four render on the same grid; loading them in parallel
+  // gives a single visual flash. priceVersion bumps re-fetch after a bulk
+  // price write (the RPC returns a count, not the new rows).
   useEffect(() => {
-    const startISO = new Date(windowStart + 'T00:00:00Z').toISOString();
-    const endISO = new Date(addDaysStr(windowStart, WINDOW_DAYS) + 'T00:00:00Z').toISOString();
+    const startDate = windowStart;
+    const endDate = addDaysStr(windowStart, WINDOW_DAYS);
+    const startISO = new Date(startDate + 'T00:00:00Z').toISOString();
+    const endISO = new Date(endDate + 'T00:00:00Z').toISOString();
     setLoading(true);
-    listReservationsInRange(startISO, endISO)
-      .then(setReservations)
-      .catch((e) => setError(e?.message ?? 'Rezervasyonlar yüklenemedi'))
+    Promise.all([
+      listReservationsInRange(startISO, endISO),
+      listBlocksInRange(startISO, endISO),
+      listNotesInRange(startDate, endDate),
+      listPricesInRange(startDate, endDate),
+    ])
+      .then(([r, b, n, pr]) => {
+        setReservations(r);
+        setBlocks(b);
+        setNotes(n);
+        setPrices(pr);
+      })
+      .catch((e) => setError(e?.message ?? 'Takvim yüklenemedi'))
       .finally(() => setLoading(false));
-  }, [windowStart]);
+  }, [windowStart, priceVersion]);
 
   const days = useMemo(
     () =>
@@ -167,15 +230,96 @@ export function ReservationsCalendarPage() {
     return map;
   }, [reservations]);
 
+  const blocksByUnit = useMemo(() => {
+    const map = new Map<string, PropertyBlock[]>();
+    for (const b of blocks) {
+      const arr = map.get(b.unit_id) ?? [];
+      arr.push(b);
+      map.set(b.unit_id, arr);
+    }
+    return map;
+  }, [blocks]);
+
+  /** Fast (unit_id, date) → note lookup so the cell render is O(1) per cell. */
+  const notesByCell = useMemo(() => {
+    const map = new Map<string, PropertyDateNote>();
+    for (const n of notes) {
+      map.set(`${n.unit_id}|${n.note_date}`, n);
+    }
+    return map;
+  }, [notes]);
+
+  /** Fast (unit_id, date) → price-override lookup, same shape as notesByCell. */
+  const pricesByCell = useMemo(() => {
+    const map = new Map<string, NightlyPrice>();
+    for (const p of prices) {
+      map.set(`${p.unit_id}|${p.price_date}`, p);
+    }
+    return map;
+  }, [prices]);
+
   const trackWidth = WINDOW_DAYS * DAY_W;
   const windowEndLabel = addDaysStr(windowStart, WINDOW_DAYS - 1);
 
-  const handleCellClick = (propertyId: string, unitId: string, dateStr: string) => {
+  const handleCellClick = (
+    propertyId: string,
+    unitId: string,
+    unitName: string,
+    dateStr: string,
+  ) => {
     if (!canCreate) return;
-    // ?from= lets the reservation form's "← Geri" / "İptal" return here
-    navigate(
-      `/reservations/new?property=${propertyId}&unit=${unitId}&checkin=${dateStr}&from=/reservations/calendar`,
-    );
+    // Replaces the old "click cell → straight to /reservations/new" flow.
+    // Now we open the action sheet so the operator can pick from {new
+    // reservation, block dates, add note, set price}. Routing each pick is
+    // handled in handleActionPick once the user chooses.
+    setPickedCell({ propertyId, unitId, unitName, dateStr });
+  };
+
+  const handleActionPick = (action: CellAction) => {
+    if (!pickedCell) return;
+    switch (action) {
+      case 'reservation': {
+        const { propertyId, unitId, dateStr } = pickedCell;
+        setPickedCell(null);
+        navigate(
+          `/reservations/new?property=${propertyId}&unit=${unitId}&checkin=${dateStr}&from=/reservations/calendar`,
+        );
+        return;
+      }
+      case 'block':
+        // Keep pickedCell set so the modal can read unit/date from it.
+        setShowBlockModal(true);
+        return;
+      case 'note':
+        setShowNoteModal(true);
+        return;
+      case 'price':
+        setShowPriceModal(true);
+        return;
+      default:
+        return;
+    }
+  };
+
+  const handleBlockClick = (block: PropertyBlock) => {
+    if (!canCreate) return;
+    setBlockDeleteError(null);
+    setBlockToDelete(block);
+  };
+
+  const handleConfirmDeleteBlock = async () => {
+    if (!blockToDelete) return;
+    setBlockDeleting(true);
+    setBlockDeleteError(null);
+    try {
+      await deleteBlock(blockToDelete.id);
+      setBlocks((prev) => prev.filter((b) => b.id !== blockToDelete.id));
+      setBlockToDelete(null);
+    } catch (e) {
+      setBlockDeleteError(e instanceof Error ? e.message : 'Blok silinemedi');
+    } finally {
+      setBlockDeleting(false);
+    }
   };
 
   return (
@@ -297,7 +441,7 @@ export function ReservationsCalendarPage() {
                         style={{ width: trackWidth }}
                       >
                         <span className="ml-3 rounded bg-stone-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
-                          {p.type === 'HOTEL' ? 'Otel' : 'Apart'}
+                          {p.type === 'HOTEL' ? 'Bina' : 'Apart'}
                         </span>
                       </div>
                     </div>
@@ -316,6 +460,7 @@ export function ReservationsCalendarPage() {
 
                     {propUnits.map((u) => {
                       const unitRes = reservationsByUnit.get(u.id) ?? [];
+                      const unitBlocks = blocksByUnit.get(u.id) ?? [];
                       return (
                         <div
                           key={u.id}
@@ -338,8 +483,8 @@ export function ReservationsCalendarPage() {
                                   key={d.dateStr}
                                   type="button"
                                   disabled={!canCreate}
-                                  onClick={() => handleCellClick(p.id, u.id, d.dateStr)}
-                                  aria-label={`${u.name} ${d.dateStr} yeni rezervasyon`}
+                                  onClick={() => handleCellClick(p.id, u.id, u.name, d.dateStr)}
+                                  aria-label={`${u.name} ${d.dateStr} işlemler`}
                                   className={cn(
                                     'shrink-0 border-l border-stone-200 dark:border-stone-700',
                                     d.isWeekend && 'bg-stone-100/60 dark:bg-stone-800/30',
@@ -352,6 +497,91 @@ export function ReservationsCalendarPage() {
                                 />
                               ))}
                             </div>
+
+                            {/* Date-block bars — render below reservations
+                                (z-5) so a paying stay overlays cleanly if a
+                                block somehow exists (shouldn't, per triggers). */}
+                            {unitBlocks.map((b) => {
+                              const sIdx = dayIndex(windowStart, b.block_start.slice(0, 10));
+                              const eIdx = dayIndex(windowStart, b.block_end.slice(0, 10));
+                              const left = Math.max(sIdx, 0);
+                              const right = Math.min(eIdx, WINDOW_DAYS);
+                              if (right <= left) return null;
+                              const clippedLeft = sIdx < 0;
+                              const clippedRight = eIdx > WINDOW_DAYS;
+                              const padLeft = clippedLeft ? 0 : 2;
+                              const padRight = clippedRight ? 0 : 2;
+                              return (
+                                <button
+                                  key={b.id}
+                                  type="button"
+                                  onClick={() => handleBlockClick(b)}
+                                  title={
+                                    b.reason
+                                      ? `Bloklu — ${b.reason}`
+                                      : 'Bloklu (sebep belirtilmemiş)'
+                                  }
+                                  aria-label="Tarih bloğu"
+                                  className={cn(
+                                    'absolute z-[5] flex items-center justify-center overflow-hidden text-xs font-semibold text-stone-700 transition-opacity hover:opacity-80 dark:text-stone-200',
+                                    clippedLeft ? '' : 'rounded-l',
+                                    clippedRight ? '' : 'rounded-r',
+                                  )}
+                                  style={{
+                                    left: left * DAY_W + padLeft,
+                                    width: (right - left) * DAY_W - padLeft - padRight,
+                                    top: BAR_INSET,
+                                    height: ROW_H - BAR_INSET * 2,
+                                    backgroundColor: 'rgba(120, 113, 108, 0.25)',
+                                    backgroundImage:
+                                      'repeating-linear-gradient(45deg, rgba(120,113,108,0.35) 0 6px, transparent 6px 12px)',
+                                    border: '1px solid rgba(120, 113, 108, 0.5)',
+                                  }}
+                                >
+                                  <span className="truncate px-1.5">⛔ Bloklu</span>
+                                </button>
+                              );
+                            })}
+
+                            {/* Per-date note dots — small amber circle in
+                                the top-right of any cell with a note. Sits
+                                above bars (z-20) so it's still visible when
+                                a reservation covers the date. */}
+                            {days.map((d, di) => {
+                              const noteRow = notesByCell.get(`${u.id}|${d.dateStr}`);
+                              if (!noteRow) return null;
+                              return (
+                                <span
+                                  key={`note-${d.dateStr}`}
+                                  className="pointer-events-none absolute z-20 h-2 w-2 rounded-full bg-amber-500 shadow ring-1 ring-white dark:ring-stone-900"
+                                  style={{ left: (di + 1) * DAY_W - 8, top: 4 }}
+                                  title={noteRow.note}
+                                />
+                              );
+                            })}
+
+                            {/* Per-date price overrides — tiny ₺ label at the
+                                bottom of any cell with a custom price. Hidden
+                                when a reservation/block bar covers the cell
+                                (the bar's z-10 sits above this z-0 label). */}
+                            {days.map((d, di) => {
+                              const priceRow = pricesByCell.get(`${u.id}|${d.dateStr}`);
+                              if (!priceRow) return null;
+                              return (
+                                <span
+                                  key={`price-${d.dateStr}`}
+                                  className="pointer-events-none absolute z-[1] truncate text-center text-[10px] font-semibold leading-tight text-emerald-700 dark:text-emerald-400"
+                                  style={{
+                                    left: di * DAY_W,
+                                    width: DAY_W,
+                                    bottom: 2,
+                                  }}
+                                  title={`Özel fiyat: ${priceRow.price} ₺`}
+                                >
+                                  ₺{Number(priceRow.price).toLocaleString('tr-TR')}
+                                </span>
+                              );
+                            })}
 
                             {/* Reservation bars */}
                             {unitRes.map((r) => {
@@ -382,8 +612,8 @@ export function ReservationsCalendarPage() {
                                   style={{
                                     left: left * DAY_W + padLeft,
                                     width: (right - left) * DAY_W - padLeft - padRight,
-                                    top: 4,
-                                    height: ROW_H - 8,
+                                    top: BAR_INSET,
+                                    height: ROW_H - BAR_INSET * 2,
                                   }}
                                 >
                                   <span className="truncate">
@@ -410,9 +640,131 @@ export function ReservationsCalendarPage() {
 
       {canCreate && (
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Boş bir güne tıklayarak yeni rezervasyon oluşturabilirsiniz.
+          Boş bir güne tıklayarak yeni rezervasyon, blok, not veya fiyat ekleyebilirsiniz.
         </p>
       )}
+
+      {/* Cell action sheet — pops on any empty-cell click. All four actions
+          are now live (block / note / price + the original new-reservation). */}
+      {pickedCell && !showBlockModal && !showNoteModal && !showPriceModal && (
+        <CellActionSheet
+          unitName={pickedCell.unitName}
+          dateStr={pickedCell.dateStr}
+          onPick={handleActionPick}
+          onClose={() => setPickedCell(null)}
+        />
+      )}
+
+      {/* Tarihi Blokla modal — appears after the sheet's 'block' action. */}
+      {showBlockModal && pickedCell && (
+        <BlockDatesModal
+          propertyId={pickedCell.propertyId}
+          unitId={pickedCell.unitId}
+          unitName={pickedCell.unitName}
+          initialStart={pickedCell.dateStr}
+          onClose={() => {
+            setShowBlockModal(false);
+            setPickedCell(null);
+          }}
+          onCreated={(b) => {
+            setBlocks((prev) => [...prev, b]);
+            setShowBlockModal(false);
+            setPickedCell(null);
+          }}
+        />
+      )}
+
+      {/* Tarih Notu modal — add / edit / delete the note for the picked cell. */}
+      {showNoteModal && pickedCell && (
+        <DateNoteModal
+          propertyId={pickedCell.propertyId}
+          unitId={pickedCell.unitId}
+          unitName={pickedCell.unitName}
+          dateStr={pickedCell.dateStr}
+          existing={notesByCell.get(`${pickedCell.unitId}|${pickedCell.dateStr}`) ?? null}
+          onClose={() => {
+            setShowNoteModal(false);
+            setPickedCell(null);
+          }}
+          onSaved={(n) => {
+            setNotes((prev) => {
+              // Upsert by id: replace if present, otherwise append. n=null
+              // means the note was deleted — drop it from the local cache.
+              const key = `${pickedCell.unitId}|${pickedCell.dateStr}`;
+              const existing = prev.find(
+                (x) => `${x.unit_id}|${x.note_date}` === key,
+              );
+              if (n === null) {
+                return existing ? prev.filter((x) => x.id !== existing.id) : prev;
+              }
+              if (existing) {
+                return prev.map((x) => (x.id === existing.id ? n : x));
+              }
+              return [...prev, n];
+            });
+            setShowNoteModal(false);
+            setPickedCell(null);
+          }}
+        />
+      )}
+
+      {/* Gecelik Fiyat modal — single-day or range price override. The bulk
+          RPC returns just a count, so we bump priceVersion to re-fetch. */}
+      {showPriceModal && pickedCell && (() => {
+        const key = `${pickedCell.unitId}|${pickedCell.dateStr}`;
+        const existing = pricesByCell.get(key) ?? null;
+        const unit = units.find((u) => u.id === pickedCell.unitId);
+        return (
+          <NightlyPriceModal
+            propertyId={pickedCell.propertyId}
+            unitId={pickedCell.unitId}
+            unitName={pickedCell.unitName}
+            dateStr={pickedCell.dateStr}
+            existingId={existing?.id ?? null}
+            existingPrice={existing ? Number(existing.price) : null}
+            unitBasePrice={unit ? Number(unit.base_price) : 0}
+            onClose={() => {
+              setShowPriceModal(false);
+              setPickedCell(null);
+            }}
+            onSaved={() => {
+              setShowPriceModal(false);
+              setPickedCell(null);
+              setPriceVersion((v) => v + 1);
+            }}
+          />
+        );
+      })()}
+
+      {/* Delete a block by clicking its bar. */}
+      <ConfirmDialog
+        open={blockToDelete !== null}
+        title="Bu blok kaldırılsın mı?"
+        description={
+          blockToDelete && (
+            <>
+              <p>
+                <strong>
+                  {blockToDelete.block_start.slice(0, 10)} → {blockToDelete.block_end.slice(0, 10)}
+                </strong>
+                {blockToDelete.reason ? ` — ${blockToDelete.reason}` : ''}
+              </p>
+              <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
+                Blok kaldırıldıktan sonra bu tarihler tekrar rezervasyona açılır.
+              </p>
+            </>
+          )
+        }
+        confirmLabel="Bloğu Kaldır"
+        destructive
+        loading={blockDeleting}
+        error={blockDeleteError}
+        onConfirm={handleConfirmDeleteBlock}
+        onCancel={() => {
+          setBlockToDelete(null);
+          setBlockDeleteError(null);
+        }}
+      />
     </div>
   );
 }
