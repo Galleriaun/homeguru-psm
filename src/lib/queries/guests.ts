@@ -9,6 +9,7 @@ export interface GuestSummary {
   phone: string | null;
   email: string | null;
   nationality: string | null;
+  is_problematic: boolean;
   created_at: string;
 }
 
@@ -20,16 +21,20 @@ export interface GuestInput {
   email?: string | null;
   address?: string | null;
   nationality?: string | null;
+  is_problematic?: boolean;
+  problematic_note?: string | null;
 }
 
 /**
  * Lists guests visible to the current user (RLS-filtered).
  * Selects only non-sensitive fields — no decryption, no audit log entry.
+ * Includes is_problematic so list rows can flag warned guests at a glance
+ * (migration 043).
  */
 export async function listGuests(): Promise<GuestSummary[]> {
   const { data, error } = await supabase
     .from('guests')
-    .select('id, full_name, phone, email, nationality, created_at')
+    .select('id, full_name, phone, email, nationality, is_problematic, created_at')
     .order('full_name');
   if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
   return data ?? [];
@@ -55,6 +60,8 @@ export async function createGuest(input: GuestInput): Promise<GuestRow> {
     _email: input.email ?? null,
     _address: input.address ?? null,
     _nationality: input.nationality ?? null,
+    _is_problematic: input.is_problematic ?? false,
+    _problematic_note: input.problematic_note ?? null,
   });
   if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
   return data;
@@ -71,6 +78,27 @@ export async function updateGuest(id: string, input: GuestInput): Promise<GuestR
     _email: input.email ?? null,
     _address: input.address ?? null,
     _nationality: input.nationality ?? null,
+    _is_problematic: input.is_problematic ?? false,
+    _problematic_note: input.problematic_note ?? null,
+  });
+  if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  return data;
+}
+
+/**
+ * Quick-toggle the "Sorunlu Misafir" flag on a guest, with an optional note.
+ * Backed by set_guest_problematic (migration 043) which runs SECURITY INVOKER
+ * — RLS on guests is the security boundary, same as updateGuest.
+ */
+export async function setGuestProblematic(
+  id: string,
+  isProblematic: boolean,
+  note: string | null,
+): Promise<GuestRow> {
+  const { data, error } = await supabase.rpc('set_guest_problematic', {
+    _id: id,
+    _is_problematic: isProblematic,
+    _note: note,
   });
   if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
   return data;

@@ -148,7 +148,7 @@ export function PropertyFormPage() {
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Örn: Alsancak Otel"
+            placeholder="Örn: Alsancak Bina"
           />
 
           <Select
@@ -158,7 +158,7 @@ export function PropertyFormPage() {
             value={type}
             onChange={(v) => setType(v as PropertyType)}
             options={[
-              { value: 'HOTEL', label: 'Otel' },
+              { value: 'HOTEL', label: 'Bina' },
               { value: 'APARTMENT', label: 'Daire' },
             ]}
           />

@@ -35,7 +35,7 @@ export function PropertiesListPage() {
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Mülkler</h1>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-            Otel ve dairelerinizin listesi
+            Bina ve dairelerinizin listesi
           </p>
         </div>
         {canCreate && (
@@ -57,7 +57,7 @@ export function PropertiesListPage() {
                 : 'rounded-full border border-stone-300 px-4 py-1 text-sm text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800'
             }
           >
-            {f === 'ALL' ? 'Tümü' : f === 'HOTEL' ? 'Oteller' : 'Daireler'}
+            {f === 'ALL' ? 'Tümü' : f === 'HOTEL' ? 'Binalar' : 'Daireler'}
           </button>
         ))}
       </div>
@@ -119,7 +119,7 @@ export function PropertiesListPage() {
                         : 'rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200'
                     }
                   >
-                    {p.type === 'HOTEL' ? 'Otel' : 'Daire'}
+                    {p.type === 'HOTEL' ? 'Bina' : 'Daire'}
                   </span>
                 </div>
               </Card>

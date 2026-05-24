@@ -65,7 +65,7 @@ export function formatRole(role: string): string {
 
 const SCOPE_LABELS: Record<string, string> = {
   ALL: 'Tüm Mülkler',
-  HOTELS: 'Oteller',
+  HOTELS: 'Binalar',
   APARTMENTS: 'Daireler',
 };
 

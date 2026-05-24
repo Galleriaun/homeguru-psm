@@ -6,6 +6,7 @@ import { listGuests, type GuestSummary } from '@/lib/queries/guests';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
 
 export function GuestsListPage() {
   const { profile } = useAuth();
@@ -86,9 +87,17 @@ export function GuestsListPage() {
                 to={`/guests/${g.id}`}
                 className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
               >
-                <p className="font-medium text-stone-900 dark:text-stone-100">
-                  {g.full_name}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  {g.is_problematic && (
+                    <WarningTriangleIcon
+                      className="h-4 w-4 shrink-0 text-amber-500"
+                      aria-label="Sorunlu misafir"
+                    />
+                  )}
+                  <p className="font-medium text-stone-900 dark:text-stone-100">
+                    {g.full_name}
+                  </p>
+                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-stone-600 dark:text-stone-300">
                   {g.phone && <span>{g.phone}</span>}
                   {g.email && <span className="truncate">{g.email}</span>}
@@ -121,8 +130,14 @@ export function GuestsListPage() {
                       className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50"
                     >
                       <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
-                        <Link to={`/guests/${g.id}`} className="block">
-                          {g.full_name}
+                        <Link to={`/guests/${g.id}`} className="flex items-center gap-1.5">
+                          {g.is_problematic && (
+                            <WarningTriangleIcon
+                              className="h-4 w-4 shrink-0 text-amber-500"
+                              aria-label="Sorunlu misafir"
+                            />
+                          )}
+                          <span>{g.full_name}</span>
                         </Link>
                       </td>
                       <td className="px-6 py-3 text-stone-700 dark:text-stone-300">

@@ -9,6 +9,11 @@ import { ReservationsViewTabs } from './ViewTabs';
 import { formatTRY, formatDate } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
+const timeFmt = new Intl.DateTimeFormat('tr-TR', { timeStyle: 'short' });
+function formatTime(iso: string): string {
+  return timeFmt.format(new Date(iso));
+}
+
 const STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: 'Beklemede',
   upcoming: 'Yakında',
@@ -166,6 +171,11 @@ function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
             <div className="flex items-start justify-between gap-2">
               <p className="min-w-0 flex-1 font-medium text-stone-900 dark:text-stone-100">
                 {r.guest?.full_name ?? '—'}
+                {r.stay_type === 'DAYUSE' && (
+                  <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                    Günübirlik
+                  </span>
+                )}
               </p>
               <span
                 className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}
@@ -178,7 +188,9 @@ function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
             </p>
             <p className="mt-1 flex items-center justify-between gap-2 text-xs text-stone-700 dark:text-stone-300">
               <span>
-                {formatDate(r.stay_start)} → {formatDate(r.stay_end)}
+                {r.stay_type === 'DAYUSE'
+                  ? `${formatDate(r.stay_start)} · ${formatTime(r.stay_start)}–${formatTime(r.stay_end)}`
+                  : `${formatDate(r.stay_start)} → ${formatDate(r.stay_end)}`}
               </span>
               <span className="font-semibold text-stone-900 dark:text-stone-100">
                 {formatTRY(Number(r.total_amount))}
@@ -207,6 +219,11 @@ function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
                   <td className="px-6 py-3 font-medium text-stone-900 dark:text-stone-100">
                     <Link to={`/reservations/${r.id}`} className="block">
                       {r.guest?.full_name ?? '—'}
+                      {r.stay_type === 'DAYUSE' && (
+                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          Günübirlik
+                        </span>
+                      )}
                     </Link>
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
@@ -218,10 +235,21 @@ function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
                     </div>
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                    <div>{formatDate(r.stay_start)}</div>
-                    <div className="text-xs text-stone-600 dark:text-stone-400">
-                      → {formatDate(r.stay_end)}
-                    </div>
+                    {r.stay_type === 'DAYUSE' ? (
+                      <>
+                        <div>{formatDate(r.stay_start)}</div>
+                        <div className="text-xs text-stone-600 dark:text-stone-400">
+                          {formatTime(r.stay_start)}–{formatTime(r.stay_end)}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>{formatDate(r.stay_start)}</div>
+                        <div className="text-xs text-stone-600 dark:text-stone-400">
+                          → {formatDate(r.stay_end)}
+                        </div>
+                      </>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                     {formatTRY(Number(r.total_amount))}

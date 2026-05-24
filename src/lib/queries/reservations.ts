@@ -32,7 +32,7 @@ export async function listReservations(): Promise<ReservationWithRefs[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, total_amount, deposit, auto_debit, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
     .order('stay_start', { ascending: false })
     .limit(1000);
@@ -51,7 +51,7 @@ export async function listReservationsInRange(
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, total_amount, deposit, auto_debit, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
     .lt('stay_start', endISO)
     .gt('stay_end', startISO)

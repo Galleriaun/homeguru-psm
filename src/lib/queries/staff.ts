@@ -61,7 +61,7 @@ export async function updateStaffSalary(userId: string, salary: number): Promise
 }
 
 /**
- * Sets which properties a staff member works across (Tüm Mülkler / Oteller /
+ * Sets which properties a staff member works across (Tüm Mülkler / Binalar /
  * Daireler). RLS gates this to SUPER_ADMIN (staff_profiles_modify). Drives
  * branch isolation via auth_sees_property() — see migration 033.
  */

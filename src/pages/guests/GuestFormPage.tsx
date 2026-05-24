@@ -22,6 +22,14 @@ export function GuestFormPage() {
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [nationality, setNationality] = useState('Türkiye');
+  /**
+   * Sorunlu Misafir flag + note are NOT editable from this form — the
+   * warning-triangle modal on the detail page owns that. We still load them
+   * here so we can pass them through on update, otherwise updateGuest would
+   * clobber an existing flag back to false on every form save.
+   */
+  const [isProblematic, setIsProblematic] = useState(false);
+  const [problematicNote, setProblematicNote] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -42,6 +50,8 @@ export function GuestFormPage() {
         setEmail(g.email ?? '');
         setAddress(g.address ?? '');
         setNationality(g.nationality ?? '');
+        setIsProblematic(g.is_problematic);
+        setProblematicNote(g.problematic_note);
       })
       .catch((e) => setError(e?.message ?? 'Yüklenemedi'))
       .finally(() => setLoading(false));
@@ -99,6 +109,10 @@ export function GuestFormPage() {
       email: email.trim() || null,
       address: address.trim() || null,
       nationality: nationality.trim() || null,
+      // Pass through the persisted Sorunlu Misafir state so an unrelated
+      // form save doesn't clear a flag set via the warning-triangle modal.
+      is_problematic: isProblematic,
+      problematic_note: problematicNote,
     };
 
     setSaving(true);

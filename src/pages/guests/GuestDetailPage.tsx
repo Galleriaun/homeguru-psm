@@ -15,7 +15,9 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
+import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
 import { CompanionModal } from './CompanionModal';
+import { ProblematicFlagModal } from './ProblematicFlagModal';
 import { formatDate } from '@/lib/utils';
 
 export function GuestDetailPage() {
@@ -35,6 +37,8 @@ export function GuestDetailPage() {
     ledgerEntries: number;
   } | null>(null);
   const [showWhatsApp, setShowWhatsApp] = useState(false);
+  /** Sorunlu Misafir — persistent warning flag modal (migration 043). */
+  const [showProblematicModal, setShowProblematicModal] = useState(false);
 
   // Ek Misafir (companions)
   const [companions, setCompanions] = useState<DecryptedCompanion[]>([]);
@@ -153,11 +157,44 @@ export function GuestDetailPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-            {guest.full_name}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-2xl font-semibold text-stone-900 dark:text-stone-100">
+              {guest.full_name}
+            </h1>
+            {/* Sorunlu Misafir — persistent warning flag (migration 043). */}
+            {(guest.is_problematic || canEdit) && (
+              <button
+                type="button"
+                onClick={canEdit ? () => setShowProblematicModal(true) : undefined}
+                disabled={!canEdit}
+                aria-label={
+                  guest.is_problematic ? 'Sorunlu misafir uyarısı' : 'Sorunlu misafir işaretle'
+                }
+                title={
+                  guest.is_problematic
+                    ? guest.problematic_note
+                      ? `Sorunlu Misafir — ${guest.problematic_note}`
+                      : 'Sorunlu Misafir'
+                    : 'Sorunlu misafir olarak işaretle'
+                }
+                className={
+                  guest.is_problematic
+                    ? 'shrink-0 rounded-full p-1 text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-amber-950/40'
+                    : 'shrink-0 rounded-full p-1 text-stone-300 hover:text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-stone-600 dark:hover:bg-amber-950/40'
+                }
+              >
+                <WarningTriangleIcon className="h-5 w-5" />
+              </button>
+            )}
+          </div>
           {guest.nationality && (
             <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{guest.nationality}</p>
+          )}
+          {guest.is_problematic && guest.problematic_note && (
+            <p className="mt-1 flex items-start gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+              <WarningTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="break-words">{guest.problematic_note}</span>
+            </p>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -374,6 +411,27 @@ export function GuestDetailPage() {
             misafir_adi: guest.full_name,
           }}
           onClose={() => setShowWhatsApp(false)}
+        />
+      )}
+
+      {showProblematicModal && (
+        <ProblematicFlagModal
+          guestId={guest.id}
+          guestName={guest.full_name}
+          initialIsProblematic={guest.is_problematic}
+          initialNote={guest.problematic_note}
+          onClose={() => setShowProblematicModal(false)}
+          onSaved={({ isProblematic, note }) => {
+            // Update the local guest snapshot so the icon + inline note reflect
+            // the new state immediately without a re-fetch (which would log a
+            // KVKK GUEST_DECRYPT audit row for no good reason).
+            setGuest((prev) =>
+              prev
+                ? { ...prev, is_problematic: isProblematic, problematic_note: note }
+                : prev,
+            );
+            setShowProblematicModal(false);
+          }}
         />
       )}
     </div>

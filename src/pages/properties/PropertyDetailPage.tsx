@@ -181,7 +181,7 @@ export function PropertyDetailPage() {
                   : 'rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
               }
             >
-              {property.type === 'HOTEL' ? 'Otel' : 'Daire'}
+              {property.type === 'HOTEL' ? 'Bina' : 'Daire'}
             </span>
             {property.address && (
               <span className="text-sm text-stone-600 dark:text-stone-300">{property.address}</span>

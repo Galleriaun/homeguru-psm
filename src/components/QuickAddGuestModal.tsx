@@ -67,6 +67,7 @@ export function QuickAddGuestModal({ onClose, onCreated }: Props) {
         phone: row.phone,
         email: row.email,
         nationality: row.nationality,
+        is_problematic: row.is_problematic,
         created_at: row.created_at,
       };
       onCreated(summary);

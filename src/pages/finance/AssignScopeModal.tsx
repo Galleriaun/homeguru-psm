@@ -15,7 +15,7 @@ interface Props {
 
 const SCOPE_OPTIONS: { value: AccessScope; label: string }[] = [
   { value: 'ALL', label: 'Tüm Mülkler' },
-  { value: 'HOTELS', label: 'Oteller' },
+  { value: 'HOTELS', label: 'Binalar' },
   { value: 'APARTMENTS', label: 'Daireler' },
 ];
 
