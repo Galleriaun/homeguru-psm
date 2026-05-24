@@ -24,6 +24,9 @@ import { LedgerEntryModal } from './LedgerEntryModal';
 import { PaymentCollectModal } from './PaymentCollectModal';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
+import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
+import { ClockIcon } from '@/components/icons/ActionIcons';
+import { ProblematicFlagModal } from '@/pages/guests/ProblematicFlagModal';
 import { formatDate, formatTRY } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
 import { resolveKatalogLink } from '@/lib/gallery';
@@ -53,7 +56,11 @@ export function ReservationDetailPage() {
   const [unit, setUnit] = useState<Unit | null>(null);
   const [guestName, setGuestName] = useState<string>('');
   const [guestPhone, setGuestPhone] = useState<string | null>(null);
+  /** Persistent guest warning state — drives the inline triangle button. */
+  const [guestIsProblematic, setGuestIsProblematic] = useState(false);
+  const [guestProblematicNote, setGuestProblematicNote] = useState<string | null>(null);
   const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [showProblematicModal, setShowProblematicModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -95,7 +102,7 @@ export function ReservationDetailPage() {
           getUnit(r.unit_id),
           supabase
             .from('guests')
-            .select('full_name, phone')
+            .select('full_name, phone, is_problematic, problematic_note')
             .eq('id', r.guest_id)
             .maybeSingle(),
         ]);
@@ -103,6 +110,8 @@ export function ReservationDetailPage() {
         setUnit(u);
         setGuestName(g.data?.full_name ?? '');
         setGuestPhone(g.data?.phone ?? null);
+        setGuestIsProblematic(g.data?.is_problematic ?? false);
+        setGuestProblematicNote(g.data?.problematic_note ?? null);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Yüklenemedi');
       }
@@ -144,6 +153,8 @@ export function ReservationDetailPage() {
   const canEdit = profile && can(profile.role, 'reservation:update');
   const canCancel = profile && can(profile.role, 'reservation:cancel');
   const canDelete = profile && can(profile.role, 'reservation:delete');
+  /** Can flip the persistent guest warning flag. */
+  const canEditGuest = Boolean(profile && can(profile.role, 'guest:update'));
   // Ödeme Topla — type-conditional: HOTEL=reception, APARTMENT=housekeeping; manager+admin everywhere.
   const canCollect = Boolean(
     profile && property && canCollectPayment(profile.role, property.type),
@@ -214,12 +225,49 @@ export function ReservationDetailPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-            {guestName || '—'}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-2xl font-semibold text-stone-900 dark:text-stone-100">
+              {guestName || '—'}
+            </h1>
+            {/* Sorunlu Misafir — persistent warning flag (migration 043).
+                Always visible to flagged guests (housekeeping needs the signal);
+                also clickable for users with guest:update so they can edit. */}
+            {(guestIsProblematic || canEditGuest) && (
+              <button
+                type="button"
+                onClick={canEditGuest ? () => setShowProblematicModal(true) : undefined}
+                disabled={!canEditGuest}
+                aria-label={
+                  guestIsProblematic ? 'Sorunlu misafir uyarısı' : 'Sorunlu misafir işaretle'
+                }
+                title={
+                  guestIsProblematic
+                    ? guestProblematicNote
+                      ? `Sorunlu Misafir — ${guestProblematicNote}`
+                      : 'Sorunlu Misafir'
+                    : 'Sorunlu misafir olarak işaretle'
+                }
+                className={
+                  guestIsProblematic
+                    ? 'shrink-0 rounded-full p-1 text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-default disabled:hover:bg-transparent dark:hover:bg-amber-950/40'
+                    : 'shrink-0 rounded-full p-1 text-stone-300 hover:text-amber-500 hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 dark:text-stone-600 dark:hover:bg-amber-950/40'
+                }
+              >
+                <WarningTriangleIcon className="h-5 w-5" />
+              </button>
+            )}
+          </div>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
             {property?.name} · {unit?.name}
           </p>
+          {/* Surface the warning note inline so housekeeping doesn't have to
+              click the icon to read it. */}
+          {guestIsProblematic && guestProblematicNote && (
+            <p className="mt-1 flex items-start gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+              <WarningTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="break-words">{guestProblematicNote}</span>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {canCollect && !isCancelled && (
@@ -268,9 +316,29 @@ export function ReservationDetailPage() {
       </div>
 
       <Card>
+        {reservation.stay_type === 'DAYUSE' && (
+          <p className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+            <ClockIcon className="h-3.5 w-3.5" />
+            Günübirlik konaklama
+          </p>
+        )}
         <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-          <Field label="Giriş" value={formatDate(reservation.stay_start)} />
-          <Field label="Çıkış" value={formatDate(reservation.stay_end)} />
+          <Field
+            label="Giriş"
+            value={
+              reservation.stay_type === 'DAYUSE'
+                ? `${formatDate(reservation.stay_start)} · ${formatTime(reservation.stay_start)}`
+                : formatDate(reservation.stay_start)
+            }
+          />
+          <Field
+            label="Çıkış"
+            value={
+              reservation.stay_type === 'DAYUSE'
+                ? `${formatDate(reservation.stay_end)} · ${formatTime(reservation.stay_end)}`
+                : formatDate(reservation.stay_end)
+            }
+          />
           <Field label="Toplam Tutar" value={formatTRY(Number(reservation.total_amount))} />
           <Field label="Kapora" value={formatTRY(Number(reservation.deposit))} />
           <Field
@@ -354,6 +422,21 @@ export function ReservationDetailPage() {
           setDeleteError(null);
         }}
       />
+
+      {showProblematicModal && (
+        <ProblematicFlagModal
+          guestId={reservation.guest_id}
+          guestName={guestName || 'Misafir'}
+          initialIsProblematic={guestIsProblematic}
+          initialNote={guestProblematicNote}
+          onClose={() => setShowProblematicModal(false)}
+          onSaved={({ isProblematic, note }) => {
+            setGuestIsProblematic(isProblematic);
+            setGuestProblematicNote(note);
+            setShowProblematicModal(false);
+          }}
+        />
+      )}
 
       {showWhatsApp && (
         <SendWhatsAppModal

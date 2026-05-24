@@ -1,5 +1,14 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { Card } from '@/components/ui/Card';
+import {
+  EyeIcon,
+  PencilIcon,
+  ArrowsLeftRightIcon,
+  PlusIcon,
+  MinusIcon,
+  XMarkIcon,
+  ClockIcon,
+} from '@/components/icons/ActionIcons';
 import type { ReservationStatus, StayType } from '@/types/database';
 
 export type ReservationAction =
@@ -23,9 +32,11 @@ interface Props {
   onClose: () => void;
 }
 
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+
 interface ActionDef {
   key: ReservationAction;
-  icon: string;
+  Icon: IconComponent;
   label: string;
   hint: string;
 }
@@ -73,7 +84,7 @@ export function ReservationActionSheet({
   const actions: ActionDef[] = [
     {
       key: 'detail',
-      icon: '👁',
+      Icon: EyeIcon,
       label: 'Detayı aç',
       hint: 'Cari hesap, ödemeler, KBS vb. tüm rezervasyon ayrıntıları.',
     },
@@ -81,13 +92,13 @@ export function ReservationActionSheet({
   if (canEdit && !isCancelled) {
     actions.push({
       key: 'edit',
-      icon: '✏',
+      Icon: PencilIcon,
       label: 'Düzenle',
       hint: 'Tutar, durum, ek bilgileri açılır formda değiştir.',
     });
     actions.push({
       key: 'move',
-      icon: '↔',
+      Icon: ArrowsLeftRightIcon,
       label: 'Taşı',
       hint:
         stayType === 'DAYUSE'
@@ -97,14 +108,14 @@ export function ReservationActionSheet({
     if (stayType === 'OVERNIGHT') {
       actions.push({
         key: 'extend',
-        icon: '＋',
+        Icon: PlusIcon,
         label: 'Uzat (+1 gece)',
         hint: 'Çıkış tarihini bir gün ileri al.',
       });
       if (nights > 1) {
         actions.push({
           key: 'shorten',
-          icon: '−',
+          Icon: MinusIcon,
           label: 'Kısalt (−1 gece)',
           hint: 'Çıkış tarihini bir gün geri al.',
         });
@@ -114,7 +125,7 @@ export function ReservationActionSheet({
   if (canCancel && !isCancelled) {
     actions.push({
       key: 'cancel',
-      icon: '✕',
+      Icon: XMarkIcon,
       label: 'İptal Et',
       hint: 'Rezervasyonu iptal statüsüne çek (silmez).',
     });
@@ -133,10 +144,13 @@ export function ReservationActionSheet({
             <h2 className="truncate text-lg font-semibold text-stone-900 dark:text-stone-100">
               {guestName}
             </h2>
-            <p className="text-sm text-stone-600 dark:text-stone-300">
-              {unitName} · {STATUS_LABELS[status]}
+            <p className="flex flex-wrap items-center gap-1.5 text-sm text-stone-600 dark:text-stone-300">
+              <span>
+                {unitName} · {STATUS_LABELS[status]}
+              </span>
               {stayType === 'DAYUSE' && (
-                <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                  <ClockIcon className="h-3 w-3" />
                   Günübirlik
                 </span>
               )}
@@ -148,14 +162,7 @@ export function ReservationActionSheet({
             className="shrink-0 rounded p-1 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700"
             aria-label="Kapat"
           >
-            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path
-                d="M5 5l10 10M15 5L5 15"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
 
@@ -163,7 +170,7 @@ export function ReservationActionSheet({
           {actions.map((a) => (
             <li key={a.key}>
               <ActionButton
-                icon={a.icon}
+                icon={<a.Icon className="h-5 w-5" />}
                 label={a.label}
                 hint={a.hint}
                 destructive={a.key === 'cancel'}
@@ -200,10 +207,10 @@ function ActionButton({ icon, label, hint, destructive, onClick }: ActionButtonP
       <span
         aria-hidden="true"
         className={
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base ' +
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full ' +
           (destructive
             ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400'
-            : 'bg-stone-100 dark:bg-stone-800')
+            : 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200')
         }
       >
         {icon}

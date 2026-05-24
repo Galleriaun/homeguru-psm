@@ -27,6 +27,11 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ReservationsViewTabs } from './ViewTabs';
+import {
+  ArrowsLeftRightIcon,
+  NoEntryIcon,
+  XMarkIcon,
+} from '@/components/icons/ActionIcons';
 import { CellActionSheet, type CellAction } from './CellActionSheet';
 import {
   ReservationActionSheet,
@@ -527,7 +532,17 @@ export function ReservationsCalendarPage() {
                 setRangeAnchor(null);
               }}
             >
-              {rangeMode ? '⨯ Aralık modunu kapat' : '⟷ Aralık seç'}
+              {rangeMode ? (
+                <>
+                  <XMarkIcon className="h-4 w-4" />
+                  Aralık modunu kapat
+                </>
+              ) : (
+                <>
+                  <ArrowsLeftRightIcon className="h-4 w-4" />
+                  Aralık seç
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -664,7 +679,7 @@ export function ReservationsCalendarPage() {
                         style={{ width: trackWidth }}
                       >
                         <span className="ml-3 rounded bg-stone-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
-                          {p.type === 'HOTEL' ? 'Bina' : 'Apart'}
+                          {p.type === 'HOTEL' ? 'Bina' : 'Daire'}
                         </span>
                       </div>
                     </div>
@@ -772,7 +787,10 @@ export function ReservationsCalendarPage() {
                                     border: '1px solid rgba(120, 113, 108, 0.5)',
                                   }}
                                 >
-                                  <span className="truncate px-1.5">⛔ Bloklu</span>
+                                  <span className="flex items-center justify-center gap-1 truncate px-1.5">
+                                    <NoEntryIcon className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">Bloklu</span>
+                                  </span>
                                 </button>
                               );
                             })}

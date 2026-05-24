@@ -1,6 +1,11 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { Card } from '@/components/ui/Card';
 import { formatDate } from '@/lib/utils';
+import {
+  NoEntryIcon,
+  CurrencyLiraIcon,
+  XMarkIcon,
+} from '@/components/icons/ActionIcons';
 
 export type RangeAction = 'block' | 'price';
 
@@ -15,9 +20,11 @@ interface Props {
   onClose: () => void;
 }
 
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+
 interface ActionDef {
   key: RangeAction;
-  icon: string;
+  Icon: IconComponent;
   label: string;
   hint: string;
 }
@@ -25,13 +32,13 @@ interface ActionDef {
 const ACTIONS: ActionDef[] = [
   {
     key: 'block',
-    icon: '⛔',
+    Icon: NoEntryIcon,
     label: 'Aralığı blokla',
     hint: 'Bakım, ev sahibi konaklaması vb. için seçilen tüm günleri kapat.',
   },
   {
     key: 'price',
-    icon: '₺',
+    Icon: CurrencyLiraIcon,
     label: 'Aralığa fiyat ayarla',
     hint: 'Hafta sonu, sezon vb. için aralıktaki her geceyi tek fiyata getir.',
   },
@@ -87,14 +94,7 @@ export function RangeActionSheet({
             className="shrink-0 rounded p-1 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700"
             aria-label="Kapat"
           >
-            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path
-                d="M5 5l10 10M15 5L5 15"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
 
@@ -102,7 +102,7 @@ export function RangeActionSheet({
           {ACTIONS.map((a) => (
             <li key={a.key}>
               <ActionButton
-                icon={a.icon}
+                icon={<a.Icon className="h-5 w-5" />}
                 label={a.label}
                 hint={a.hint}
                 onClick={() => onPick(a.key)}
@@ -131,7 +131,7 @@ function ActionButton({ icon, label, hint, onClick }: ActionButtonProps) {
     >
       <span
         aria-hidden="true"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-base dark:bg-stone-800"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200"
       >
         {icon}
       </span>

@@ -1,6 +1,13 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { Card } from '@/components/ui/Card';
 import { formatDate } from '@/lib/utils';
+import {
+  PlusIcon,
+  NoEntryIcon,
+  NoteIcon,
+  CurrencyLiraIcon,
+  XMarkIcon,
+} from '@/components/icons/ActionIcons';
 
 export type CellAction = 'reservation' | 'block' | 'note' | 'price';
 
@@ -15,9 +22,11 @@ interface Props {
   onClose: () => void;
 }
 
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+
 interface ActionDef {
   key: CellAction;
-  icon: string;
+  Icon: IconComponent;
   label: string;
   hint: string;
 }
@@ -25,27 +34,27 @@ interface ActionDef {
 const ACTIONS: ActionDef[] = [
   {
     key: 'reservation',
-    icon: '＋',
+    Icon: PlusIcon,
     label: 'Yeni rezervasyon',
     hint: 'Bu birim için yeni bir konaklama oluştur.',
   },
   {
     key: 'block',
-    icon: '⛔',
+    Icon: NoEntryIcon,
     label: 'Tarihi blokla',
     hint: 'Bakım, ev sahibi konaklaması vb. için rezervasyon dışı bırak.',
   },
   {
     key: 'note',
-    icon: '📝',
+    Icon: NoteIcon,
     label: 'Not ekle',
     hint: 'Bu tarihe özel temizlik / operasyon notu bırak.',
   },
   {
     key: 'price',
-    icon: '₺',
+    Icon: CurrencyLiraIcon,
     label: 'Fiyat ayarla',
-    hint: 'Bu tarihteki gecelik ücreti override et.',
+    hint: 'Bu tarihe özel gecelik fiyat ata.',
   },
 ];
 
@@ -96,14 +105,7 @@ export function CellActionSheet({
             className="shrink-0 rounded p-1 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-700"
             aria-label="Kapat"
           >
-            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path
-                d="M5 5l10 10M15 5L5 15"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
 
@@ -113,7 +115,7 @@ export function CellActionSheet({
             return (
               <li key={a.key}>
                 <ActionButton
-                  icon={a.icon}
+                  icon={<a.Icon className="h-5 w-5" />}
                   label={a.label}
                   hint={a.hint}
                   disabled={isDisabled}
@@ -151,7 +153,7 @@ function ActionButton({ icon, label, hint, disabled, onClick }: ActionButtonProp
     >
       <span
         aria-hidden="true"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-base dark:bg-stone-800"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200"
       >
         {icon}
       </span>
