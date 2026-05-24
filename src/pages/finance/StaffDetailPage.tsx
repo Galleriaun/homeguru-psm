@@ -8,10 +8,15 @@ import {
   type StaffAdvance,
   type StaffProfileWithProperty,
 } from '@/lib/queries/staff';
+import {
+  listSalaryPaymentsForStaff,
+  type StaffSalaryPayment,
+} from '@/lib/queries/staff_salary_payments';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { StaffAdvanceModal } from './StaffAdvanceModal';
 import { EditSalaryModal } from './EditSalaryModal';
+import { PaySalaryModal } from './PaySalaryModal';
 import { AssignScopeModal } from './AssignScopeModal';
 import { EditRoleModal } from './EditRoleModal';
 import { formatDate, formatTRY, formatRole, formatScope } from '@/lib/utils';
@@ -54,17 +59,22 @@ export function StaffDetailPage() {
 
   const [staff, setStaff] = useState<StaffProfileWithProperty | null>(null);
   const [advances, setAdvances] = useState<StaffAdvance[]>([]);
+  const [salaryPayments, setSalaryPayments] = useState<StaffSalaryPayment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showEditSalary, setShowEditSalary] = useState(false);
+  const [showPaySalary, setShowPaySalary] = useState(false);
   const [showAssignScope, setShowAssignScope] = useState(false);
   const [showEditRole, setShowEditRole] = useState(false);
 
   // RLS (staff_profiles_modify) limits salary edits, scope, and role changes
-  // to SUPER_ADMIN.
+  // to SUPER_ADMIN. The pay_staff_salary RPC server-side accepts SUPER_ADMIN
+  // and PROPERTY_MANAGER, so the manual-payment button surfaces for both.
   const canEditSalary = profile?.role === 'SUPER_ADMIN';
   const canAssignScope = profile?.role === 'SUPER_ADMIN';
   const canChangeRole = profile?.role === 'SUPER_ADMIN';
+  const canPaySalary =
+    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
 
   const currentMonth = currentIstanbulYearMonth();
 
@@ -79,8 +89,12 @@ export function StaffDetailPage() {
           return;
         }
         setStaff(s);
-        const ads = await listAdvancesForStaff(userId);
+        const [ads, pays] = await Promise.all([
+          listAdvancesForStaff(userId),
+          listSalaryPaymentsForStaff(userId),
+        ]);
         setAdvances(ads);
+        setSalaryPayments(pays);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Yüklenemedi');
       }
@@ -159,7 +173,14 @@ export function StaffDetailPage() {
             </div>
           )}
         </div>
-        <Button onClick={() => setShowAdvanceModal(true)}>+ Avans Ver</Button>
+        <div className="flex flex-wrap gap-2">
+          {canPaySalary && (
+            <Button onClick={() => setShowPaySalary(true)}>Maaş Öde</Button>
+          )}
+          <Button variant="secondary" onClick={() => setShowAdvanceModal(true)}>
+            + Avans Ver
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -183,6 +204,11 @@ export function StaffDetailPage() {
             <p className="mt-0.5 text-lg font-semibold text-stone-900 dark:text-stone-100">
               {salary != null ? formatTRY(salary) : '—'}
             </p>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              {staff.salary_day != null
+                ? `Otomatik ödeme: ayın ${staff.salary_day}'i`
+                : 'Otomatik ödeme yok — elle ödenir'}
+            </p>
           </div>
           <div>
             <p className="text-xs text-stone-600 dark:text-stone-300">Bu ay verilen avans</p>
@@ -203,6 +229,69 @@ export function StaffDetailPage() {
           </p>
         )}
       </Card>
+
+      {/* Maaş Ödemeleri — recent payouts from the kasa, AUTO + MANUAL together. */}
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+          Maaş Ödemeleri
+        </h2>
+        {salaryPayments.length === 0 ? (
+          <Card>
+            <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+              Henüz maaş ödemesi kaydı yok.
+            </p>
+          </Card>
+        ) : (
+          <Card className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Dönem</th>
+                    <th className="px-6 py-3 font-medium">Ödendi</th>
+                    <th className="px-6 py-3 font-medium">Kaynak</th>
+                    <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+                  {salaryPayments.map((p) => (
+                    <tr key={p.id}>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        {monthLabel(p.pay_period.slice(0, 7))}
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        <div>{formatDate(p.paid_at)}</div>
+                        <div className="text-xs text-stone-600 dark:text-stone-300">
+                          {formatTime(p.paid_at)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                        <span
+                          className={
+                            p.source === 'AUTO'
+                              ? 'rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+                              : 'rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-medium uppercase text-stone-700 dark:bg-stone-700 dark:text-stone-200'
+                          }
+                        >
+                          {p.source === 'AUTO' ? 'Otomatik' : 'Elle'}
+                        </span>
+                        {p.note && (
+                          <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                            {p.note}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-6 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-400">
+                        {formatTRY(Number(p.amount))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+      </section>
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
@@ -293,10 +382,26 @@ export function StaffDetailPage() {
           staffUserId={staff.user_id}
           staffName={staff.full_name}
           currentSalary={salary}
+          currentSalaryDay={staff.salary_day}
           onClose={() => setShowEditSalary(false)}
-          onUpdated={(newSalary) => {
-            setStaff((prev) => (prev ? { ...prev, salary: newSalary } : prev));
+          onUpdated={(next) => {
+            setStaff((prev) =>
+              prev ? { ...prev, salary: next.salary, salary_day: next.salary_day } : prev,
+            );
             setShowEditSalary(false);
+          }}
+        />
+      )}
+
+      {showPaySalary && (
+        <PaySalaryModal
+          staffUserId={staff.user_id}
+          staffName={staff.full_name}
+          defaultSalary={salary}
+          onClose={() => setShowPaySalary(false)}
+          onPaid={(payment) => {
+            setSalaryPayments((prev) => [payment, ...prev]);
+            setShowPaySalary(false);
           }}
         />
       )}

@@ -124,6 +124,7 @@ export type Database = {
           property_id: string | null;
           access_scope: AccessScope;
           salary: number | null;
+          salary_day: number | null;
           hire_date: string | null;
           created_at: string;
         };
@@ -134,6 +135,7 @@ export type Database = {
           property_id?: string | null;
           access_scope?: AccessScope;
           salary?: number | null;
+          salary_day?: number | null;
           hire_date?: string | null;
           created_at?: string;
         };
@@ -144,7 +146,51 @@ export type Database = {
           property_id?: string | null;
           access_scope?: AccessScope;
           salary?: number | null;
+          salary_day?: number | null;
           hire_date?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      staff_salary_payments: {
+        Row: {
+          id: string;
+          user_id: string;
+          amount: number;
+          paid_at: string;
+          source: 'AUTO' | 'MANUAL';
+          pay_period: string; // DATE → "YYYY-MM-01"
+          cash_account_id: string | null;
+          cash_tx_id: string | null;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          amount: number;
+          paid_at?: string;
+          source: 'AUTO' | 'MANUAL';
+          pay_period: string;
+          cash_account_id?: string | null;
+          cash_tx_id?: string | null;
+          note?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          // Append-only by RLS — shape kept for type completeness only.
+          id?: string;
+          user_id?: string;
+          amount?: number;
+          paid_at?: string;
+          source?: 'AUTO' | 'MANUAL';
+          pay_period?: string;
+          cash_account_id?: string | null;
+          cash_tx_id?: string | null;
+          note?: string | null;
+          created_by?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -828,6 +874,15 @@ export type Database = {
           _price: number;
         };
         Returns: number; // count of nights upserted
+      };
+      pay_staff_salary: {
+        Args: {
+          _user_id: string;
+          _amount: number;
+          _pay_period: string; // DATE
+          _note?: string | null;
+        };
+        Returns: Database['public']['Tables']['staff_salary_payments']['Row'];
       };
       collect_payment: {
         Args: {

@@ -26,7 +26,7 @@ export async function listStaff(): Promise<StaffProfileWithProperty[]> {
   const { data, error } = await supabase
     .from('staff_profiles')
     .select(
-      'user_id, full_name, role, property_id, access_scope, salary, hire_date, created_at, property:properties(name, type)',
+      'user_id, full_name, role, property_id, access_scope, salary, salary_day, hire_date, created_at, property:properties(name, type)',
     )
     .order('full_name');
   if (error) throw wrapErr(error);
@@ -37,7 +37,7 @@ export async function getStaff(userId: string): Promise<StaffProfileWithProperty
   const { data, error } = await supabase
     .from('staff_profiles')
     .select(
-      'user_id, full_name, role, property_id, access_scope, salary, hire_date, created_at, property:properties(name, type)',
+      'user_id, full_name, role, property_id, access_scope, salary, salary_day, hire_date, created_at, property:properties(name, type)',
     )
     .eq('user_id', userId)
     .maybeSingle();
@@ -46,13 +46,19 @@ export async function getStaff(userId: string): Promise<StaffProfileWithProperty
 }
 
 /**
- * Updates only the salary column. RLS limits this to SUPER_ADMIN
- * (see staff_profiles_modify policy in 003_rls.sql).
+ * Updates a staff member's payroll settings: monthly salary amount and the
+ * day-of-month the auto-pay cron fires (migration 049). RLS limits this to
+ * SUPER_ADMIN (staff_profiles_modify policy in 003_rls.sql). Pass
+ * salary_day = null to disable auto-pay for this staff (manual only).
  */
-export async function updateStaffSalary(userId: string, salary: number): Promise<StaffProfileRow> {
+export async function updateStaffSalary(
+  userId: string,
+  salary: number,
+  salaryDay: number | null,
+): Promise<StaffProfileRow> {
   const { data, error } = await supabase
     .from('staff_profiles')
-    .update({ salary })
+    .update({ salary, salary_day: salaryDay })
     .eq('user_id', userId)
     .select()
     .single();
