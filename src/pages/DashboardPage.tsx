@@ -5,6 +5,12 @@ import { can } from '@/lib/rbac';
 import { loadDashboardCounts, type DashboardCounts } from '@/lib/queries/dashboard';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
+import {
+  CalendarIcon,
+  MagnifyingGlassIcon,
+  UserIcon,
+  CheckCircleIcon,
+} from '@/components/icons/ActionIcons';
 
 export function DashboardPage() {
   const { profile } = useAuth();
@@ -87,18 +93,21 @@ export function DashboardPage() {
           {canCreateReservation && (
             <QuickAction
               to="/reservations/new"
+              icon={<CalendarIcon className="h-5 w-5" />}
               label="+ Yeni Rezervasyon"
               description="Müsait birim seçerek hızlıca rezervasyon oluştur"
             />
           )}
           <QuickAction
             to="/reservations/availability"
+            icon={<MagnifyingGlassIcon className="h-5 w-5" />}
             label="Müsaitlik Ara"
             description="Tarih ve gece sayısına göre uygun birimleri bul"
           />
           {canCreateGuest && (
             <QuickAction
               to="/guests/new"
+              icon={<UserIcon className="h-5 w-5" />}
               label="+ Yeni Misafir"
               description="Misafir kaydı oluştur"
             />
@@ -106,6 +115,7 @@ export function DashboardPage() {
           {canReadFinance && (
             <QuickAction
               to="/finance/pending"
+              icon={<CheckCircleIcon className="h-5 w-5" />}
               label="Tahsilat Onayları"
               description="Personel tarafından toplanan tahsilatları onayla"
             />
@@ -179,18 +189,32 @@ function Tile({ to, label, value, watchTone }: TileProps) {
 
 interface QuickActionProps {
   to: string;
+  /** Optional leading icon, rendered in a circular well on the left. */
+  icon?: ReactNode;
   label: string;
   description: ReactNode;
 }
 
-function QuickAction({ to, label, description }: QuickActionProps) {
+function QuickAction({ to, icon, label, description }: QuickActionProps) {
   return (
     <Link
       to={to}
-      className="block rounded-lg border border-emerald-300 bg-white p-4 text-stone-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-stone-900 dark:text-stone-100 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30"
+      className="flex items-center gap-3 rounded-lg border border-emerald-300 bg-white p-4 text-stone-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-stone-900 dark:text-stone-100 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30"
     >
-      <p className="text-base font-semibold">{label}</p>
-      <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">{description}</p>
+      {icon && (
+        <span
+          aria-hidden="true"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+        >
+          {icon}
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block text-base font-semibold">{label}</span>
+        <span className="mt-1 block text-xs text-stone-600 dark:text-stone-300">
+          {description}
+        </span>
+      </span>
     </Link>
   );
 }
