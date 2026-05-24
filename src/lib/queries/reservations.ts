@@ -41,6 +41,24 @@ export async function listReservations(): Promise<ReservationWithRefs[]> {
 }
 
 /**
+ * Currently-active reservations — drives the Panel's "Sorun Bildir" quick
+ * modal: housekeeping picks the unit they're cleaning from this list and
+ * files an issue against it. Order by most-recent stay_start so the typical
+ * "just-checked-in" guest sits at the top.
+ */
+export async function listActiveReservations(): Promise<ReservationWithRefs[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+    )
+    .eq('status', 'active')
+    .order('stay_start', { ascending: false });
+  if (error) throw wrapErr(error);
+  return (data as unknown as ReservationWithRefs[]) ?? [];
+}
+
+/**
  * Reservations overlapping the window [startISO, endISO).
  * A stay overlaps when it starts before the window ends and ends after the window starts.
  */
