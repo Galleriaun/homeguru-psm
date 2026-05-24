@@ -166,3 +166,16 @@ export function CheckCircleIcon({ className = 'h-5 w-5', ...rest }: IconProps) {
     </svg>
   );
 }
+
+/** Circle with exclamation mark — Sorunlar (housekeeping issues) quick action.
+ *  Distinct from the WarningTriangleIcon used by Sorunlu Misafir so the two
+ *  concepts don't get visually confused. */
+export function ExclamationCircleIcon({ className = 'h-5 w-5', ...rest }: IconProps) {
+  return (
+    <svg {...BASE_PROPS} className={className} {...rest}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v5" />
+      <path d="M12 16.25v.25" />
+    </svg>
+  );
+}
