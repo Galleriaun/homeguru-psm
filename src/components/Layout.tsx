@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
 import { PendingApprovalPage } from '@/pages/PendingApprovalPage';
 import { cn, formatRole } from '@/lib/utils';
 
@@ -14,6 +15,8 @@ export function Layout() {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  /** Bell-icon settings modal — owns per-event push opt-in toggles. */
+  const [notifModalOpen, setNotifModalOpen] = useState(false);
 
   // Close the mobile drawer on Esc + lock body scroll while open.
   useEffect(() => {
@@ -108,6 +111,34 @@ export function Layout() {
     </svg>
   );
 
+  // Bell — opens the per-event notification preferences modal. Visible to
+  // every signed-in role (not gated to SUPER_ADMIN like audit/trash).
+  const bellIcon = (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </svg>
+  );
+
+  // Same look as the audit/trash icon links but as a <button> because it
+  // opens a modal instead of navigating.
+  const iconButtonClasses = cn(
+    'inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors',
+    'border-stone-300 text-stone-700 hover:bg-stone-100',
+    'dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+  );
+
   // PENDING signups have no role permissions and are in no RLS allow-list —
   // the app shell would just be empty. Show the holding screen instead.
   if (profile?.role === 'PENDING') {
@@ -188,6 +219,17 @@ export function Layout() {
               >
                 {trashIcon}
               </NavLink>
+            )}
+            {profile && (
+              <button
+                type="button"
+                onClick={() => setNotifModalOpen(true)}
+                aria-label="Bildirim Ayarları"
+                title="Bildirim Ayarları"
+                className={iconButtonClasses}
+              >
+                {bellIcon}
+              </button>
             )}
             <ThemeToggle />
             <button
@@ -352,6 +394,20 @@ export function Layout() {
                     {trashIcon}
                   </NavLink>
                 )}
+                {profile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobile();
+                      setNotifModalOpen(true);
+                    }}
+                    aria-label="Bildirim Ayarları"
+                    title="Bildirim Ayarları"
+                    className={iconButtonClasses}
+                  >
+                    {bellIcon}
+                  </button>
+                )}
                 <ThemeToggle />
               </div>
               <button
@@ -388,6 +444,10 @@ export function Layout() {
         onConfirm={handleSignOut}
         onCancel={() => setConfirmSignOut(false)}
       />
+
+      {notifModalOpen && (
+        <NotificationSettingsModal onClose={() => setNotifModalOpen(false)} />
+      )}
     </div>
   );
 }

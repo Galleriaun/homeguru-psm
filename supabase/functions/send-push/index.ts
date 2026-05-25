@@ -6,21 +6,24 @@
 //
 // Body shape:
 //   {
-//     "user_ids"?: string[],          // explicit recipient list
-//     "roles"?:    string[],          // OR resolve recipients by staff role
-//     "title":     string,            // required
-//     "body"?:     string,
-//     "url"?:      string,
-//     "kind":      'issue' | 'payment' | 'reservation' | 'system',
-//     "data"?:     Record<string, unknown>
+//     "user_ids"?:   string[],          // explicit recipient list
+//     "roles"?:      string[],          // OR resolve recipients by staff role
+//     "title":       string,            // required
+//     "body"?:       string,
+//     "url"?:        string,
+//     "kind":        'issue' | 'payment' | 'reservation' | 'system',
+//     "event_type"?: string,            // fine-grained key for opt-in filter
+//                                        // (matches notification_preferences)
+//     "data"?:       Record<string, unknown>
 //   }
 //
 // What it does:
 //   1. Resolve recipients from user_ids + roles (deduped).
-//   2. Insert an audit row into `notifications` per recipient.
-//   3. Look up active push_subscriptions for those users.
-//   4. Send Web Push to each in parallel via VAPID.
-//   5. Delete subscriptions the push service rejects with 404/410 (gone).
+//   2. Filter out recipients who opted out of this event_type (migration 052).
+//   3. Insert an audit row into `notifications` per recipient.
+//   4. Look up active push_subscriptions for those users.
+//   5. Send Web Push to each in parallel via VAPID.
+//   6. Delete subscriptions the push service rejects with 404/410 (gone).
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webPush from 'npm:web-push@3.6.7';
@@ -40,6 +43,8 @@ interface SendPushBody {
   body?: string;
   url?: string;
   kind: 'issue' | 'payment' | 'reservation' | 'system';
+  /** Fine-grained event key — matches notification_preferences.event_type. */
+  event_type?: string;
   data?: Record<string, unknown>;
 }
 
@@ -74,10 +79,31 @@ Deno.serve(async (req) => {
       .in('role', payload.roles);
     for (const r of rows ?? []) recipientSet.add(r.user_id);
   }
-  const recipients = [...recipientSet];
+  let recipients = [...recipientSet];
 
   if (recipients.length === 0) {
     return Response.json({ sent: 0, reason: 'no recipients' });
+  }
+
+  // Apply per-user opt-outs from notification_preferences. Missing rows mean
+  // "enabled" (default ON), so we only need to subtract users with an explicit
+  // disabled=true row for this event_type.
+  if (payload.event_type) {
+    const { data: prefs } = await supabase
+      .from('notification_preferences')
+      .select('user_id, enabled')
+      .eq('event_type', payload.event_type)
+      .in('user_id', recipients);
+    const disabled = new Set(
+      (prefs ?? []).filter((p) => p.enabled === false).map((p) => p.user_id),
+    );
+    if (disabled.size > 0) {
+      recipients = recipients.filter((uid) => !disabled.has(uid));
+    }
+  }
+
+  if (recipients.length === 0) {
+    return Response.json({ sent: 0, reason: 'all opted out' });
   }
 
   // Audit log (one row per recipient).
@@ -88,6 +114,7 @@ Deno.serve(async (req) => {
       body: payload.body ?? null,
       url: payload.url ?? null,
       kind: payload.kind,
+      event_type: payload.event_type ?? null,
       data: payload.data ?? null,
     })),
   );
