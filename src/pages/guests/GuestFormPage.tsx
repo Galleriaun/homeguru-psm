@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { maskPhoneInput, phoneForSave } from '@/lib/utils';
 
 export function GuestFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,7 +19,10 @@ export function GuestFormPage() {
   const [fullName, setFullName] = useState('');
   const [tcKimlik, setTcKimlik] = useState('');
   const [passport, setPassport] = useState('');
-  const [phone, setPhone] = useState('');
+  // Default to "+90 " on the new-guest form so most operators (typing a TR
+  // number) don't have to add it manually. Edit mode overwrites with the
+  // stored value in the load effect below.
+  const [phone, setPhone] = useState('+90 ');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [nationality, setNationality] = useState('Türkiye');
@@ -105,7 +109,7 @@ export function GuestFormPage() {
       full_name: fullName.trim(),
       tc_kimlik: cleanTc || null,
       passport: passport.trim() || null,
-      phone: phone.trim() || null,
+      phone: phoneForSave(phone),
       email: email.trim() || null,
       address: address.trim() || null,
       nationality: nationality.trim() || null,
@@ -182,8 +186,9 @@ export function GuestFormPage() {
             label="Telefon"
             name="phone"
             value={phone}
-            // Phone may only contain digits and + ( ) - and spaces — strip letters etc.
-            onChange={(e) => setPhone(e.target.value.replace(/[^\d+ ()-]/g, ''))}
+            // Live-masked: strips illegal chars + auto-prepends +90 for local-format
+            // Turkish numbers. Foreign numbers starting with `+` pass through unchanged.
+            onChange={(e) => setPhone(maskPhoneInput(e.target.value))}
             placeholder="+90 5xx xxx xx xx"
             type="tel"
             inputMode="tel"

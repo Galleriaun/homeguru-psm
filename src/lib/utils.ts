@@ -104,6 +104,32 @@ export function toWhatsAppPhone(phone: string | null | undefined): string | null
   return digits;
 }
 
+/**
+ * Live-mask a phone field as the user types. Strips characters that aren't
+ * digits / + / space / parens / dash, then auto-prepends "+90 " when the
+ * input has digits but no leading country code (covers fresh typing AND
+ * pasting a Turkish-local "0555…" or "555…"). The user can still type "+1…"
+ * etc. for foreign numbers — those start with `+` and are left alone.
+ */
+export function maskPhoneInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d+ ()-]/g, '');
+  if (!cleaned) return '';
+  if (cleaned.startsWith('+')) return cleaned;
+  // Local-format Turkish numbers (with or without leading 0) → add +90.
+  return '+90 ' + cleaned.replace(/^0+/, '');
+}
+
+/**
+ * Trim a phone string for DB save. Treat a leftover "+90" / "+90 " prefix
+ * with no actual number as empty so we don't store dangling country codes.
+ */
+export function phoneForSave(v: string): string | null {
+  const t = v.trim();
+  if (!t) return null;
+  if (/^\+?9?0?$/.test(t.replace(/\s/g, ''))) return null;
+  return t;
+}
+
 /** Build a wa.me URL with the message URL-encoded. */
 export function whatsAppUrl(phone: string, text: string): string {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;

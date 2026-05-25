@@ -3,6 +3,7 @@ import { createGuest, type GuestInput, type GuestSummary } from '@/lib/queries/g
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { maskPhoneInput, phoneForSave } from '@/lib/utils';
 
 interface Props {
   onClose: () => void;
@@ -13,7 +14,7 @@ export function QuickAddGuestModal({ onClose, onCreated }: Props) {
   const [fullName, setFullName] = useState('');
   const [tcKimlik, setTcKimlik] = useState('');
   const [passport, setPassport] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+90 ');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [nationality, setNationality] = useState('Türkiye');
@@ -55,7 +56,7 @@ export function QuickAddGuestModal({ onClose, onCreated }: Props) {
         full_name: fullName.trim(),
         tc_kimlik: cleanTc || null,
         passport: passport.trim() || null,
-        phone: phone.trim() || null,
+        phone: phoneForSave(phone),
         email: email.trim() || null,
         address: address.trim() || null,
         nationality: nationality.trim() || null,
@@ -143,8 +144,9 @@ export function QuickAddGuestModal({ onClose, onCreated }: Props) {
             type="tel"
             inputMode="tel"
             value={phone}
-            // Phone may only contain digits and + ( ) - and spaces — strip letters etc.
-            onChange={(e) => setPhone(e.target.value.replace(/[^\d+ ()-]/g, ''))}
+            // Live-masked: strips illegal chars + auto-prepends +90 for local-format
+            // Turkish numbers. Foreign numbers starting with `+` pass through unchanged.
+            onChange={(e) => setPhone(maskPhoneInput(e.target.value))}
             placeholder="+90 5xx xxx xx xx"
             maxLength={25}
           />

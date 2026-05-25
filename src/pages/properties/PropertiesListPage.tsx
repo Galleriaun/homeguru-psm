@@ -1,23 +1,52 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import { listProperties, type Property } from '@/lib/queries/properties';
+import { listAllUnits, type Unit } from '@/lib/queries/units';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { propertyPhotoUrl } from '@/lib/photos';
+import { formatRoomType } from '@/lib/utils';
 
 export function PropertiesListPage() {
   const { profile } = useAuth();
   const [properties, setProperties] = useState<Property[] | null>(null);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'ALL' | 'HOTEL' | 'APARTMENT'>('ALL');
 
   useEffect(() => {
-    listProperties()
-      .then(setProperties)
+    // Load properties + units in parallel so the card can show each mülk's
+    // unit type(s) inline next to its name.
+    Promise.all([listProperties(), listAllUnits()])
+      .then(([props, us]) => {
+        setProperties(props);
+        setUnits(us);
+      })
       .catch((e) => setError(e.message ?? 'Mülkler yüklenemedi'));
   }, []);
+
+  /**
+   * Build per-property unit-type summaries. For apartments (single unit) the
+   * card shows that one type. For binalar with several rooms we surface the
+   * distinct types comma-joined, e.g. "1+0 · 1+1".
+   */
+  const typesByProperty = useMemo(() => {
+    const map = new Map<string, string>();
+    const grouped = new Map<string, Unit[]>();
+    for (const u of units) {
+      const arr = grouped.get(u.property_id) ?? [];
+      arr.push(u);
+      grouped.set(u.property_id, arr);
+    }
+    for (const [propId, propUnits] of grouped) {
+      const distinct = Array.from(new Set(propUnits.map((u) => u.room_type)));
+      if (distinct.length === 0) continue;
+      map.set(propId, distinct.map(formatRoomType).join(' · '));
+    }
+    return map;
+  }, [units]);
 
   const canCreate = profile && can(profile.role, 'admin:*');
   const filtered = (properties?.filter((p) => filter === 'ALL' || p.type === filter) ?? [])
@@ -103,9 +132,16 @@ export function PropertiesListPage() {
                 </div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-semibold text-stone-900 dark:text-stone-100">
-                      {p.name}
-                    </h3>
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <h3 className="truncate font-semibold text-stone-900 dark:text-stone-100">
+                        {p.name}
+                      </h3>
+                      {typesByProperty.has(p.id) && (
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          {typesByProperty.get(p.id)}
+                        </span>
+                      )}
+                    </div>
                     {p.address && (
                       <p className="mt-1 truncate text-xs text-stone-600 dark:text-stone-300">
                         {p.address}
