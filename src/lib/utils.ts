@@ -81,21 +81,9 @@ const ROOM_TYPE_LABELS: Record<string, string> = {
   QUAD: 'Dört Kişilik',
 };
 
-const HOTEL_ROOM_CAPACITY: Record<string, number> = {
-  SINGLE: 1,
-  DOUBLE: 2,
-  TRIPLE: 3,
-  QUAD: 4,
-};
-
-/** Friendly label for a room type. Falls back to raw value for apartment types. */
+/** Friendly label for a room type. Falls back to raw value for unknown types. */
 export function formatRoomType(roomType: string): string {
   return ROOM_TYPE_LABELS[roomType] ?? roomType;
-}
-
-/** Capacity implied by a hotel room type, or null for apartment types. */
-export function capacityFromRoomType(roomType: string): number | null {
-  return HOTEL_ROOM_CAPACITY[roomType] ?? null;
 }
 
 /**

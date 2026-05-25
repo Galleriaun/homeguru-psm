@@ -14,7 +14,7 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
-import { capacityFromRoomType, formatRoomType } from '@/lib/utils';
+import { formatRoomType } from '@/lib/utils';
 import {
   uploadUnitPhoto,
   unitPhotoUrl,
@@ -22,7 +22,10 @@ import {
   UNIT_PHOTO_MAX,
 } from '@/lib/photos';
 
-const HOTEL_ROOM_TYPES: RoomType[] = ['SINGLE', 'DOUBLE', 'TRIPLE', 'QUAD'];
+// Bina ve daire birimleri artık aynı oda tiplerini kullanıyor (1+0/1+1/2+1).
+// Kapasite her iki tipte de elle giriliyor — eski SINGLE/DOUBLE/TRIPLE/QUAD
+// kayıtları DB'de kalsa bile yeni seçimler bu üç değerden biri olur.
+const HOTEL_ROOM_TYPES: RoomType[] = ['1+0', '1+1', '2+1'];
 const APARTMENT_ROOM_TYPES: RoomType[] = ['1+0', '1+1', '2+1'];
 
 export function UnitFormPage() {
@@ -131,10 +134,9 @@ export function UnitFormPage() {
         }
       }
 
-      // For hotels, capacity is implied by room type
-      const finalCapacity = isHotel
-        ? (capacityFromRoomType(roomType) ?? capacity)
-        : capacity;
+      // Capacity is now entered manually for both bina and daire — the old
+      // implied-from-room-type mapping was only valid for SINGLE/DOUBLE etc.
+      const finalCapacity = capacity;
 
       const trimmedCatalog = catalogUrl.trim();
       const catalogPayload = trimmedCatalog.length > 0 ? trimmedCatalog : null;
@@ -220,18 +222,15 @@ export function UnitFormPage() {
             }))}
           />
 
-          {/* Capacity only applies to apartments — hotels derive from room type */}
-          {!isHotel && (
-            <NumberInput
-              label="Kapasite (kişi)"
-              name="capacity"
-              min={1}
-              max={20}
-              required
-              value={capacity}
-              onChange={setCapacity}
-            />
-          )}
+          <NumberInput
+            label="Kapasite (kişi)"
+            name="capacity"
+            min={1}
+            max={20}
+            required
+            value={capacity}
+            onChange={setCapacity}
+          />
 
           <NumberInput
             label="Gecelik Ücret (₺)"
