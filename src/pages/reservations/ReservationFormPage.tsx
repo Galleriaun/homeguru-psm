@@ -29,14 +29,21 @@ const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
 ];
 
 function addDays(dateStr: string, days: number): string {
+  // Guard empty / malformed input — `new Date('T00:00:00Z').toISOString()`
+  // throws RangeError on an invalid date, which used to crash the whole page
+  // when the operator cleared the giriş field.
+  if (!dateStr) return '';
   const d = new Date(dateStr + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return '';
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
 function daysBetween(start: string, end: string): number {
+  if (!start || !end) return 1;
   const a = new Date(start + 'T00:00:00Z').getTime();
   const b = new Date(end + 'T00:00:00Z').getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return 1;
   return Math.max(1, Math.round((b - a) / (1000 * 60 * 60 * 24)));
 }
 

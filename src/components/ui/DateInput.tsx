@@ -99,6 +99,13 @@ export function DateInput({
       setError('Geçersiz tarih (gg/aa/yyyy)');
       return;
     }
+    // Block propagating an empty value when the field is required — otherwise
+    // downstream consumers that assume a non-empty date (e.g. ReservationForm
+    // calls addDays(checkin, nights) which throws on '') crash the whole page.
+    if (required && parsed === '') {
+      setError('Tarih zorunludur');
+      return;
+    }
     setError(null);
     if (parsed !== value) onChange(parsed);
   };
