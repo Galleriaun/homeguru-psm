@@ -79,16 +79,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!session?.user) return;
+    const userId = session?.user?.id;
+    if (!userId) return;
     let cancelled = false;
     setLoading(true);
-    loadProfile(session.user.id).finally(() => {
+    loadProfile(userId).finally(() => {
       if (!cancelled) setLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [session?.user, loadProfile]);
+    // Key on the user *id* (primitive), not the user object reference —
+    // Supabase emits a fresh session on every silent token refresh (e.g. tab
+    // focus), and depending on the object reference here caused the whole
+    // app to flash "Yükleniyor…" on every alt-tab.
+  }, [session?.user?.id, loadProfile]);
 
   const refreshProfile = useCallback(async () => {
     if (!session?.user) return;
