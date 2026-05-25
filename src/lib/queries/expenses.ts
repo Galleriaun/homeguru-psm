@@ -52,7 +52,7 @@ export async function listExpenses(
   let q = supabase
     .from('expenses')
     .select(
-      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, created_by, created_at, property:properties(name, type)',
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, property:properties(name, type)',
     )
     .order('expense_date', { ascending: false })
     .order('created_at', { ascending: false });
@@ -100,12 +100,17 @@ export interface NewExpenseInput {
   expenseDate: string; // 'YYYY-MM-DD'
   isRecurring: boolean;
   paidFromKasa: boolean;
+  /**
+   * Day of month (1–31) the recurring template should auto-post on each
+   * month. Null for one-off expenses. Mirrors staff_profiles.salary_day.
+   */
+  recurringDay: number | null;
 }
 
 /**
- * Create an expense via the record_expense RPC (migration 037) — atomically
- * inserts the expense and, when paidFromKasa is set, a matching 'Gider'
- * movement in the general kasa so the balance stays correct.
+ * Create an expense via the record_expense RPC (migration 037 + 054) —
+ * atomically inserts the expense and, when paidFromKasa is set, a matching
+ * 'Gider' movement in the general kasa so the balance stays correct.
  */
 export async function createExpense(input: NewExpenseInput): Promise<ExpenseRow> {
   const { data, error } = await supabase.rpc('record_expense', {
@@ -116,6 +121,7 @@ export async function createExpense(input: NewExpenseInput): Promise<ExpenseRow>
     _expense_date: input.expenseDate,
     _is_recurring: input.isRecurring,
     _paid_from_kasa: input.paidFromKasa,
+    _recurring_day: input.recurringDay,
   });
   if (error) throw wrapErr(error);
   return data as ExpenseRow;

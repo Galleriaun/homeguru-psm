@@ -788,6 +788,7 @@ export type Database = {
           is_recurring: boolean;
           paid_from_kasa: boolean;
           recurring_source_id: string | null;
+          recurring_day: number | null;
           created_by: string | null;
           created_at: string;
         };
@@ -801,6 +802,7 @@ export type Database = {
           is_recurring?: boolean;
           paid_from_kasa?: boolean;
           recurring_source_id?: string | null;
+          recurring_day?: number | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -814,6 +816,7 @@ export type Database = {
           is_recurring?: boolean;
           paid_from_kasa?: boolean;
           recurring_source_id?: string | null;
+          recurring_day?: number | null;
           created_by?: string | null;
           created_at?: string;
         };

@@ -17,6 +17,19 @@ import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { cn, istanbulToday } from '@/lib/utils';
 
+/**
+ * Dropdown options for the recurring-expense day picker. Empty value = the
+ * expense is a one-off. Mirrors the salary EditSalaryModal so the operator
+ * sees the same shape in both forms.
+ */
+const RECURRING_DAY_OPTIONS = [
+  { value: '', label: 'Yok (tek seferlik)' },
+  ...Array.from({ length: 31 }, (_, i) => ({
+    value: String(i + 1),
+    label: `Her ayın ${i + 1}. günü`,
+  })),
+];
+
 export function ExpenseFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
@@ -31,7 +44,12 @@ export function ExpenseFormPage() {
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState('');
   const [expenseDate, setExpenseDate] = useState(istanbulToday());
-  const [isRecurring, setIsRecurring] = useState(false);
+  /**
+   * Recurring-day picker. '' means "Yok" (one-off); '1'..'31' marks the
+   * expense as a recurring template that the daily cron materialises every
+   * month on the chosen day. Stored as string so the Select can clear.
+   */
+  const [recurringDay, setRecurringDay] = useState<string>('');
   // Whether the expense being edited posted a kasa movement — drives the
   // heads-up shown on the delete dialog.
   const [loadedPaidFromKasa, setLoadedPaidFromKasa] = useState(false);
@@ -64,7 +82,16 @@ export function ExpenseFormPage() {
           setAmount(Number(e.amount));
           setDescription(e.description ?? '');
           setExpenseDate(e.expense_date);
-          setIsRecurring(e.is_recurring);
+          setRecurringDay(
+            // Edit mode: prefer the explicit recurring_day; fall back to the
+            // template's own day if a legacy row only has is_recurring set
+            // (pre-054 data, until the backfill in 054 catches up).
+            e.recurring_day != null
+              ? String(e.recurring_day)
+              : e.is_recurring
+                ? String(Number(e.expense_date.slice(8, 10)))
+                : '',
+          );
           setLoadedPaidFromKasa(e.paid_from_kasa);
         }
       } catch (e) {
@@ -99,6 +126,20 @@ export function ExpenseFormPage() {
 
     const effectivePropertyId = propertyMode === 'general' ? null : propertyId;
 
+    // Translate the dropdown back to the (is_recurring, recurring_day) pair
+    // the DB layer expects. Any picked day implies recurring=true, which in
+    // turn implies paid_from_kasa=true (the kasa OUT is the whole point).
+    let parsedDay: number | null = null;
+    if (recurringDay !== '') {
+      const n = Number(recurringDay);
+      if (!Number.isInteger(n) || n < 1 || n > 31) {
+        setError('Ödeme günü 1 ile 31 arasında olmalıdır.');
+        return;
+      }
+      parsedDay = n;
+    }
+    const isRecurring = parsedDay !== null;
+
     setSaving(true);
     try {
       if (isEdit && id) {
@@ -109,6 +150,7 @@ export function ExpenseFormPage() {
           description: description.trim() || null,
           expense_date: expenseDate,
           is_recurring: isRecurring,
+          recurring_day: parsedDay,
         });
       } else {
         await createExpense({
@@ -120,6 +162,7 @@ export function ExpenseFormPage() {
           isRecurring,
           // A recurring expense (kira, fatura…) is paid out of the general kasa.
           paidFromKasa: isRecurring,
+          recurringDay: parsedDay,
         });
       }
       navigate('/finance/expenses', { replace: true });
@@ -266,15 +309,30 @@ export function ExpenseFormPage() {
             maxLength={250}
           />
 
-          <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
-            <input
-              type="checkbox"
-              checked={isRecurring}
-              onChange={(e) => setIsRecurring(e.target.checked)}
-              className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+          <div>
+            <Select
+              label="Otomatik Ödeme Günü"
+              name="recurring_day"
+              value={recurringDay}
+              onChange={setRecurringDay}
+              options={RECURRING_DAY_OPTIONS}
+              searchable
             />
-            Düzenli gider (örn. kira, fatura — her ay oluşturulur, kasadan düşülür)
-          </label>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Seçilen gün geldiğinde gider otomatik oluşturulur ve kasadan
+              düşülür (örn. kira, fatura). "Yok" seçerseniz yalnızca tek
+              seferlik gider olur.
+            </p>
+            {/* Same Feb/Apr fallback as the salary cron — the
+                generate_recurring_expenses() function pays on the last day
+                of the month when recurring_day > that month's last day. */}
+            {Number(recurringDay) >= 29 && (
+              <p className="mt-1 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                Not: Bu sayının olmadığı aylarda (örn. Şubat) ödeme ayın son
+                gününde otomatik yapılır.
+              </p>
+            )}
+          </div>
 
           {error && (
             <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
