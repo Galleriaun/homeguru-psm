@@ -3,6 +3,16 @@ import { updateStaffSalary } from '@/lib/queries/staff';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { NumberInput } from '@/components/ui/NumberInput';
+import { Select } from '@/components/ui/Select';
+
+/** Dropdown options for the salary auto-pay day. Empty value = manual only. */
+const SALARY_DAY_OPTIONS = [
+  { value: '', label: 'Yok (elle ödeme)' },
+  ...Array.from({ length: 31 }, (_, i) => ({
+    value: String(i + 1),
+    label: `Her ayın ${i + 1}. günü`,
+  })),
+];
 
 interface Props {
   staffUserId: string;
@@ -118,31 +128,28 @@ export function EditSalaryModal({
           />
 
           <div>
-            <label
-              htmlFor="salary_day"
-              className="block text-sm font-medium text-stone-700 dark:text-stone-300"
-            >
-              Ödeme Günü (ayın 1–31 arası)
-            </label>
-            <input
-              id="salary_day"
+            <Select
+              label="Otomatik Ödeme Günü"
               name="salary_day"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={31}
-              step={1}
               value={salaryDay}
-              onChange={(e) =>
-                setSalaryDay(e.target.value.replace(/\D/g, '').slice(0, 2))
-              }
-              placeholder="Örn: 1, 5, 15"
-              className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder-stone-500"
+              onChange={setSalaryDay}
+              options={SALARY_DAY_OPTIONS}
+              searchable
             />
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              O gün geldiğinde maaş kasadan otomatik düşülür. Boş bırakırsanız
-              yalnızca elle ödeme yapılır.
+              Seçilen gün geldiğinde maaş kasadan otomatik düşülür.
+              "Yok" seçerseniz yalnızca elle ödeme yapılır.
             </p>
+            {/* The cron has a "salary_day > month length" fallback that pays on
+                the last day of the month so nobody misses February etc. Surface
+                it inline when the user picks 29 / 30 / 31 so they aren't
+                surprised by the behavior. */}
+            {Number(salaryDay) >= 29 && (
+              <p className="mt-1 rounded bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                Not: Bu sayının olmadığı aylarda (örn. Şubat) ödeme ayın son
+                gününde otomatik yapılır.
+              </p>
+            )}
           </div>
 
           {error && (

@@ -35,6 +35,13 @@ export default defineConfig({
       // 'prompt' — a new build does NOT silently swap in. The app shows a
       // "Yeni sürüm hazır" banner (PwaUpdatePrompt) and the user taps Yenile.
       registerType: 'prompt',
+      // 'injectManifest' — we own src/sw.ts end to end. Old generateSW
+      // strategy wrapped importScripts() in an async define() callback which
+      // ran after the SW's synchronous parse and broke push handler install.
+      // See src/sw.ts header for the long story.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['icons/icon-512.png'],
       manifest: {
         name: 'HomeGuru PMS',
@@ -53,20 +60,8 @@ export default defineConfig({
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.host.endsWith('supabase.co') && url.pathname.startsWith('/rest/'),
-            handler: 'NetworkFirst',
-            options: { cacheName: 'supabase-api', networkTimeoutSeconds: 5 },
-          },
-          {
-            urlPattern: ({ url }) => url.host.endsWith('supabase.co') && url.pathname.startsWith('/storage/'),
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'supabase-storage' },
-          },
-        ],
       },
     }),
   ],

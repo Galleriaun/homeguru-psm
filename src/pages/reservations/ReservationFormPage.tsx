@@ -52,6 +52,20 @@ function toIstanbulDateAndTime(iso: string): { date: string; time: string } {
 }
 
 /**
+ * Mask raw input into HH:MM as the user types. Strips non-digits, caps at
+ * 4 digits, and auto-inserts the colon after two. Always 24-hour — we use a
+ * masked text input instead of <input type="time"> because the latter falls
+ * back to OS-locale AM/PM on Chrome/Windows even when lang="tr".
+ */
+function maskTime(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return digits.slice(0, 2) + ':' + digits.slice(2);
+}
+
+const TIME_HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
  * Default status for a new reservation, from its dates: a future stay is
  * 'upcoming', one in progress 'active', a fully-past one 'completed'.
  * (A daily cron later promotes 'upcoming' → 'active' on the check-in day.)
@@ -311,11 +325,18 @@ export function ReservationFormPage() {
       return;
     }
 
-    // Day-use sanity: end must be strictly after start (DB CHECK reasserts
+    // Day-use sanity. Two checks: (1) both times are well-formed HH:MM in
+    // 24-hour range, (2) end is strictly after start (the DB CHECK reasserts
     // this, but a friendlier message here saves a round-trip).
-    if (stayType === 'DAYUSE' && endTime <= startTime) {
-      setError('Günübirlik konaklamada çıkış saati, giriş saatinden sonra olmalıdır.');
-      return;
+    if (stayType === 'DAYUSE') {
+      if (!TIME_HHMM_RE.test(startTime) || !TIME_HHMM_RE.test(endTime)) {
+        setError('Saat formatı HH:MM olmalıdır (örn: 14:30).');
+        return;
+      }
+      if (endTime <= startTime) {
+        setError('Günübirlik konaklamada çıkış saati, giriş saatinden sonra olmalıdır.');
+        return;
+      }
     }
 
     setSaving(true);
@@ -573,11 +594,15 @@ export function ReservationFormPage() {
                   <input
                     id="start_time"
                     name="start_time"
-                    type="time"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-2][0-9]:[0-5][0-9]"
+                    maxLength={5}
+                    placeholder="14:00"
                     required
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                    onChange={(e) => setStartTime(maskTime(e.target.value))}
+                    className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder-stone-500"
                   />
                 </div>
                 <div>
@@ -590,11 +615,15 @@ export function ReservationFormPage() {
                   <input
                     id="end_time"
                     name="end_time"
-                    type="time"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-2][0-9]:[0-5][0-9]"
+                    maxLength={5}
+                    placeholder="16:00"
                     required
                     value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+                    onChange={(e) => setEndTime(maskTime(e.target.value))}
+                    className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder-stone-500"
                   />
                 </div>
               </div>

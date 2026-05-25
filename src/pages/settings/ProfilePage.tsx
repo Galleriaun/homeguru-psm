@@ -4,6 +4,7 @@ import { updateOwnFullName } from '@/lib/queries/profile';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { PushNotificationsCard } from '@/components/PushNotificationsCard';
 import { formatRole } from '@/lib/utils';
 
 export function ProfilePage() {
@@ -116,6 +117,8 @@ export function ProfilePage() {
           </div>
         </form>
       </Card>
+
+      <PushNotificationsCard />
     </div>
   );
 }
