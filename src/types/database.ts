@@ -193,6 +193,7 @@ export type Database = {
           body: string | null;
           url: string | null;
           kind: 'issue' | 'payment' | 'reservation' | 'system';
+          event_type: string | null;
           data: Json | null;
           read_at: string | null;
           created_at: string;
@@ -204,6 +205,7 @@ export type Database = {
           body?: string | null;
           url?: string | null;
           kind: 'issue' | 'payment' | 'reservation' | 'system';
+          event_type?: string | null;
           data?: Json | null;
           read_at?: string | null;
           created_at?: string;
@@ -216,9 +218,31 @@ export type Database = {
           body?: string | null;
           url?: string | null;
           kind?: 'issue' | 'payment' | 'reservation' | 'system';
+          event_type?: string | null;
           data?: Json | null;
           read_at?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      notification_preferences: {
+        Row: {
+          user_id: string;
+          event_type: string;
+          enabled: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          event_type: string;
+          enabled?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          event_type?: string;
+          enabled?: boolean;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -361,6 +385,7 @@ export type Database = {
           auto_debit: boolean;
           created_by: string;
           created_at: string;
+          notified_2d_before: string | null;
         };
         Insert: {
           id?: string;
@@ -376,6 +401,7 @@ export type Database = {
           auto_debit?: boolean;
           created_by: string;
           created_at?: string;
+          notified_2d_before?: string | null;
         };
         Update: {
           id?: string;
@@ -391,6 +417,7 @@ export type Database = {
           auto_debit?: boolean;
           created_by?: string;
           created_at?: string;
+          notified_2d_before?: string | null;
         };
         Relationships: [];
       };
