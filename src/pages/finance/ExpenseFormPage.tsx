@@ -160,8 +160,9 @@ export function ExpenseFormPage() {
           description: description.trim() || null,
           expenseDate,
           isRecurring,
-          // A recurring expense (kira, fatura…) is paid out of the general kasa.
-          paidFromKasa: isRecurring,
+          // Every expense — one-off or recurring — posts a matching OUT to the
+          // general kasa so the cash balance always reflects reality.
+          paidFromKasa: true,
           recurringDay: parsedDay,
         });
       }
