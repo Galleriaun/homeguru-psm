@@ -389,6 +389,7 @@ export type Database = {
           created_by: string;
           created_at: string;
           notified_2d_before: string | null;
+          late_checkout_hours: number;
         };
         Insert: {
           id?: string;
@@ -405,6 +406,7 @@ export type Database = {
           created_by: string;
           created_at?: string;
           notified_2d_before?: string | null;
+          late_checkout_hours?: number;
         };
         Update: {
           id?: string;
@@ -421,6 +423,7 @@ export type Database = {
           created_by?: string;
           created_at?: string;
           notified_2d_before?: string | null;
+          late_checkout_hours?: number;
         };
         Relationships: [];
       };

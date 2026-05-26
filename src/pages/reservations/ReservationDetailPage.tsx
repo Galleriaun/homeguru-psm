@@ -20,6 +20,7 @@ import type { Database, ReservationStatus } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { LateCheckoutModal } from './LateCheckoutModal';
 import { LedgerEntryModal } from './LedgerEntryModal';
 import { PaymentCollectModal } from './PaymentCollectModal';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
@@ -27,7 +28,7 @@ import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
 import { ClockIcon } from '@/components/icons/ActionIcons';
 import { ProblematicFlagModal } from '@/pages/guests/ProblematicFlagModal';
-import { formatDate, formatTRY } from '@/lib/utils';
+import { formatDate, formatTRY, checkoutTimeLabel } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
 import { resolveKatalogLink } from '@/lib/gallery';
 
@@ -77,6 +78,8 @@ export function ReservationDetailPage() {
 
   // Payment collection — gated to payment:collect via type-conditional canCollectPayment()
   const [showCollectModal, setShowCollectModal] = useState(false);
+  /** Geç Çıkış picker — sets reservations.late_checkout_hours (0..4). */
+  const [showLateCheckout, setShowLateCheckout] = useState(false);
 
   // Per-row ledger deletion (SUPER_ADMIN only — see migration 017)
   const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
@@ -287,6 +290,15 @@ export function ReservationDetailPage() {
               </Button>
             </Link>
           )}
+          {canEdit && !isCancelled && reservation.stay_type !== 'DAYUSE' && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowLateCheckout(true)}
+            >
+              Geç Çıkış: {checkoutTimeLabel(reservation.late_checkout_hours)}
+            </Button>
+          )}
           {canCancel && !isCancelled && (
             <Button
               variant="danger"
@@ -383,6 +395,20 @@ export function ReservationDetailPage() {
             setShowCollectModal(false);
             // Re-fetch the ledger so the new PAYMENT entry appears
             setLedgerVersion((v) => v + 1);
+          }}
+        />
+      )}
+
+      {showLateCheckout && (
+        <LateCheckoutModal
+          reservationId={reservation.id}
+          current={reservation.late_checkout_hours ?? 0}
+          onClose={() => setShowLateCheckout(false)}
+          onUpdated={(next) => {
+            setReservation((prev) =>
+              prev ? { ...prev, late_checkout_hours: next } : prev,
+            );
+            setShowLateCheckout(false);
           }}
         />
       )}

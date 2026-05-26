@@ -6,7 +6,7 @@ import { listReservations, type ReservationWithRefs } from '@/lib/queries/reserv
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ReservationsViewTabs } from './ViewTabs';
-import { formatTRY, formatDate } from '@/lib/utils';
+import { formatTRY, formatDate, checkoutTimeLabel } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', { timeStyle: 'short' });
@@ -190,7 +190,7 @@ function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
               <span>
                 {r.stay_type === 'DAYUSE'
                   ? `${formatDate(r.stay_start)} · ${formatTime(r.stay_start)}–${formatTime(r.stay_end)}`
-                  : `${formatDate(r.stay_start)} → ${formatDate(r.stay_end)}`}
+                  : `${formatDate(r.stay_start)} → ${formatDate(r.stay_end)} · Çıkış ${checkoutTimeLabel(r.late_checkout_hours)}`}
               </span>
               <span className="font-semibold text-stone-900 dark:text-stone-100">
                 {formatTRY(Number(r.total_amount))}
@@ -246,7 +246,7 @@ function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
                       <>
                         <div>{formatDate(r.stay_start)}</div>
                         <div className="text-xs text-stone-600 dark:text-stone-400">
-                          → {formatDate(r.stay_end)}
+                          → {formatDate(r.stay_end)} · Çıkış {checkoutTimeLabel(r.late_checkout_hours)}
                         </div>
                       </>
                     )}

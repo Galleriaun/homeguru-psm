@@ -130,6 +130,22 @@ export function phoneForSave(v: string): string | null {
   return t;
 }
 
+/**
+ * Standard overnight-stay checkout hour, Istanbul-local. Reservations carry
+ * a `late_checkout_hours` offset (0–4) that the operator bumps when a guest
+ * asks to stay a little longer; the displayed time is base + offset.
+ */
+export const DEFAULT_CHECKOUT_HOUR = 11;
+
+/**
+ * Render the checkout-time label for an overnight reservation, e.g. "11:00"
+ * for the standard hour or "13:00" when late_checkout_hours = 2.
+ */
+export function checkoutTimeLabel(lateCheckoutHours: number | null | undefined): string {
+  const hour = DEFAULT_CHECKOUT_HOUR + (lateCheckoutHours ?? 0);
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
 /** Build a wa.me URL with the message URL-encoded. */
 export function whatsAppUrl(phone: string, text: string): string {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
