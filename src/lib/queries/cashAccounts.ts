@@ -1,10 +1,9 @@
 import { supabase } from '@/lib/supabase';
 import { softDeleteEntity } from '@/lib/queries/trash';
-import type { Database } from '@/types/database';
+import type { Database, TxDirection } from '@/types/database';
 
 type CashAccountRow = Database['public']['Tables']['cash_accounts']['Row'];
 type CashTxRow = Database['public']['Tables']['cash_transactions']['Row'];
-type CashTxInsert = Database['public']['Tables']['cash_transactions']['Insert'];
 
 export type CashAccount = CashAccountRow;
 export type CashTransaction = CashTxRow;
@@ -49,7 +48,11 @@ export interface CashTransactionWithRefs extends CashTxRow {
   } | null;
 }
 
-/** Transactions for the kasa, newest first — guest-payment rows carry their reservation. */
+/**
+ * Transactions for the kasa, newest first. Filters to approved rows only —
+ * pending and rejected movements live in the /finance/pending queue and
+ * shouldn't pollute the main kasa view (or its visible balance).
+ */
 export async function listCashTransactions(
   accountId: string,
 ): Promise<CashTransactionWithRefs[]> {
@@ -59,19 +62,32 @@ export async function listCashTransactions(
       '*, payment_collection:payment_collections(reservation:reservations(id, guest:guests(full_name), unit:units(name)))',
     )
     .eq('cash_account_id', accountId)
+    .eq('approval_status', 'approved')
     .order('created_at', { ascending: false });
   if (error) throw wrapErr(error);
   return (data as unknown as CashTransactionWithRefs[]) ?? [];
 }
 
-export async function createCashTransaction(input: CashTxInsert): Promise<CashTxRow> {
-  const { data, error } = await supabase
-    .from('cash_transactions')
-    .insert(input)
-    .select()
-    .single();
+/**
+ * Submit a manual kasa entry via the submit_cash_tx RPC. The RPC decides
+ * approval_status from the caller's role: SUPER_ADMIN → 'approved' (posts
+ * to balance immediately), PROPERTY_MANAGER → 'pending' (waits for admin
+ * review at /finance/pending).
+ */
+export async function submitCashTransaction(input: {
+  cash_account_id: string;
+  amount: number;
+  direction: TxDirection;
+  description: string | null;
+}): Promise<CashTxRow> {
+  const { data, error } = await supabase.rpc('submit_cash_tx', {
+    _cash_account_id: input.cash_account_id,
+    _amount: input.amount,
+    _direction: input.direction,
+    _description: input.description,
+  });
   if (error) throw wrapErr(error);
-  return data;
+  return data as CashTxRow;
 }
 
 /**

@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 export type NotificationEventType =
   | 'new_issue'
   | 'payment_unconfirmed'
+  | 'pending_approval'
   | 'new_reservation'
   | 'reservation_auto_completed'
   | 'salary_auto_paid'
@@ -17,6 +18,7 @@ export type NotificationEventType =
 export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   'new_issue',
   'payment_unconfirmed',
+  'pending_approval',
   'new_reservation',
   'upcoming_reservation_2d',
   'reservation_auto_completed',
@@ -27,6 +29,7 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
 export const NOTIFICATION_EVENT_LABELS: Record<NotificationEventType, string> = {
   new_issue: 'Yeni sorun bildirimi',
   payment_unconfirmed: 'Onay bekleyen tahsilat',
+  pending_approval: 'Onay bekleyen gider / kasa hareketi',
   new_reservation: 'Yeni rezervasyon',
   upcoming_reservation_2d: 'Yaklaşan rezervasyon (2 gün önce)',
   reservation_auto_completed: 'Rezervasyon otomatik tamamlandı',
@@ -37,6 +40,7 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEventType, string> = 
 export const NOTIFICATION_EVENT_HINTS: Record<NotificationEventType, string> = {
   new_issue: 'Bir personel yeni sorun bildirdiğinde.',
   payment_unconfirmed: 'Onay bekleyen yeni bir tahsilat girildiğinde.',
+  pending_approval: 'Yetkili olmayan bir personel gider veya kasa hareketi gönderdiğinde.',
   new_reservation: 'Sisteme yeni bir rezervasyon eklendiğinde.',
   upcoming_reservation_2d: 'Bir rezervasyonun girişine 2 gün kala.',
   reservation_auto_completed: 'Sistem bir rezervasyonu otomatik tamamladığında.',
@@ -54,6 +58,7 @@ export async function listNotificationPreferences(): Promise<
   const defaults: Record<NotificationEventType, boolean> = {
     new_issue: true,
     payment_unconfirmed: true,
+    pending_approval: true,
     new_reservation: true,
     upcoming_reservation_2d: true,
     reservation_auto_completed: true,

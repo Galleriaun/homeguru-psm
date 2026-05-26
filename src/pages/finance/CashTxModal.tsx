@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  createCashTransaction,
+  submitCashTransaction,
   type CashTransaction,
 } from '@/lib/queries/cashAccounts';
 import { Button } from '@/components/ui/Button';
@@ -12,12 +12,13 @@ import type { TxDirection } from '@/types/database';
 
 interface Props {
   accountId: string;
-  createdByUserId: string;
+  /** Kept for source compatibility — submit_cash_tx derives created_by from auth.uid(). */
+  createdByUserId?: string;
   onClose: () => void;
   onCreated: (tx: CashTransaction) => void;
 }
 
-export function CashTxModal({ accountId, createdByUserId, onClose, onCreated }: Props) {
+export function CashTxModal({ accountId, onClose, onCreated }: Props) {
   const [direction, setDirection] = useState<TxDirection>('IN');
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState('');
@@ -46,12 +47,14 @@ export function CashTxModal({ accountId, createdByUserId, onClose, onCreated }: 
 
     setSaving(true);
     try {
-      const created = await createCashTransaction({
+      // submit_cash_tx flips status to 'pending' for non-admin callers — the
+      // movement won't affect kasa balance until the admin approves it on
+      // the /finance/pending page.
+      const created = await submitCashTransaction({
         cash_account_id: accountId,
         amount,
         direction,
         description: description.trim() || null,
-        created_by: createdByUserId,
       });
       onCreated(created);
     } catch (err) {

@@ -789,6 +789,10 @@ export type Database = {
           paid_from_kasa: boolean;
           recurring_source_id: string | null;
           recurring_day: number | null;
+          approval_status: 'pending' | 'approved' | 'rejected';
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          rejection_reason: string | null;
           created_by: string | null;
           created_at: string;
         };
@@ -803,6 +807,10 @@ export type Database = {
           paid_from_kasa?: boolean;
           recurring_source_id?: string | null;
           recurring_day?: number | null;
+          approval_status?: 'pending' | 'approved' | 'rejected';
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          rejection_reason?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -817,6 +825,10 @@ export type Database = {
           paid_from_kasa?: boolean;
           recurring_source_id?: string | null;
           recurring_day?: number | null;
+          approval_status?: 'pending' | 'approved' | 'rejected';
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          rejection_reason?: string | null;
           created_by?: string | null;
           created_at?: string;
         };
@@ -876,6 +888,11 @@ export type Database = {
           created_by: string | null;
           created_at: string;
           payment_collection_id: string | null;
+          approval_status: 'pending' | 'approved' | 'rejected';
+          submitted_by: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          rejection_reason: string | null;
         };
         Insert: {
           id?: string;
@@ -888,10 +905,16 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           payment_collection_id?: string | null;
+          approval_status?: 'pending' | 'approved' | 'rejected';
+          submitted_by?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          rejection_reason?: string | null;
         };
         Update: {
-          // cash_transactions are append-only by RLS — no UPDATE policy exists,
-          // so this shape is only here for type-completeness.
+          // Direct UPDATE on cash_transactions has no RLS policy — admin
+          // status flips go through approve_cash_tx / reject_cash_tx RPCs,
+          // which are SECURITY DEFINER. This shape is for type-completeness.
           id?: string;
           cash_account_id?: string;
           amount?: number;
@@ -902,6 +925,11 @@ export type Database = {
           created_by?: string | null;
           created_at?: string;
           payment_collection_id?: string | null;
+          approval_status?: 'pending' | 'approved' | 'rejected';
+          submitted_by?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          rejection_reason?: string | null;
         };
         Relationships: [];
       };
@@ -1042,8 +1070,34 @@ export type Database = {
           _expense_date: string;
           _is_recurring: boolean;
           _paid_from_kasa: boolean;
+          _recurring_day?: number | null;
         };
         Returns: Database['public']['Tables']['expenses']['Row'];
+      };
+      submit_cash_tx: {
+        Args: {
+          _cash_account_id: string;
+          _amount: number;
+          _direction: string;
+          _description: string | null;
+        };
+        Returns: Database['public']['Tables']['cash_transactions']['Row'];
+      };
+      approve_expense: {
+        Args: { _expense_id: string };
+        Returns: Database['public']['Tables']['expenses']['Row'];
+      };
+      reject_expense: {
+        Args: { _expense_id: string; _reason?: string | null };
+        Returns: Database['public']['Tables']['expenses']['Row'];
+      };
+      approve_cash_tx: {
+        Args: { _cash_tx_id: string };
+        Returns: Database['public']['Tables']['cash_transactions']['Row'];
+      };
+      reject_cash_tx: {
+        Args: { _cash_tx_id: string; _reason?: string | null };
+        Returns: Database['public']['Tables']['cash_transactions']['Row'];
       };
       create_companion: {
         Args: {
