@@ -30,11 +30,10 @@ export function PaymentCollectModal({
   onCollected,
 }: Props) {
   const { profile } = useAuth();
-  // Roles without finance:write submit UNCONFIRMED rows that a manager later
-  // approves before money lands in the kasa / cari. HOUSEKEEPING and YETKILI
-  // both fall in this bucket.
-  const requiresApproval =
-    profile?.role === 'HOUSEKEEPING' || profile?.role === 'YETKILI';
+  // Migration 063: only SUPER_ADMIN posts straight to cari + kasa. Every
+  // other role (PROPERTY_MANAGER / RECEPTION / HOUSEKEEPING / YETKILI)
+  // submits UNCONFIRMED and waits for yönetici onayı.
+  const requiresApproval = profile?.role !== 'SUPER_ADMIN';
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [amount, setAmount] = useState(defaultAmount);

@@ -54,6 +54,8 @@ export function HousekeepingPage() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [tasks, setTasks] = useState<TaskWithRefs[]>([]);
   const [filter, setFilter] = useState<FilterOption>('ALL');
+  /** Cross-cutting filter: scope rendering to Binalar only, Daireler only, or both. */
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'HOTEL' | 'APARTMENT'>('ALL');
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +182,32 @@ export function HousekeepingPage() {
         </p>
       </div>
 
+      {/* Mülk-type filter chips (Bina / Daire) — independent from status. */}
+      <div className="flex flex-wrap gap-2">
+        {(['ALL', 'HOTEL', 'APARTMENT'] as const).map((t) => {
+          const isActive = typeFilter === t;
+          const count =
+            t === 'ALL'
+              ? properties.length
+              : properties.filter((p) => p.type === t).length;
+          const label = t === 'ALL' ? 'Tüm Mülkler' : t === 'HOTEL' ? 'Binalar' : 'Daireler';
+          return (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={cn(
+                'rounded-full px-4 py-1 text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-emerald-600 text-white'
+                  : 'border border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+              )}
+            >
+              {label} <span className="ml-1 text-xs opacity-80">({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Status filter chips with counts */}
       <div className="flex flex-wrap gap-2">
         {(['ALL', 'DIRTY', 'IN_PROGRESS', 'CLEAN', 'ISSUES'] as const).map((f) => {
@@ -246,6 +274,9 @@ export function HousekeepingPage() {
       {!loading && (
         <>
           {(['HOTEL', 'APARTMENT'] as const).map((typeKey) => {
+            // Honour the top Bina / Daire filter — skip the whole section
+            // when the user has narrowed to the other type.
+            if (typeFilter !== 'ALL' && typeFilter !== typeKey) return null;
             const groupsForType = grouped.filter((g) => g.property.type === typeKey);
             // Drop properties whose units are all filtered out, so empty
             // sections don't render an orphan "Binalar" / "Daireler" header.
