@@ -18,6 +18,17 @@ const GROUP_ORDER: Record<string, number> = {
   APARTMENTS: 3,
 };
 
+// Within each access-scope group, list roles in this order:
+// Yönetici → Alt Yönetici → Personel → Temizlik → Resepsiyon → Onay Bekliyor.
+const ROLE_ORDER: Record<string, number> = {
+  SUPER_ADMIN: 0,
+  PROPERTY_MANAGER: 1,
+  YETKILI: 2,
+  HOUSEKEEPING: 3,
+  RECEPTION: 4,
+  PENDING: 5,
+};
+
 export function StaffListPage() {
   const [staff, setStaff] = useState<StaffProfileWithProperty[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +54,16 @@ export function StaffListPage() {
       const existing = buckets.get(key);
       if (existing) existing.items.push(s);
       else buckets.set(key, { key, label, items: [s] });
+    }
+    // Sort items inside each bucket by role priority, then by name within
+    // the same role — so the visual scan goes top-down by seniority.
+    for (const bucket of buckets.values()) {
+      bucket.items.sort((a, b) => {
+        const ra = ROLE_ORDER[a.role] ?? 9;
+        const rb = ROLE_ORDER[b.role] ?? 9;
+        if (ra !== rb) return ra - rb;
+        return a.full_name.localeCompare(b.full_name, 'tr', { numeric: true });
+      });
     }
     return Array.from(buckets.values()).sort(
       (g1, g2) => (GROUP_ORDER[g1.key] ?? 9) - (GROUP_ORDER[g2.key] ?? 9),
