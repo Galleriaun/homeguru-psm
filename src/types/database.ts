@@ -127,6 +127,7 @@ export type Database = {
           salary_day: number | null;
           hire_date: string | null;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           user_id: string;
@@ -138,6 +139,7 @@ export type Database = {
           salary_day?: number | null;
           hire_date?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           user_id?: string;
@@ -149,6 +151,7 @@ export type Database = {
           salary_day?: number | null;
           hire_date?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };
@@ -1098,6 +1101,10 @@ export type Database = {
       reject_cash_tx: {
         Args: { _cash_tx_id: string; _reason?: string | null };
         Returns: Database['public']['Tables']['cash_transactions']['Row'];
+      };
+      delete_staff: {
+        Args: { _user_id: string };
+        Returns: Database['public']['Tables']['staff_profiles']['Row'];
       };
       create_companion: {
         Args: {

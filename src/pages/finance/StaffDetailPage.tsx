@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
+  deleteStaff,
   getStaff,
   listAdvancesForStaff,
   totalAdvancesInMonth,
@@ -14,6 +15,7 @@ import {
 } from '@/lib/queries/staff_salary_payments';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { StaffAdvanceModal } from './StaffAdvanceModal';
 import { EditSalaryModal } from './EditSalaryModal';
 import { PaySalaryModal } from './PaySalaryModal';
@@ -56,6 +58,7 @@ function monthLabel(yearMonth: string): string {
 export function StaffDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
 
   const [staff, setStaff] = useState<StaffProfileWithProperty | null>(null);
   const [advances, setAdvances] = useState<StaffAdvance[]>([]);
@@ -66,6 +69,10 @@ export function StaffDetailPage() {
   const [showPaySalary, setShowPaySalary] = useState(false);
   const [showAssignScope, setShowAssignScope] = useState(false);
   const [showEditRole, setShowEditRole] = useState(false);
+  /** Delete confirmation modal — SUPER_ADMIN-only (matches delete_staff RPC). */
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // RLS (staff_profiles_modify) limits salary edits, scope, and role changes
   // to SUPER_ADMIN. The pay_staff_salary RPC server-side accepts SUPER_ADMIN
@@ -75,6 +82,9 @@ export function StaffDetailPage() {
   const canChangeRole = profile?.role === 'SUPER_ADMIN';
   const canPaySalary =
     profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
+  // delete_staff RPC blocks self-delete on the server too, but hiding the
+  // button up-front saves the operator the round trip + error toast.
+  const canDelete = profile?.role === 'SUPER_ADMIN' && userId !== user?.id;
 
   const currentMonth = currentIstanbulYearMonth();
 
@@ -180,6 +190,17 @@ export function StaffDetailPage() {
           <Button variant="secondary" onClick={() => setShowAdvanceModal(true)}>
             + Avans Ver
           </Button>
+          {canDelete && (
+            <Button
+              variant="danger"
+              onClick={() => {
+                setDeleteError(null);
+                setShowDelete(true);
+              }}
+            >
+              Sil
+            </Button>
+          )}
         </div>
       </div>
 
@@ -431,6 +452,44 @@ export function StaffDetailPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={showDelete}
+        title="Personel silinsin mi?"
+        description={
+          <>
+            <p>
+              <strong>{staff.full_name}</strong> personel listesinden
+              kaldırılır. Maaş ödemeleri, avanslar ve geçmiş kasa hareketleri
+              olduğu gibi kalır.
+            </p>
+            <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">
+              Otomatik maaş ödemesi bu personel için bir daha çalışmaz.
+            </p>
+          </>
+        }
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        destructive
+        loading={deleting}
+        error={deleteError}
+        onConfirm={async () => {
+          if (!userId) return;
+          setDeleting(true);
+          setDeleteError(null);
+          try {
+            await deleteStaff(userId);
+            navigate('/finance/staff', { replace: true });
+          } catch (err) {
+            setDeleteError(err instanceof Error ? err.message : 'Silinemedi');
+            setDeleting(false);
+          }
+        }}
+        onCancel={() => {
+          setShowDelete(false);
+          setDeleteError(null);
+        }}
+      />
     </div>
   );
 }

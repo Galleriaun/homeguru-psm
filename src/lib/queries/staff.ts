@@ -21,13 +21,18 @@ const wrapErr = (e: { message: string; details?: string; hint?: string; code?: s
 // Staff profiles (read-only here — creation lives in admin/Supabase for now)
 // =============================================================================
 
-/** All staff visible to the caller. RLS already scopes managers to their branch. */
+/**
+ * All staff visible to the caller. RLS already scopes managers to their
+ * branch; we add deleted_at=NULL on top so soft-deleted ex-staff don't show
+ * up in the directory (migration 057).
+ */
 export async function listStaff(): Promise<StaffProfileWithProperty[]> {
   const { data, error } = await supabase
     .from('staff_profiles')
     .select(
       'user_id, full_name, role, property_id, access_scope, salary, salary_day, hire_date, created_at, property:properties(name, type)',
     )
+    .is('deleted_at', null)
     .order('full_name');
   if (error) throw wrapErr(error);
   return (data as unknown as StaffProfileWithProperty[]) ?? [];
@@ -40,9 +45,19 @@ export async function getStaff(userId: string): Promise<StaffProfileWithProperty
       'user_id, full_name, role, property_id, access_scope, salary, salary_day, hire_date, created_at, property:properties(name, type)',
     )
     .eq('user_id', userId)
+    .is('deleted_at', null)
     .maybeSingle();
   if (error) throw wrapErr(error);
   return (data as unknown as StaffProfileWithProperty | null) ?? null;
+}
+
+/**
+ * Soft-delete a staff member via the delete_staff RPC. SUPER_ADMIN only;
+ * the function refuses to delete the caller's own row to prevent self-lockout.
+ */
+export async function deleteStaff(userId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_staff', { _user_id: userId });
+  if (error) throw wrapErr(error);
 }
 
 /**
