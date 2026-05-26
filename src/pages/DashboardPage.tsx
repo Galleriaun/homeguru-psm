@@ -134,6 +134,14 @@ export function DashboardPage() {
               description="Personel tarafından toplanan tahsilatları onayla"
             />
           )}
+          {profile?.role === 'SUPER_ADMIN' && (
+            <QuickAction
+              to="/reservations/google-pending"
+              icon={<CalendarIcon className="h-5 w-5" />}
+              label="Google Rezervasyon Talepleri"
+              description="Google Takvim'e dışarıdan eklenen rezervasyonları daireye ata"
+            />
+          )}
         </div>
       </section>
 

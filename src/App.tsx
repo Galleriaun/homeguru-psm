@@ -18,6 +18,7 @@ import { ReservationsCalendarPage } from '@/pages/reservations/ReservationsCalen
 import { ReservationsAvailabilityPage } from '@/pages/reservations/ReservationsAvailabilityPage';
 import { ReservationDetailPage } from '@/pages/reservations/ReservationDetailPage';
 import { ReservationFormPage } from '@/pages/reservations/ReservationFormPage';
+import { GooglePendingPage } from '@/pages/reservations/GooglePendingPage';
 import { CashPage } from '@/pages/finance/CashPage';
 import { ExpensesListPage } from '@/pages/finance/ExpensesListPage';
 import { ExpenseFormPage } from '@/pages/finance/ExpenseFormPage';
@@ -120,6 +121,14 @@ export default function App() {
           <Route path="/reservations" element={<ReservationsListPage />} />
           <Route path="/reservations/calendar" element={<ReservationsCalendarPage />} />
           <Route path="/reservations/availability" element={<ReservationsAvailabilityPage />} />
+          <Route
+            path="/reservations/google-pending"
+            element={
+              <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <GooglePendingPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/reservations/new"
             element={

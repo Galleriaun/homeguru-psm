@@ -228,6 +228,84 @@ export type Database = {
         };
         Relationships: [];
       };
+      google_oauth_tokens: {
+        Row: {
+          user_id: string;
+          access_token: string;
+          refresh_token: string;
+          expires_at: string;
+          calendar_id: string;
+          last_sync_token: string | null;
+          connected_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          access_token: string;
+          refresh_token: string;
+          expires_at: string;
+          calendar_id?: string;
+          last_sync_token?: string | null;
+          connected_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          access_token?: string;
+          refresh_token?: string;
+          expires_at?: string;
+          calendar_id?: string;
+          last_sync_token?: string | null;
+          connected_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      pending_google_reservations: {
+        Row: {
+          id: string;
+          google_event_id: string;
+          summary: string | null;
+          description: string | null;
+          start_at: string;
+          end_at: string;
+          raw_payload: Json | null;
+          status: 'pending' | 'imported' | 'dismissed';
+          reservation_id: string | null;
+          imported_at: string | null;
+          dismissed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          google_event_id: string;
+          summary?: string | null;
+          description?: string | null;
+          start_at: string;
+          end_at: string;
+          raw_payload?: Json | null;
+          status?: 'pending' | 'imported' | 'dismissed';
+          reservation_id?: string | null;
+          imported_at?: string | null;
+          dismissed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          google_event_id?: string;
+          summary?: string | null;
+          description?: string | null;
+          start_at?: string;
+          end_at?: string;
+          raw_payload?: Json | null;
+          status?: 'pending' | 'imported' | 'dismissed';
+          reservation_id?: string | null;
+          imported_at?: string | null;
+          dismissed_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       notification_preferences: {
         Row: {
           user_id: string;
@@ -390,6 +468,7 @@ export type Database = {
           created_at: string;
           notified_2d_before: string | null;
           late_checkout_hours: number;
+          google_event_id: string | null;
         };
         Insert: {
           id?: string;
@@ -407,6 +486,7 @@ export type Database = {
           created_at?: string;
           notified_2d_before?: string | null;
           late_checkout_hours?: number;
+          google_event_id?: string | null;
         };
         Update: {
           id?: string;
@@ -424,6 +504,7 @@ export type Database = {
           created_at?: string;
           notified_2d_before?: string | null;
           late_checkout_hours?: number;
+          google_event_id?: string | null;
         };
         Relationships: [];
       };

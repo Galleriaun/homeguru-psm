@@ -19,6 +19,8 @@ import { Select } from '@/components/ui/Select';
 import { formatTRY, istanbulToday } from '@/lib/utils';
 import { QuickAddGuestModal } from '@/components/QuickAddGuestModal';
 import { CompanionModal } from '@/pages/guests/CompanionModal';
+import { markPendingImported } from '@/lib/queries/google_calendar';
+import { supabase } from '@/lib/supabase';
 
 const STATUS_OPTIONS: { value: ReservationStatus; label: string }[] = [
   { value: 'pending', label: 'Beklemede' },
@@ -378,6 +380,22 @@ export function ReservationFormPage() {
         });
         navigate(`/reservations/${id}`, { replace: true });
       } else {
+        // If we arrived here from the Beklemede-Google queue, lift the
+        // google_event_id off the pending row so the new reservation links
+        // straight to its calendar event (and the trigger PATCHes that event
+        // with our format on first sync). The pending row is then marked
+        // imported so it drops off the queue.
+        const googlePendingId = searchParams.get('google_pending');
+        let googleEventId: string | null = null;
+        if (googlePendingId) {
+          const { data: pending } = await supabase
+            .from('pending_google_reservations')
+            .select('google_event_id')
+            .eq('id', googlePendingId)
+            .maybeSingle();
+          googleEventId = pending?.google_event_id ?? null;
+        }
+
         const created = await createReservation({
           property_id: propertyId,
           unit_id: unitId,
@@ -390,7 +408,14 @@ export function ReservationFormPage() {
           auto_debit: effectiveAutoDebit,
           status,
           created_by: user.id,
+          google_event_id: googleEventId,
         });
+
+        if (googlePendingId) {
+          // Best-effort: don't fail the redirect if the audit update flakes.
+          markPendingImported(googlePendingId, created.id).catch(() => {});
+        }
+
         navigate(`/reservations/${created.id}`, { replace: true });
       }
     } catch (err) {
