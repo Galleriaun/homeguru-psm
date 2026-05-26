@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
@@ -78,24 +79,36 @@ function PeopleIcon() {
 }
 
 export function FinanceTabs() {
+  const { profile } = useAuth();
+  // Personel (YETKILI) only has access to Giderler (their own submissions
+  // queued for onay). The other three routes are ProtectedRoute-blocked for
+  // them anyway, but hiding the tabs avoids dead-end clicks.
+  const isFullFinance =
+    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
   return (
     <div className="flex flex-wrap gap-2">
-      <NavLink to="/finance/staff" className={tabClass}>
-        <PeopleIcon />
-        Personel
-      </NavLink>
+      {isFullFinance && (
+        <NavLink to="/finance/staff" className={tabClass}>
+          <PeopleIcon />
+          Personel
+        </NavLink>
+      )}
       <NavLink to="/finance/expenses" className={tabClass}>
         <ReceiptIcon />
         Giderler
       </NavLink>
-      <NavLink to="/finance/cash" className={tabClass}>
-        <CashIcon />
-        Kasa
-      </NavLink>
-      <NavLink to="/finance/pending" className={tabClass}>
-        <CheckIcon />
-        Onaylar
-      </NavLink>
+      {isFullFinance && (
+        <NavLink to="/finance/cash" className={tabClass}>
+          <CashIcon />
+          Kasa
+        </NavLink>
+      )}
+      {isFullFinance && (
+        <NavLink to="/finance/pending" className={tabClass}>
+          <CheckIcon />
+          Onaylar
+        </NavLink>
+      )}
     </div>
   );
 }

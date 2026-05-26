@@ -36,6 +36,12 @@ export function ExpensesListPage() {
   const [expenses, setExpenses] = useState<ExpenseWithProperty[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // YETKILI may *submit* a gider (queues pending), but doesn't have
+  // finance:write for edits. Surface the "+ Yeni Gider" button for them too.
+  const canCreateExpense =
+    profile?.role === 'SUPER_ADMIN' ||
+    profile?.role === 'PROPERTY_MANAGER' ||
+    profile?.role === 'YETKILI';
   const canWrite = profile && can(profile.role, 'finance:write');
 
   // Load properties once
@@ -101,7 +107,7 @@ export function ExpensesListPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <FinanceTabs />
-          {canWrite && (
+          {canCreateExpense && (
             <Link to="/finance/expenses/new">
               <Button>+ Yeni Gider</Button>
             </Link>

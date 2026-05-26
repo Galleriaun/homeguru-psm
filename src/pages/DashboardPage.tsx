@@ -142,6 +142,16 @@ export function DashboardPage() {
               description="Google Takvim'e dışarıdan eklenen rezervasyonları daireye ata"
             />
           )}
+          {/* Personel (YETKILI) has no Finans menu, but can submit giderler.
+              The form lands the row in 'pending' for yönetici onay. */}
+          {profile?.role === 'YETKILI' && (
+            <QuickAction
+              to="/finance/expenses/new"
+              icon={<ExclamationCircleIcon className="h-5 w-5" />}
+              label="+ Gider Bildir"
+              description="Yapılan harcamayı yönetici onayına gönder"
+            />
+          )}
         </div>
       </section>
 

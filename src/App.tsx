@@ -35,6 +35,9 @@ import { UnitGalleryPage } from '@/pages/public/UnitGalleryPage';
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION', 'YETKILI'] as const;
 const GUEST_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION', 'YETKILI'] as const;
 const FINANCE_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER'] as const;
+// Roles that can submit a new gider. YETKILI's submission goes through the
+// onay queue (migration 055 + 064) instead of posting straight to the kasa.
+const EXPENSE_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
 const HOUSEKEEPING_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'HOUSEKEEPING', 'YETKILI'] as const;
 const UNIT_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
 
@@ -159,7 +162,7 @@ export default function App() {
           <Route
             path="/finance/expenses"
             element={
-              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+              <ProtectedRoute allowedRoles={[...EXPENSE_WRITERS]}>
                 <ExpensesListPage />
               </ProtectedRoute>
             }
@@ -167,7 +170,7 @@ export default function App() {
           <Route
             path="/finance/expenses/new"
             element={
-              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+              <ProtectedRoute allowedRoles={[...EXPENSE_WRITERS]}>
                 <ExpenseFormPage />
               </ProtectedRoute>
             }
