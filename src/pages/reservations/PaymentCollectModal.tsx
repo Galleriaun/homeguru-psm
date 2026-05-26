@@ -10,6 +10,9 @@ import type { PaymentMethod } from '@/types/database';
 
 interface Props {
   reservationId: string;
+  /** Amount to pre-fill — typically the reservation's total. The operator
+      can still overwrite (partial collection, refund-style entry, etc.). */
+  defaultAmount?: number;
   onClose: () => void;
   onCollected: () => void;
 }
@@ -20,7 +23,12 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   CARD: 'Kart',
 };
 
-export function PaymentCollectModal({ reservationId, onClose, onCollected }: Props) {
+export function PaymentCollectModal({
+  reservationId,
+  defaultAmount = 0,
+  onClose,
+  onCollected,
+}: Props) {
   const { profile } = useAuth();
   // Roles without finance:write submit UNCONFIRMED rows that a manager later
   // approves before money lands in the kasa / cari. HOUSEKEEPING and YETKILI
@@ -29,7 +37,7 @@ export function PaymentCollectModal({ reservationId, onClose, onCollected }: Pro
     profile?.role === 'HOUSEKEEPING' || profile?.role === 'YETKILI';
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
-  const [amount, setAmount] = useState(0);
+  const [amount, setAmount] = useState(defaultAmount);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

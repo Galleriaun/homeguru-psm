@@ -76,6 +76,18 @@ export function ExpensesListPage() {
 
   const total = expenses ? totalAmount(expenses) : 0;
 
+  // Split into Genel (no property) vs Mülk (tied to a property) so the list
+  // can render two stacked sections with their own subtotals. The user-facing
+  // contract: Genel first at the top, Mülk giderleri underneath.
+  const genelExpenses = useMemo(
+    () => expenses?.filter((e) => e.property_id === null) ?? [],
+    [expenses],
+  );
+  const mulkExpenses = useMemo(
+    () => expenses?.filter((e) => e.property_id !== null) ?? [],
+    [expenses],
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -189,102 +201,153 @@ export function ExpensesListPage() {
             </div>
           </div>
 
-          {/* Mobile: stacked cards (each card is a tap-target linking to edit) */}
-          <div className="space-y-2 sm:hidden">
-            {expenses.map((e) => (
-              <Link
-                key={e.id}
-                to={`/finance/expenses/${e.id}/edit`}
-                className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
+          {/* Genel giderler — property_id IS NULL. Always renders first. */}
+          {genelExpenses.length > 0 && (
+            <ExpenseSection
+              title="Genel Giderler"
+              items={genelExpenses}
+              subtotal={totalAmount(genelExpenses)}
+            />
+          )}
+
+          {/* Mülk giderleri — tied to a property. Renders below. */}
+          {mulkExpenses.length > 0 && (
+            <ExpenseSection
+              title="Mülk Giderleri"
+              items={mulkExpenses}
+              subtotal={totalAmount(mulkExpenses)}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One titled block of expense rows + its own subtotal. Pulled out so the
+ * Genel / Mülk split renders without duplicating the mobile-card-vs-table
+ * markup. Each row remains a tap-target linking to the edit page.
+ */
+function ExpenseSection({
+  title,
+  items,
+  subtotal,
+}: {
+  title: string;
+  items: ExpenseWithProperty[];
+  subtotal: number;
+}) {
+  return (
+    <section className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300">
+          {title}{' '}
+          <span className="ml-1 text-xs font-normal text-stone-500 dark:text-stone-400">
+            ({items.length})
+          </span>
+        </h2>
+        <p className="text-sm">
+          <strong className="text-stone-900 dark:text-stone-100">
+            {formatTRY(subtotal)}
+          </strong>
+        </p>
+      </div>
+
+      {/* Mobile: stacked cards */}
+      <div className="space-y-2 sm:hidden">
+        {items.map((e) => (
+          <Link
+            key={e.id}
+            to={`/finance/expenses/${e.id}/edit`}
+            className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200">
+                    {e.category}
+                  </span>
+                  {e.is_recurring && (
+                    <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                      Düzenli
+                    </span>
+                  )}
+                  <span className="text-xs text-stone-600 dark:text-stone-300">
+                    {formatDate(e.expense_date)}
+                  </span>
+                </div>
+                <p className="mt-1 truncate text-sm text-stone-700 dark:text-stone-300">
+                  {e.property?.name ?? 'Genel'}
+                </p>
+                {e.description && (
+                  <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
+                    {e.description}
+                  </p>
+                )}
+              </div>
+              <p className="shrink-0 font-semibold text-stone-900 dark:text-stone-100">
+                {formatTRY(Number(e.amount))}
+              </p>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* Tablet+ : table */}
+      <Card className="hidden p-0 sm:block">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
+              <tr>
+                <th className="px-6 py-3 font-medium">Tarih</th>
+                <th className="px-6 py-3 font-medium">Mülk</th>
+                <th className="px-6 py-3 font-medium">Kategori</th>
+                <th className="px-6 py-3 font-medium">Açıklama</th>
+                <th className="px-6 py-3 text-right font-medium">Tutar</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
+              {items.map((e) => (
+                <tr
+                  key={e.id}
+                  className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                >
+                  <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                    <Link to={`/finance/expenses/${e.id}/edit`} className="block">
+                      {formatDate(e.expense_date)}
+                    </Link>
+                  </td>
+                  <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                    {e.property?.name ?? 'Genel'}
+                  </td>
+                  <td className="px-6 py-3">
+                    <span className="inline-flex items-center gap-1.5">
                       <span className="rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200">
                         {e.category}
                       </span>
                       {e.is_recurring && (
-                        <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                        <span
+                          title="Düzenli (örn. her ay)"
+                          className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                        >
                           Düzenli
                         </span>
                       )}
-                      <span className="text-xs text-stone-600 dark:text-stone-300">
-                        {formatDate(e.expense_date)}
-                      </span>
-                    </div>
-                    <p className="mt-1 truncate text-sm text-stone-700 dark:text-stone-300">
-                      {e.property?.name ?? 'Genel'}
-                    </p>
-                    {e.description && (
-                      <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
-                        {e.description}
-                      </p>
-                    )}
-                  </div>
-                  <p className="shrink-0 font-semibold text-stone-900 dark:text-stone-100">
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                    {e.description || '—'}
+                  </td>
+                  <td className="px-6 py-3 text-right font-semibold text-stone-900 dark:text-stone-100">
                     {formatTRY(Number(e.amount))}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          {/* Tablet+ : table */}
-          <Card className="hidden p-0 sm:block">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                  <tr>
-                    <th className="px-6 py-3 font-medium">Tarih</th>
-                    <th className="px-6 py-3 font-medium">Mülk</th>
-                    <th className="px-6 py-3 font-medium">Kategori</th>
-                    <th className="px-6 py-3 font-medium">Açıklama</th>
-                    <th className="px-6 py-3 text-right font-medium">Tutar</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                  {expenses.map((e) => (
-                    <tr
-                      key={e.id}
-                      className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50"
-                    >
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        <Link to={`/finance/expenses/${e.id}/edit`} className="block">
-                          {formatDate(e.expense_date)}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        {e.property?.name ?? 'Genel'}
-                      </td>
-                      <td className="px-6 py-3">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200">
-                            {e.category}
-                          </span>
-                          {e.is_recurring && (
-                            <span
-                              title="Düzenli (örn. her ay)"
-                              className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
-                            >
-                              Düzenli
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        {e.description || '—'}
-                      </td>
-                      <td className="px-6 py-3 text-right font-semibold text-stone-900 dark:text-stone-100">
-                        {formatTRY(Number(e.amount))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </>
-      )}
-    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </section>
   );
 }

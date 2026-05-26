@@ -61,6 +61,7 @@ export async function deleteProperty(id: string) {
 export function sortHotelsFirst(properties: Property[]): Property[] {
   return [...properties].sort((a, b) => {
     if (a.type !== b.type) return a.type === 'HOTEL' ? -1 : 1;
-    return a.name.localeCompare(b.name, 'tr');
+    // numeric: true → "B2" < "B10" (natural order) instead of "B10" < "B2".
+    return a.name.localeCompare(b.name, 'tr', { numeric: true });
   });
 }

@@ -7,7 +7,7 @@ import { listAllUnits, type Unit } from '@/lib/queries/units';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { propertyPhotoUrl } from '@/lib/photos';
-import { formatRoomType } from '@/lib/utils';
+import { formatRoomType, formatTRY } from '@/lib/utils';
 
 export function PropertiesListPage() {
   const { profile } = useAuth();
@@ -44,6 +44,31 @@ export function PropertiesListPage() {
       const distinct = Array.from(new Set(propUnits.map((u) => u.room_type)));
       if (distinct.length === 0) continue;
       map.set(propId, distinct.map(formatRoomType).join(' · '));
+    }
+    return map;
+  }, [units]);
+
+  /**
+   * Per-property base price summary. Single unit → exact price. Multiple
+   * units with the same price → exact price. Otherwise show the range
+   * (min–max). All zero/missing → undefined (card hides the chip).
+   */
+  const priceByProperty = useMemo(() => {
+    const map = new Map<string, string>();
+    const grouped = new Map<string, Unit[]>();
+    for (const u of units) {
+      const arr = grouped.get(u.property_id) ?? [];
+      arr.push(u);
+      grouped.set(u.property_id, arr);
+    }
+    for (const [propId, propUnits] of grouped) {
+      const prices = propUnits
+        .map((u) => Number(u.base_price))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      if (prices.length === 0) continue;
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      map.set(propId, min === max ? formatTRY(min) : `${formatTRY(min)}–${formatTRY(max)}`);
     }
     return map;
   }, [units]);
@@ -132,13 +157,18 @@ export function PropertiesListPage() {
                 </div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-x-2">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                       <h3 className="truncate font-semibold text-stone-900 dark:text-stone-100">
                         {p.name}
                       </h3>
                       {typesByProperty.has(p.id) && (
-                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        <span className="rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
                           {typesByProperty.get(p.id)}
+                        </span>
+                      )}
+                      {priceByProperty.has(p.id) && (
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          {priceByProperty.get(p.id)}
                         </span>
                       )}
                     </div>

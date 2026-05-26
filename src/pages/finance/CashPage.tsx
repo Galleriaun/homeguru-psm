@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
@@ -45,6 +45,8 @@ export function CashPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTxModal, setShowTxModal] = useState(false);
+  /** Gelir / Gider filter for the Hareketler list. Balance always uses the full set. */
+  const [directionFilter, setDirectionFilter] = useState<'ALL' | TxDirection>('ALL');
 
   // Per-row tx deletion (SUPER_ADMIN only — see migration 015).
   const [txToDelete, setTxToDelete] = useState<CashTransaction | null>(null);
@@ -53,6 +55,21 @@ export function CashPage() {
 
   const canWrite = Boolean(profile && can(profile.role, 'finance:write'));
   const canDeleteTx = profile?.role === 'SUPER_ADMIN';
+
+  // Filtered view for the Hareketler list. Balance stays computed from the
+  // full set so toggling Gelir / Gider doesn't change the running total.
+  const filteredTransactions = useMemo(() => {
+    if (directionFilter === 'ALL') return transactions;
+    return transactions.filter((t) => t.direction === directionFilter);
+  }, [transactions, directionFilter]);
+  const gelirCount = useMemo(
+    () => transactions.filter((t) => t.direction === 'IN').length,
+    [transactions],
+  );
+  const giderCount = useMemo(
+    () => transactions.filter((t) => t.direction === 'OUT').length,
+    [transactions],
+  );
 
   useEffect(() => {
     setError(null);
@@ -161,7 +178,7 @@ export function CashPage() {
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    const rows = transactions.map((t) => ({
+                    const rows = filteredTransactions.map((t) => ({
                       Tarih: formatDate(t.created_at),
                       Saat: formatTime(t.created_at),
                       Yön: DIRECTION_LABEL[t.direction],
@@ -192,6 +209,31 @@ export function CashPage() {
               )}
             </div>
 
+            {transactions.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {(['ALL', 'IN', 'OUT'] as const).map((f) => {
+                  const isActive = directionFilter === f;
+                  const count =
+                    f === 'ALL' ? transactions.length : f === 'IN' ? gelirCount : giderCount;
+                  const label = f === 'ALL' ? 'Tümü' : DIRECTION_LABEL[f];
+                  return (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setDirectionFilter(f)}
+                      className={
+                        isActive
+                          ? 'rounded-full bg-stone-900 px-4 py-1 text-sm font-medium text-white dark:bg-stone-100 dark:text-stone-900'
+                          : 'rounded-full border border-stone-300 px-4 py-1 text-sm font-medium text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800'
+                      }
+                    >
+                      {label} <span className="ml-1 text-xs opacity-70">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {transactions.length === 0 ? (
               <Card>
                 <p className="text-center text-sm text-stone-600 dark:text-stone-300">
@@ -199,11 +241,17 @@ export function CashPage() {
                   {canWrite && ' Sağ üstteki “İşlem Ekle” butonu ile başlayın.'}
                 </p>
               </Card>
+            ) : filteredTransactions.length === 0 ? (
+              <Card>
+                <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+                  Bu filtre için kayıt yok.
+                </p>
+              </Card>
             ) : (
               <>
                 {/* Mobile: stacked cards */}
                 <div className="space-y-2 sm:hidden">
-                  {transactions.map((t) => {
+                  {filteredTransactions.map((t) => {
                     const positive = t.direction === 'IN';
                     return (
                       <div
@@ -285,7 +333,7 @@ export function CashPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                        {transactions.map((t) => {
+                        {filteredTransactions.map((t) => {
                           const positive = t.direction === 'IN';
                           return (
                             <tr key={t.id}>
@@ -377,7 +425,14 @@ export function CashPage() {
           createdByUserId={user.id}
           onClose={() => setShowTxModal(false)}
           onCreated={(tx) => {
-            setTransactions((prev) => [tx, ...prev]);
+            // Only push to the visible list when the server marked the row
+            // as approved (SUPER_ADMIN path). PROPERTY_MANAGER submissions
+            // come back with approval_status='pending' and belong in the
+            // /finance/pending queue — adding them here would inflate the
+            // displayed balance until the next refresh.
+            if (tx.approval_status === 'approved') {
+              setTransactions((prev) => [tx, ...prev]);
+            }
             setShowTxModal(false);
           }}
         />

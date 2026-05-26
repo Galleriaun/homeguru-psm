@@ -36,13 +36,16 @@ const STATUS_ACTIVE: Record<HousekeepingStatus, string> = {
 const STATUS_INACTIVE =
   'border border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800';
 
-type FilterOption = 'ALL' | HousekeepingStatus;
+// "ISSUES" is a virtual filter — not a HousekeepingStatus value; it surfaces
+// units that have one or more open housekeeping_issues regardless of clean state.
+type FilterOption = 'ALL' | HousekeepingStatus | 'ISSUES';
 
 const FILTER_LABELS: Record<FilterOption, string> = {
   ALL: 'Tümü',
   DIRTY: 'Kirli',
   IN_PROGRESS: 'Temizleniyor',
   CLEAN: 'Temiz',
+  ISSUES: 'Sorunlu',
 };
 
 export function HousekeepingPage() {
@@ -105,7 +108,7 @@ export function HousekeepingPage() {
       property: p,
       units: units
         .filter((u) => u.property_id === p.id)
-        .sort((a, b) => a.name.localeCompare(b.name, 'tr')),
+        .sort((a, b) => a.name.localeCompare(b.name, 'tr', { numeric: true })),
     }));
   }, [properties, units]);
 
@@ -119,9 +122,11 @@ export function HousekeepingPage() {
   const cleanCount = units.filter(
     (u) => (currentByUnit.get(u.id)?.status ?? DEFAULT_STATUS) === 'CLEAN',
   ).length;
+  const issuesCount = units.filter((u) => (openIssueCounts.get(u.id) ?? 0) > 0).length;
 
   const matchesFilter = (unitId: string): boolean => {
     if (filter === 'ALL') return true;
+    if (filter === 'ISSUES') return (openIssueCounts.get(unitId) ?? 0) > 0;
     const status = currentByUnit.get(unitId)?.status ?? DEFAULT_STATUS;
     return status === filter;
   };
@@ -177,7 +182,7 @@ export function HousekeepingPage() {
 
       {/* Status filter chips with counts */}
       <div className="flex flex-wrap gap-2">
-        {(['ALL', 'DIRTY', 'IN_PROGRESS', 'CLEAN'] as const).map((f) => {
+        {(['ALL', 'DIRTY', 'IN_PROGRESS', 'CLEAN', 'ISSUES'] as const).map((f) => {
           const count =
             f === 'ALL'
               ? totalCount
@@ -185,7 +190,9 @@ export function HousekeepingPage() {
                 ? dirtyCount
                 : f === 'IN_PROGRESS'
                   ? inProgressCount
-                  : cleanCount;
+                  : f === 'CLEAN'
+                    ? cleanCount
+                    : issuesCount;
           const isActive = filter === f;
           return (
             <button
@@ -236,96 +243,112 @@ export function HousekeepingPage() {
         />
       )}
 
-      {!loading &&
-        grouped.map((g) => {
-          const visibleUnits = g.units.filter((u) => matchesFilter(u.id));
-          if (visibleUnits.length === 0) return null;
-          return (
-            <Fragment key={g.property.id}>
-              <section className="space-y-3">
-                <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-                  {g.property.name}
+      {!loading && (
+        <>
+          {(['HOTEL', 'APARTMENT'] as const).map((typeKey) => {
+            const groupsForType = grouped.filter((g) => g.property.type === typeKey);
+            // Drop properties whose units are all filtered out, so empty
+            // sections don't render an orphan "Binalar" / "Daireler" header.
+            const visibleGroups = groupsForType
+              .map((g) => ({ ...g, visible: g.units.filter((u) => matchesFilter(u.id)) }))
+              .filter((g) => g.visible.length > 0);
+            if (visibleGroups.length === 0) return null;
+            const sectionTitle = typeKey === 'HOTEL' ? 'Binalar' : 'Daireler';
+            return (
+              <section key={typeKey} className="space-y-4">
+                <h2 className="border-b border-stone-200 pb-1 text-xl font-bold text-stone-900 dark:border-stone-700 dark:text-stone-100">
+                  {sectionTitle}
                 </h2>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {visibleUnits.map((unit) => {
-                    const latest = currentByUnit.get(unit.id);
-                    const current = latest?.status ?? DEFAULT_STATUS;
-                    const isSaving = savingUnitId === unit.id;
-                    const openIssues = openIssueCounts.get(unit.id) ?? 0;
-                    return (
-                      <Card key={unit.id} className="space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-base font-semibold text-stone-900 dark:text-stone-100">
-                              {unit.name}
-                            </p>
-                            <p className="text-xs text-stone-600 dark:text-stone-300">
-                              {formatRoomType(unit.room_type)}
-                            </p>
-                            <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                              {latest
-                                ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
-                                : 'Henüz kayıt yok'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {isSaving && (
-                              <span className="text-xs text-stone-500">Kaydediliyor…</span>
-                            )}
-                            {openIssues > 0 && (
-                              <span
-                                title={`${openIssues} açık sorun`}
-                                className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300"
-                              >
-                                ⚠ {openIssues}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                {visibleGroups.map((g) => (
+                  <Fragment key={g.property.id}>
+                    <section className="space-y-3">
+                      <h3 className="text-base font-semibold text-stone-800 dark:text-stone-200">
+                        {g.property.name}
+                      </h3>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {g.visible.map((unit) => {
+                          const latest = currentByUnit.get(unit.id);
+                          const current = latest?.status ?? DEFAULT_STATUS;
+                          const isSaving = savingUnitId === unit.id;
+                          const openIssues = openIssueCounts.get(unit.id) ?? 0;
+                          return (
+                            <Card key={unit.id} className="space-y-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-base font-semibold text-stone-900 dark:text-stone-100">
+                                    {unit.name}
+                                  </p>
+                                  <p className="text-xs text-stone-600 dark:text-stone-300">
+                                    {formatRoomType(unit.room_type)}
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                                    {latest
+                                      ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
+                                      : 'Henüz kayıt yok'}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {isSaving && (
+                                    <span className="text-xs text-stone-500">Kaydediliyor…</span>
+                                  )}
+                                  {openIssues > 0 && (
+                                    <span
+                                      title={`${openIssues} açık sorun`}
+                                      className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                                    >
+                                      ⚠ {openIssues}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
 
-                        {/* Status buttons: current is filled, others are outlined */}
-                        <div className="grid grid-cols-3 gap-2">
-                          {(['DIRTY', 'IN_PROGRESS', 'CLEAN'] as const).map((s) => {
-                            const isCurrent = s === current;
-                            return (
-                              <button
-                                key={s}
-                                type="button"
-                                disabled={!canWrite || isSaving}
-                                onClick={() => handleChangeStatus(unit, s)}
-                                className={cn(
-                                  'rounded-md px-2 py-2 text-xs font-medium transition-colors',
-                                  isCurrent ? STATUS_ACTIVE[s] : STATUS_INACTIVE,
-                                  (!canWrite || isSaving) && 'cursor-not-allowed opacity-60',
+                              {/* Status buttons: current is filled, others are outlined */}
+                              <div className="grid grid-cols-3 gap-2">
+                                {(['DIRTY', 'IN_PROGRESS', 'CLEAN'] as const).map((s) => {
+                                  const isCurrent = s === current;
+                                  return (
+                                    <button
+                                      key={s}
+                                      type="button"
+                                      disabled={!canWrite || isSaving}
+                                      onClick={() => handleChangeStatus(unit, s)}
+                                      className={cn(
+                                        'rounded-md px-2 py-2 text-xs font-medium transition-colors',
+                                        isCurrent ? STATUS_ACTIVE[s] : STATUS_INACTIVE,
+                                        (!canWrite || isSaving) && 'cursor-not-allowed opacity-60',
+                                      )}
+                                    >
+                                      {STATUS_LABELS[s]}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => setIssueModalUnit(unit)}
+                              >
+                                Sorunlar
+                                {openIssues > 0 && (
+                                  <span className="ml-1 text-xs text-red-600 dark:text-red-400">
+                                    ({openIssues})
+                                  </span>
                                 )}
-                              >
-                                {STATUS_LABELS[s]}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => setIssueModalUnit(unit)}
-                        >
-                          Sorunlar
-                          {openIssues > 0 && (
-                            <span className="ml-1 text-xs text-red-600 dark:text-red-400">
-                              ({openIssues})
-                            </span>
-                          )}
-                        </Button>
-                      </Card>
-                    );
-                  })}
-                </div>
+                              </Button>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  </Fragment>
+                ))}
               </section>
-            </Fragment>
-          );
-        })}
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

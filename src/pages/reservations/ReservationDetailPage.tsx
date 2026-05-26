@@ -390,6 +390,7 @@ export function ReservationDetailPage() {
       {showCollectModal && (
         <PaymentCollectModal
           reservationId={reservation.id}
+          defaultAmount={Number(reservation.total_amount)}
           onClose={() => setShowCollectModal(false)}
           onCollected={() => {
             setShowCollectModal(false);

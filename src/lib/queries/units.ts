@@ -18,22 +18,30 @@ const wrapErr = (e: { message: string; details?: string; hint?: string; code?: s
     `${e.message}${e.details ? ` — ${e.details}` : ''}${e.hint ? ` [${e.hint}]` : ''}${e.code ? ` (${e.code})` : ''}`,
   );
 
-/** All units for a given property, ordered by name. */
+/**
+ * Numeric-aware compare so "No.1", "No.2", "No.10" sort naturally instead of
+ * the lexicographic "No.1", "No.10", "No.2". Applied client-side because
+ * Postgres ORDER BY is plain string-sort without an extension.
+ */
+function compareNamesNatural(a: { name: string }, b: { name: string }): number {
+  return a.name.localeCompare(b.name, 'tr', { numeric: true });
+}
+
+/** All units for a given property, ordered by name (natural sort). */
 export async function listUnitsForProperty(propertyId: string) {
   const { data, error } = await supabase
     .from('units')
     .select('*')
-    .eq('property_id', propertyId)
-    .order('name');
+    .eq('property_id', propertyId);
   if (error) throw wrapErr(error);
-  return data;
+  return (data ?? []).sort(compareNamesNatural);
 }
 
-/** Every unit across all properties (RLS-filtered), ordered by name. */
+/** Every unit across all properties (RLS-filtered), ordered by name (natural). */
 export async function listAllUnits(): Promise<Unit[]> {
-  const { data, error } = await supabase.from('units').select('*').order('name');
+  const { data, error } = await supabase.from('units').select('*');
   if (error) throw wrapErr(error);
-  return data ?? [];
+  return (data ?? []).sort(compareNamesNatural);
 }
 
 export async function getUnit(id: string) {

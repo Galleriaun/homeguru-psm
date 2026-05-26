@@ -145,7 +145,7 @@ export function ReservationsAvailabilityPage() {
         const bAbs = Math.abs(b.shift);
         if (aAbs !== bAbs) return aAbs - bAbs;
         if (a.shift !== b.shift) return a.shift - b.shift;
-        return a.property.name.localeCompare(b.property.name, 'tr');
+        return a.property.name.localeCompare(b.property.name, 'tr', { numeric: true });
       });
 
       setResults(found);
