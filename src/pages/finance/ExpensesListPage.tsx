@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
 import {
   listExpenses,
   totalAmount,
@@ -42,7 +41,6 @@ export function ExpensesListPage() {
     profile?.role === 'SUPER_ADMIN' ||
     profile?.role === 'PROPERTY_MANAGER' ||
     profile?.role === 'YETKILI';
-  const canWrite = profile && can(profile.role, 'finance:write');
 
   // Load properties once
   useEffect(() => {
