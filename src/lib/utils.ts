@@ -54,7 +54,7 @@ const ROLE_LABELS: Record<string, string> = {
   PROPERTY_MANAGER: 'Alt Yönetici',
   RECEPTION: 'Resepsiyon',
   HOUSEKEEPING: 'Temizlik',
-  YETKILI: 'Yetkili',
+  YETKILI: 'Personel',
   PENDING: 'Onay Bekliyor',
 };
 
