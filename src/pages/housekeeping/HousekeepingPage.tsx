@@ -237,7 +237,7 @@ export function HousekeepingPage() {
                   ? 'border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-600'
                   : isActive
                     ? 'border-stone-900 bg-stone-900 text-white dark:border-stone-100 dark:bg-stone-100 dark:text-stone-900'
-                    : isAlert && count > 0
+                    : isAlert
                       ? 'border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30'
                       : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
               )}

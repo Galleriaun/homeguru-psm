@@ -19,6 +19,7 @@ import { CashTxModal } from './CashTxModal';
 import { FinanceTabs } from './FinanceTabs';
 import { formatTRY, formatDate } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
+import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import type { TxDirection } from '@/types/database';
 
 const DIRECTION_LABEL: Record<TxDirection, string> = {
@@ -47,6 +48,7 @@ export function CashPage() {
   const [showTxModal, setShowTxModal] = useState(false);
   /** Gelir / Gider filter for the Hareketler list. Balance always uses the full set. */
   const [directionFilter, setDirectionFilter] = useState<'ALL' | TxDirection>('ALL');
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   // Per-row tx deletion (SUPER_ADMIN only — see migration 015).
   const [txToDelete, setTxToDelete] = useState<CashTransaction | null>(null);
@@ -82,6 +84,7 @@ export function CashPage() {
         }
         setAccount(a);
         setTransactions(await listCashTransactions(a.id));
+        loadStaffDirectory().then(setStaffMap).catch(() => {});
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Yüklenemedi');
       } finally {
@@ -288,6 +291,16 @@ export function CashPage() {
                                   : ''}
                               </Link>
                             )}
+                            {(() => {
+                              const uid = t.submitted_by ?? t.created_by;
+                              const name = uid ? staffMap.get(uid) : undefined;
+                              if (!name) return null;
+                              return (
+                                <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+                                  Oluşturan: {name}
+                                </p>
+                              );
+                            })()}
                           </div>
                           <p
                             className={
@@ -342,6 +355,16 @@ export function CashPage() {
                                 <div className="text-xs text-stone-600 dark:text-stone-300">
                                   {formatTime(t.created_at)}
                                 </div>
+                                {(() => {
+                                  const uid = t.submitted_by ?? t.created_by;
+                                  const name = uid ? staffMap.get(uid) : undefined;
+                                  if (!name) return null;
+                                  return (
+                                    <div className="text-xs text-stone-500 dark:text-stone-400">
+                                      Oluşturan: {name}
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td className="px-6 py-3">
                                 <span

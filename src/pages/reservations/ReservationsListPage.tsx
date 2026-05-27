@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ReservationsViewTabs } from './ViewTabs';
 import { formatTRY, formatDate, checkoutTimeLabel, istanbulToday } from '@/lib/utils';
+import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import type { ReservationStatus } from '@/types/database';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', { timeStyle: 'short' });
@@ -44,6 +45,7 @@ export function ReservationsListPage() {
   const { profile } = useAuth();
   const [reservations, setReservations] = useState<ReservationWithRefs[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
   // 'CHECKOUT_TODAY' is a virtual filter — it cuts across statuses and shows
   // any reservation whose stay_end is on today's Istanbul calendar date.
   // Cancelled stays are excluded — "bugün çıkacaklar" is a reception-desk
@@ -54,6 +56,8 @@ export function ReservationsListPage() {
     listReservations()
       .then(setReservations)
       .catch((e) => setError(e?.message ?? 'Rezervasyonlar yüklenemedi'));
+    // Best-effort: staff directory powers the "Oluşturan: X" line.
+    loadStaffDirectory().then(setStaffMap).catch(() => {});
   }, []);
 
   const canCreate = profile && can(profile.role, 'reservation:create');
@@ -187,19 +191,25 @@ export function ReservationsListPage() {
                     {g.items.length}
                   </span>
                 </h2>
-                <ReservationRows items={g.items} />
+                <ReservationRows items={g.items} staffMap={staffMap} />
               </section>
             ))}
           </div>
         ) : (
-          <ReservationRows items={filtered} />
+          <ReservationRows items={filtered} staffMap={staffMap} />
         ))}
     </div>
   );
 }
 
 /** The mobile cards + tablet table for a list of reservations. */
-function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
+function ReservationRows({
+  items,
+  staffMap,
+}: {
+  items: ReservationWithRefs[];
+  staffMap: Map<string, string>;
+}) {
   return (
     <>
       {/* Mobile: stacked cards */}
@@ -238,6 +248,11 @@ function ReservationRows({ items }: { items: ReservationWithRefs[] }) {
                 {formatTRY(Number(r.total_amount))}
               </span>
             </p>
+            {staffMap.get(r.created_by) && (
+              <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                Oluşturan: {staffMap.get(r.created_by)}
+              </p>
+            )}
           </Link>
         ))}
       </div>

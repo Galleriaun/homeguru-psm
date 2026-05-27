@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { cn } from '@/lib/utils';
+import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 
 const MAX_PHOTOS = 5;
 
@@ -52,6 +53,7 @@ export function IssuesModal({
 }: Props) {
   const [issues, setIssues] = useState<HousekeepingIssue[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   // Create form state
   const [description, setDescription] = useState('');
@@ -83,6 +85,7 @@ export function IssuesModal({
     listIssuesForUnit(unitId)
       .then(setIssues)
       .catch((e) => setLoadError(e?.message ?? 'Sorunlar yüklenemedi'));
+    loadStaffDirectory().then(setStaffMap).catch(() => {});
   }, [unitId]);
 
   const handleFilesPicked = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -359,6 +362,9 @@ export function IssuesModal({
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-stone-600 dark:text-stone-300">
                     {new Date(issue.created_at).toLocaleString('tr-TR')}
+                    {issue.reported_by && staffMap.get(issue.reported_by) && (
+                      <> · Oluşturan: {staffMap.get(issue.reported_by)}</>
+                    )}
                   </span>
                   <div className="flex gap-2">
                     {canWrite && issue.status !== 'RESOLVED' && (

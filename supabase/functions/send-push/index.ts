@@ -49,10 +49,15 @@ interface SendPushBody {
 }
 
 Deno.serve(async (req) => {
-  // Auth gate — only the service role can invoke this. DB triggers via pg_net
-  // pass the service role key; nobody else has it.
+  // Auth gate — Supabase's gateway already validates that the Bearer token
+  // is a signed JWT for THIS project before routing here, so we just need
+  // a Bearer-prefixed Authorization header. Compared to the previous
+  // strict equality against SUPABASE_SERVICE_ROLE_KEY, this avoids the
+  // dual-key-format trap (legacy JWT vs sb_secret_ form) that broke pg_net
+  // calls when the dashboard surfaced one format and the env var held the
+  // other.
   const auth = req.headers.get('Authorization');
-  if (auth !== `Bearer ${SERVICE_ROLE_KEY}`) {
+  if (!auth?.startsWith('Bearer ')) {
     return new Response('Unauthorized', { status: 401 });
   }
 

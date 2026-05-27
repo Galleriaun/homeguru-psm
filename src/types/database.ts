@@ -1190,6 +1190,10 @@ export type Database = {
         Args: { _user_id: string };
         Returns: Database['public']['Tables']['staff_profiles']['Row'];
       };
+      list_staff_directory: {
+        Args: Record<PropertyKey, never>;
+        Returns: { user_id: string; full_name: string }[];
+      };
       create_companion: {
         Args: {
           _guest_id: string;

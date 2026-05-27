@@ -14,6 +14,7 @@ import { Select } from '@/components/ui/Select';
 import { FinanceTabs } from './FinanceTabs';
 import { formatTRY, formatDate } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
+import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 
 function currentMonthStr(): string {
   // YYYY-MM in local time
@@ -33,6 +34,7 @@ export function ExpensesListPage() {
 
   const [expenses, setExpenses] = useState<ExpenseWithProperty[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   // YETKILI may *submit* a gider (queues pending), but doesn't have
   // finance:write for edits. Surface the "+ Yeni Gider" button for them too.
@@ -41,11 +43,12 @@ export function ExpensesListPage() {
     profile?.role === 'PROPERTY_MANAGER' ||
     profile?.role === 'YETKILI';
 
-  // Load properties once
+  // Load properties + staff directory once
   useEffect(() => {
     listProperties()
       .then(setProperties)
       .catch((e) => setError(e?.message ?? 'Mülkler yüklenemedi'));
+    loadStaffDirectory().then(setStaffMap).catch(() => {});
   }, []);
 
   // Refetch whenever filters change
@@ -228,6 +231,7 @@ export function ExpensesListPage() {
               title="Genel Giderler"
               items={genelExpenses}
               subtotal={totalAmount(genelExpenses)}
+              staffMap={staffMap}
             />
           )}
 
@@ -237,6 +241,7 @@ export function ExpensesListPage() {
               title="Mülk Giderleri"
               items={mulkExpenses}
               subtotal={totalAmount(mulkExpenses)}
+              staffMap={staffMap}
             />
           )}
         </>
@@ -254,10 +259,12 @@ function ExpenseSection({
   title,
   items,
   subtotal,
+  staffMap,
 }: {
   title: string;
   items: ExpenseWithProperty[];
   subtotal: number;
+  staffMap: Map<string, string>;
 }) {
   return (
     <section className="space-y-2">
@@ -304,6 +311,11 @@ function ExpenseSection({
                 {e.description && (
                   <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
                     {e.description}
+                  </p>
+                )}
+                {e.created_by && staffMap.get(e.created_by) && (
+                  <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+                    Oluşturan: {staffMap.get(e.created_by)}
                   </p>
                 )}
               </div>
@@ -358,7 +370,12 @@ function ExpenseSection({
                     </span>
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                    {e.description || '—'}
+                    <div>{e.description || '—'}</div>
+                    {e.created_by && staffMap.get(e.created_by) && (
+                      <div className="text-xs text-stone-500 dark:text-stone-400">
+                        Oluşturan: {staffMap.get(e.created_by)}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-right font-semibold text-stone-900 dark:text-stone-100">
                     {formatTRY(Number(e.amount))}
