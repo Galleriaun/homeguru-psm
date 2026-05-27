@@ -17,7 +17,7 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CashTxModal } from './CashTxModal';
 import { FinanceTabs } from './FinanceTabs';
-import { formatTRY, formatDate, istanbulToday, cn } from '@/lib/utils';
+import { formatTRY, formatDate, istanbulToday, cn, tPaymentMethods } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
 import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
@@ -29,20 +29,7 @@ const DIRECTION_LABEL: Record<TxDirection, string> = {
   OUT: 'Gider',
 };
 
-/**
- * cash_transactions.description strings are built server-side by the
- * collect/confirm/expense RPCs and embed the raw payment_method codes
- * (CASH / TRANSFER / CARD). Translate them at the display layer so the
- * operator never sees the English token. Word boundaries on the regex
- * keep us from mangling unrelated text.
- */
-function tDescription(raw: string | null | undefined): string {
-  if (!raw) return '—';
-  return raw
-    .replace(/\bCASH\b/g, 'Nakit')
-    .replace(/\bTRANSFER\b/g, 'Havale/EFT')
-    .replace(/\bCARD\b/g, 'Kart');
-}
+// tPaymentMethods is now in @/lib/utils so the cari ledger can use it too.
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', { timeStyle: 'short' });
 function formatTime(iso: string): string {
@@ -384,7 +371,7 @@ export function CashPage() {
                       Yön: DIRECTION_LABEL[t.direction],
                       Tutar: Number(t.amount).toFixed(2),
                       'Para Birimi': account.currency,
-                      Açıklama: tDescription(t.description),
+                      Açıklama: tPaymentMethods(t.description),
                       Misafir: t.payment_collection?.reservation?.guest?.full_name ?? '',
                       Tip: t.ref_type ?? '',
                     }));
@@ -486,7 +473,7 @@ export function CashPage() {
                               )}
                             </div>
                             <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
-                              {tDescription(t.description)}
+                              {tPaymentMethods(t.description)}
                             </p>
                             {t.payment_collection?.reservation && (
                               <Link
@@ -606,7 +593,7 @@ export function CashPage() {
                                 </span>
                               </td>
                               <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                                <div>{tDescription(t.description)}</div>
+                                <div>{tPaymentMethods(t.description)}</div>
                                 {t.payment_collection?.reservation && (
                                   <Link
                                     to={`/reservations/${t.payment_collection.reservation.id}`}

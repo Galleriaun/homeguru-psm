@@ -31,7 +31,7 @@ import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
 import { ClockIcon } from '@/components/icons/ActionIcons';
 import { ProblematicFlagModal } from '@/pages/guests/ProblematicFlagModal';
-import { formatDate, formatTRY, checkoutTimeLabel } from '@/lib/utils';
+import { formatDate, formatTRY, checkoutTimeLabel, tPaymentMethods } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
 import { resolveKatalogLink } from '@/lib/gallery';
 
@@ -547,7 +547,7 @@ export function ReservationDetailPage() {
                   {entryToDelete.type === 'DEBT' ? '+' : '−'}
                   {formatTRY(Number(entryToDelete.amount))}
                 </strong>
-                {entryToDelete.note ? ` — ${entryToDelete.note}` : ''}
+                {entryToDelete.note ? ` — ${tPaymentMethods(entryToDelete.note)}` : ''}
               </p>
               <p className="mt-2">Kayıt Çöp Kutusu'na taşınır ve oradan geri yüklenebilir. Bakiye yeniden hesaplanır.</p>
               {entryToDelete.payment_collection_id && (
@@ -658,7 +658,7 @@ function LedgerSection({
                     Tip: e.type === 'DEBT' ? 'Ücret' : 'Ödeme',
                     Tutar: Number(e.amount).toFixed(2),
                     'Para Birimi': e.currency,
-                    Açıklama: e.note ?? '',
+                    Açıklama: tPaymentMethods(e.note),
                   }));
                   const base = `cari-${guestName || 'misafir'}-${stayStart.slice(0, 10)}`;
                   exportRowsToCsv(base, rows, [
@@ -797,7 +797,7 @@ function LedgerSection({
                             </span>
                           </div>
                           <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
-                            {e.note || '—'}
+                            {tPaymentMethods(e.note)}
                             {e.created_by === null && (
                               <span className="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-stone-600 dark:bg-stone-700 dark:text-stone-300">
                                 Sistem
@@ -868,7 +868,7 @@ function LedgerSection({
                               </span>
                             </td>
                             <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                              <span>{e.note || '—'}</span>
+                              <span>{tPaymentMethods(e.note)}</span>
                               {e.created_by === null && (
                                 <span className="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-stone-600 dark:bg-stone-700 dark:text-stone-300">
                                   Sistem

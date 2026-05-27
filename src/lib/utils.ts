@@ -146,6 +146,20 @@ export function checkoutTimeLabel(lateCheckoutHours: number | null | undefined):
   return `${String(hour).padStart(2, '0')}:00`;
 }
 
+/**
+ * Translate raw payment_method codes (CASH / TRANSFER / CARD) embedded in
+ * RPC-generated description / note strings into Turkish for display. Word
+ * boundaries keep us from mangling unrelated text. Used by the kasa list,
+ * the cari ledger rows, and anywhere else the operator sees these strings.
+ */
+export function tPaymentMethods(raw: string | null | undefined): string {
+  if (!raw) return '—';
+  return raw
+    .replace(/\bCASH\b/g, 'Nakit')
+    .replace(/\bTRANSFER\b/g, 'Havale/EFT')
+    .replace(/\bCARD\b/g, 'Kart');
+}
+
 /** Build a wa.me URL with the message URL-encoded. */
 export function whatsAppUrl(phone: string, text: string): string {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
