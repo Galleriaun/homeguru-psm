@@ -51,9 +51,11 @@ export function CashPage() {
   /** Gelir / Gider filter for the Hareketler list. */
   const [directionFilter, setDirectionFilter] = useState<'ALL' | TxDirection>('ALL');
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
-  /** Top-level view mode — Genel kasa (default), Bugünün Cirosu (today only),
+  /** Top-level view mode — Genel kasa (default), Gün Bazlı (time-window cut)
       or Mülk Bazlı (single-property cut). The bottom direction filter stacks. */
   const [kasaView, setKasaView] = useState<'general' | 'today' | 'property'>('general');
+  /** Sub-range for the Gün Bazlı view: Bugün / Hafta / Ay. */
+  const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('day');
   /** Selected property id when kasaView === 'property'. */
   const [propertyFilter, setPropertyFilter] = useState<string>('');
   const [properties, setProperties] = useState<Property[]>([]);
@@ -66,28 +68,45 @@ export function CashPage() {
   const canWrite = Boolean(profile && can(profile.role, 'finance:write'));
   const canDeleteTx = profile?.role === 'SUPER_ADMIN';
 
-  // created_at is UTC; we need the Istanbul calendar day for the "Bugünün
-  // Cirosu" filter. Shift +3h then slice the YYYY-MM-DD prefix.
+  // created_at is UTC; we need the Istanbul calendar day for the "Gün Bazlı"
+  // filter. Shift +3h then slice the YYYY-MM-DD prefix.
   const toIstanbulDate = (iso: string): string => {
     const d = new Date(iso);
     return new Date(d.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
   };
 
-  // Apply the view-mode cut first (Genel / Bugün / Mülk), then the direction
+  // Monday of the current Istanbul week (week starts Monday per TR convention).
+  const istanbulMondayOfWeek = (): string => {
+    const today = istanbulToday();
+    const d = new Date(today + 'T00:00:00Z');
+    // Date.getUTCDay() — 0=Sun..6=Sat. Distance back to Monday: (day+6)%7.
+    const offset = (d.getUTCDay() + 6) % 7;
+    d.setUTCDate(d.getUTCDate() - offset);
+    return d.toISOString().slice(0, 10);
+  };
+
+  // Apply the view-mode cut first (Genel / Gün / Mülk), then the direction
   // chip (Gelir / Gider / Tümü). Balance + totals at the top reflect the
   // view cut only (so flipping Gelir vs Gider doesn't change the headline
   // figure — same UX as before).
   const viewTransactions = useMemo(() => {
     if (kasaView === 'today') {
       const today = istanbulToday();
-      return transactions.filter((t) => toIstanbulDate(t.created_at) === today);
+      const monday = istanbulMondayOfWeek();
+      const monthPrefix = today.slice(0, 7);
+      return transactions.filter((t) => {
+        const txDate = toIstanbulDate(t.created_at);
+        if (timeRange === 'day') return txDate === today;
+        if (timeRange === 'week') return txDate >= monday && txDate <= today;
+        return txDate.slice(0, 7) === monthPrefix;
+      });
     }
     if (kasaView === 'property') {
       if (!propertyFilter) return [];
       return transactions.filter((t) => t.property_id === propertyFilter);
     }
     return transactions;
-  }, [transactions, kasaView, propertyFilter]);
+  }, [transactions, kasaView, propertyFilter, timeRange]);
 
   const filteredTransactions = useMemo(() => {
     if (directionFilter === 'ALL') return viewTransactions;
@@ -219,11 +238,11 @@ export function CashPage() {
             )}
           </Card>
 
-          {/* View-mode buttons — Genel / Bugün / Mülk Bazlı. */}
+          {/* View-mode buttons — Genel / Gün Bazlı / Mülk Bazlı. */}
           <div className="flex flex-wrap gap-2">
             {(['general', 'today', 'property'] as const).map((v) => {
               const label =
-                v === 'general' ? 'Genel Kasa' : v === 'today' ? 'Bugünün Cirosu' : 'Mülk Bazlı';
+                v === 'general' ? 'Genel Kasa' : v === 'today' ? 'Gün Bazlı' : 'Mülk Bazlı';
               const isActive = kasaView === v;
               return (
                 <button
@@ -249,6 +268,31 @@ export function CashPage() {
             })}
           </div>
 
+          {/* Gün Bazlı sub-range: Bugün / Hafta / Ay. */}
+          {kasaView === 'today' && (
+            <div className="flex flex-wrap gap-2">
+              {(['day', 'week', 'month'] as const).map((r) => {
+                const label = r === 'day' ? 'Bugün' : r === 'week' ? 'Hafta' : 'Ay';
+                const isActive = timeRange === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setTimeRange(r)}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'border-stone-900 bg-stone-900 text-white dark:border-stone-100 dark:bg-stone-100 dark:text-stone-900'
+                        : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {kasaView === 'property' && (
             <Card>
               <Select
@@ -265,11 +309,15 @@ export function CashPage() {
             </Card>
           )}
 
-          {/* View summary — today and property modes show their own headline. */}
+          {/* View summary — gün and property modes show their own headline. */}
           {kasaView === 'today' && (
             <Card className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
-                Bugünün Cirosu
+                {timeRange === 'day'
+                  ? 'Bugünün Cirosu'
+                  : timeRange === 'week'
+                    ? 'Bu Haftanın Cirosu'
+                    : 'Bu Ayın Cirosu'}
               </p>
               <div className="flex flex-wrap items-baseline gap-4">
                 <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
@@ -397,7 +445,7 @@ export function CashPage() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span
                                 className={
                                   positive
@@ -407,9 +455,20 @@ export function CashPage() {
                               >
                                 {DIRECTION_LABEL[t.direction]}
                               </span>
-                              <span className="text-xs text-stone-600 dark:text-stone-300">
-                                {formatDate(t.created_at)} · {formatTime(t.created_at)}
-                              </span>
+                              {t.payment_collection?.created_at ? (
+                                <span className="text-xs text-stone-600 dark:text-stone-300">
+                                  Toplandı: {formatDate(t.payment_collection.created_at)} ·{' '}
+                                  {formatTime(t.payment_collection.created_at)}
+                                  <span className="ml-1 text-stone-500 dark:text-stone-400">
+                                    · Onaylandı: {formatDate(t.created_at)} ·{' '}
+                                    {formatTime(t.created_at)}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-stone-600 dark:text-stone-300">
+                                  {formatDate(t.created_at)} · {formatTime(t.created_at)}
+                                </span>
+                              )}
                             </div>
                             <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
                               {t.description || '—'}
@@ -485,10 +544,30 @@ export function CashPage() {
                           return (
                             <tr key={t.id}>
                               <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                                <div>{formatDate(t.created_at)}</div>
-                                <div className="text-xs text-stone-600 dark:text-stone-300">
-                                  {formatTime(t.created_at)}
-                                </div>
+                                {t.payment_collection?.created_at ? (
+                                  <>
+                                    <div>
+                                      <span className="text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-400">
+                                        Toplandı:
+                                      </span>{' '}
+                                      {formatDate(t.payment_collection.created_at)}{' '}
+                                      <span className="text-xs text-stone-600 dark:text-stone-300">
+                                        {formatTime(t.payment_collection.created_at)}
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-stone-500 dark:text-stone-400">
+                                      Onaylandı: {formatDate(t.created_at)}{' '}
+                                      {formatTime(t.created_at)}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div>{formatDate(t.created_at)}</div>
+                                    <div className="text-xs text-stone-600 dark:text-stone-300">
+                                      {formatTime(t.created_at)}
+                                    </div>
+                                  </>
+                                )}
                                 {(() => {
                                   const uid = t.submitted_by ?? t.created_by;
                                   const name = uid ? staffMap.get(uid) : undefined;

@@ -40,6 +40,7 @@ export async function getGeneralKasa(): Promise<CashAccountRow | null> {
  */
 export interface CashTransactionWithRefs extends CashTxRow {
   payment_collection?: {
+    created_at: string;
     reservation: {
       id: string;
       guest: { full_name: string } | null;
@@ -59,7 +60,7 @@ export async function listCashTransactions(
   const { data, error } = await supabase
     .from('cash_transactions')
     .select(
-      '*, payment_collection:payment_collections(reservation:reservations(id, guest:guests(full_name), unit:units(name)))',
+      '*, payment_collection:payment_collections(created_at, reservation:reservations(id, guest:guests(full_name), unit:units(name)))',
     )
     .eq('cash_account_id', accountId)
     .eq('approval_status', 'approved')
