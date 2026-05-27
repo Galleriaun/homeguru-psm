@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useAuth } from '@/hooks/useAuth';
 import { collectPayment } from '@/lib/queries/payments';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -29,11 +28,9 @@ export function PaymentCollectModal({
   onClose,
   onCollected,
 }: Props) {
-  const { profile } = useAuth();
-  // Migration 063: only SUPER_ADMIN posts straight to cari + kasa. Every
-  // other role (PROPERTY_MANAGER / RECEPTION / HOUSEKEEPING / YETKILI)
-  // submits UNCONFIRMED and waits for yönetici onayı.
-  const requiresApproval = profile?.role !== 'SUPER_ADMIN';
+  // Migration 067: every tahsilat — including yönetici's own — lands as
+  // UNCONFIRMED and waits for an explicit Onayla tap on /finance/pending.
+  const requiresApproval = true;
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [amount, setAmount] = useState(defaultAmount);
