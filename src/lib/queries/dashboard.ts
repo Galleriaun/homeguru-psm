@@ -62,13 +62,16 @@ export async function loadDashboardCounts(): Promise<DashboardCounts> {
           .lt('stay_end', tomorrowISO)
           .neq('status', 'cancelled'),
       ),
+      // "Şu an Aktif" — trust the status alone. The hourly auto-complete
+      // cron flips active → completed when the actual end-time passes, so
+      // counting status='active' captures both overnight + day-use stays
+      // currently in progress. The previous UTC-midnight date filter missed
+      // day-use rows (stay_start at 14:00 Istanbul > midnight UTC = todayISO).
       countOr0(
         supabase
           .from('reservations')
           .select('id', { count: 'exact', head: true })
-          .eq('status', 'active')
-          .lte('stay_start', todayISO)
-          .gt('stay_end', todayISO),
+          .eq('status', 'active'),
       ),
       countOr0(
         supabase

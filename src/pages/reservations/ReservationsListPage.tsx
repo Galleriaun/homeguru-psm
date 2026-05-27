@@ -6,7 +6,7 @@ import { listReservations, type ReservationWithRefs } from '@/lib/queries/reserv
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ReservationsViewTabs } from './ViewTabs';
-import { formatTRY, formatDate, checkoutTimeLabel } from '@/lib/utils';
+import { formatTRY, formatDate, checkoutTimeLabel, istanbulToday } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', { timeStyle: 'short' });
@@ -44,7 +44,11 @@ export function ReservationsListPage() {
   const { profile } = useAuth();
   const [reservations, setReservations] = useState<ReservationWithRefs[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'ALL' | ReservationStatus>('ALL');
+  // 'CHECKOUT_TODAY' is a virtual filter — it cuts across statuses and shows
+  // any reservation whose stay_end is on today's Istanbul calendar date.
+  // Cancelled stays are excluded — "bugün çıkacaklar" is a reception-desk
+  // view that should only highlight guests who are actually leaving.
+  const [filter, setFilter] = useState<'ALL' | 'CHECKOUT_TODAY' | ReservationStatus>('ALL');
 
   useEffect(() => {
     listReservations()
@@ -58,6 +62,12 @@ export function ReservationsListPage() {
   const filtered = useMemo(() => {
     if (!reservations) return [];
     if (filter === 'ALL') return reservations;
+    if (filter === 'CHECKOUT_TODAY') {
+      const today = istanbulToday();
+      return reservations.filter(
+        (r) => r.stay_end.slice(0, 10) === today && r.status !== 'cancelled',
+      );
+    }
     return reservations.filter((r) => r.status === filter);
   }, [reservations, filter]);
 
@@ -100,19 +110,30 @@ export function ReservationsListPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {(['ALL', 'active', 'upcoming', 'completed', 'pending', 'cancelled'] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={
-              filter === f
-                ? 'rounded-full bg-emerald-600 px-4 py-1 text-sm font-medium text-white'
-                : 'rounded-full border border-stone-300 px-4 py-1 text-sm text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800'
-            }
-          >
-            {f === 'ALL' ? 'Tümü' : STATUS_LABELS[f]}
-          </button>
-        ))}
+        {(
+          ['ALL', 'CHECKOUT_TODAY', 'active', 'upcoming', 'completed', 'pending', 'cancelled'] as const
+        ).map((f) => {
+          const isActive = filter === f;
+          const label =
+            f === 'ALL'
+              ? 'Tümü'
+              : f === 'CHECKOUT_TODAY'
+                ? 'Bugün Çıkış'
+                : STATUS_LABELS[f];
+          return (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={
+                isActive
+                  ? 'rounded-full border border-emerald-600 bg-emerald-600 px-4 py-1 text-sm font-medium text-white'
+                  : 'rounded-full border border-stone-300 px-4 py-1 text-sm text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800'
+              }
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
       {error && (

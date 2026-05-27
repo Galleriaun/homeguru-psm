@@ -196,10 +196,12 @@ export function HousekeepingPage() {
               key={t}
               onClick={() => setTypeFilter(t)}
               className={cn(
-                'rounded-full px-4 py-1 text-sm font-medium transition-colors',
+                // border on BOTH states so width stays constant and the row
+                // doesn't reflow when the user toggles filters.
+                'rounded-full border px-4 py-1 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-emerald-600 text-white'
-                  : 'border border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
               )}
             >
               {label} <span className="ml-1 text-xs opacity-80">({count})</span>
@@ -227,10 +229,10 @@ export function HousekeepingPage() {
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
-                'rounded-full px-4 py-1 text-sm font-medium transition-colors',
+                'rounded-full border px-4 py-1 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
-                  : 'border border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                  ? 'border-stone-900 bg-stone-900 text-white dark:border-stone-100 dark:bg-stone-100 dark:text-stone-900'
+                  : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
               )}
             >
               {FILTER_LABELS[f]}{' '}
