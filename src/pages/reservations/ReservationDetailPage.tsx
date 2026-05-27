@@ -14,7 +14,10 @@ import {
   deleteLedgerEntry,
   type LedgerEntry,
 } from '@/lib/queries/ledger';
-import { deletePaymentCollection } from '@/lib/queries/payments';
+import {
+  deletePaymentCollection,
+  countActivePaymentsForReservation,
+} from '@/lib/queries/payments';
 import { supabase } from '@/lib/supabase';
 import type { Database, ReservationStatus } from '@/types/database';
 import { Button } from '@/components/ui/Button';
@@ -78,6 +81,10 @@ export function ReservationDetailPage() {
 
   // Payment collection — gated to payment:collect via type-conditional canCollectPayment()
   const [showCollectModal, setShowCollectModal] = useState(false);
+  /** Count of UNCONFIRMED + CONFIRMED payments for this reservation. Drives
+      the "Zaten ödeme toplanıldı" confirmation before a second Ödeme Topla. */
+  const [activePaymentsCount, setActivePaymentsCount] = useState(0);
+  const [showDoubleCollectConfirm, setShowDoubleCollectConfirm] = useState(false);
   /** Geç Çıkış picker — sets reservations.late_checkout_hours (0..4). */
   const [showLateCheckout, setShowLateCheckout] = useState(false);
 
@@ -134,6 +141,20 @@ export function ReservationDetailPage() {
       .then(setLedger)
       .catch((e) => setLedgerError(e?.message ?? 'Cari yüklenemedi'));
   }, [reservation?.id, canSeeLedger, ledgerVersion]);
+
+  // Track active (UNCONFIRMED + CONFIRMED) payment count so Ödeme Topla can
+  // warn before a second collection. Bumps on ledgerVersion change so the
+  // count refreshes after the user collects.
+  useEffect(() => {
+    const rid = reservation?.id;
+    if (!rid) {
+      setActivePaymentsCount(0);
+      return;
+    }
+    countActivePaymentsForReservation(rid)
+      .then(setActivePaymentsCount)
+      .catch(() => setActivePaymentsCount(0));
+  }, [reservation?.id, ledgerVersion]);
 
   if (error) {
     return (
@@ -271,7 +292,19 @@ export function ReservationDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {canCollect && !isCancelled && (
-            <Button size="sm" onClick={() => setShowCollectModal(true)}>
+            <Button
+              size="sm"
+              onClick={() => {
+                // If the reservation already has at least one UNCONFIRMED or
+                // CONFIRMED payment, warn before opening the modal — the
+                // operator might be repeating themselves.
+                if (activePaymentsCount > 0) {
+                  setShowDoubleCollectConfirm(true);
+                } else {
+                  setShowCollectModal(true);
+                }
+              }}
+            >
               Ödeme Topla
             </Button>
           )}
@@ -399,6 +432,20 @@ export function ReservationDetailPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={showDoubleCollectConfirm}
+        title="Zaten ödeme toplanıldı"
+        description="Bu rezervasyon için daha önce ödeme toplandı. Tekrar yapmak istediğinize emin misiniz?"
+        confirmLabel="Evet, yine de topla"
+        cancelLabel="Vazgeç"
+        destructive
+        onConfirm={() => {
+          setShowDoubleCollectConfirm(false);
+          setShowCollectModal(true);
+        }}
+        onCancel={() => setShowDoubleCollectConfirm(false)}
+      />
 
       {showLateCheckout && (
         <LateCheckoutModal

@@ -17,9 +17,11 @@ import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CashTxModal } from './CashTxModal';
 import { FinanceTabs } from './FinanceTabs';
-import { formatTRY, formatDate } from '@/lib/utils';
+import { formatTRY, formatDate, istanbulToday, cn } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
 import { loadStaffDirectory } from '@/lib/queries/staff_directory';
+import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
+import { Select } from '@/components/ui/Select';
 import type { TxDirection } from '@/types/database';
 
 const DIRECTION_LABEL: Record<TxDirection, string> = {
@@ -46,9 +48,15 @@ export function CashPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTxModal, setShowTxModal] = useState(false);
-  /** Gelir / Gider filter for the Hareketler list. Balance always uses the full set. */
+  /** Gelir / Gider filter for the Hareketler list. */
   const [directionFilter, setDirectionFilter] = useState<'ALL' | TxDirection>('ALL');
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
+  /** Top-level view mode — Genel kasa (default), Bugünün Cirosu (today only),
+      or Mülk Bazlı (single-property cut). The bottom direction filter stacks. */
+  const [kasaView, setKasaView] = useState<'general' | 'today' | 'property'>('general');
+  /** Selected property id when kasaView === 'property'. */
+  const [propertyFilter, setPropertyFilter] = useState<string>('');
+  const [properties, setProperties] = useState<Property[]>([]);
 
   // Per-row tx deletion (SUPER_ADMIN only — see migration 015).
   const [txToDelete, setTxToDelete] = useState<CashTransaction | null>(null);
@@ -58,19 +66,55 @@ export function CashPage() {
   const canWrite = Boolean(profile && can(profile.role, 'finance:write'));
   const canDeleteTx = profile?.role === 'SUPER_ADMIN';
 
-  // Filtered view for the Hareketler list. Balance stays computed from the
-  // full set so toggling Gelir / Gider doesn't change the running total.
+  // created_at is UTC; we need the Istanbul calendar day for the "Bugünün
+  // Cirosu" filter. Shift +3h then slice the YYYY-MM-DD prefix.
+  const toIstanbulDate = (iso: string): string => {
+    const d = new Date(iso);
+    return new Date(d.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  };
+
+  // Apply the view-mode cut first (Genel / Bugün / Mülk), then the direction
+  // chip (Gelir / Gider / Tümü). Balance + totals at the top reflect the
+  // view cut only (so flipping Gelir vs Gider doesn't change the headline
+  // figure — same UX as before).
+  const viewTransactions = useMemo(() => {
+    if (kasaView === 'today') {
+      const today = istanbulToday();
+      return transactions.filter((t) => toIstanbulDate(t.created_at) === today);
+    }
+    if (kasaView === 'property') {
+      if (!propertyFilter) return [];
+      return transactions.filter((t) => t.property_id === propertyFilter);
+    }
+    return transactions;
+  }, [transactions, kasaView, propertyFilter]);
+
   const filteredTransactions = useMemo(() => {
-    if (directionFilter === 'ALL') return transactions;
-    return transactions.filter((t) => t.direction === directionFilter);
-  }, [transactions, directionFilter]);
+    if (directionFilter === 'ALL') return viewTransactions;
+    return viewTransactions.filter((t) => t.direction === directionFilter);
+  }, [viewTransactions, directionFilter]);
+
   const gelirCount = useMemo(
-    () => transactions.filter((t) => t.direction === 'IN').length,
-    [transactions],
+    () => viewTransactions.filter((t) => t.direction === 'IN').length,
+    [viewTransactions],
   );
   const giderCount = useMemo(
-    () => transactions.filter((t) => t.direction === 'OUT').length,
-    [transactions],
+    () => viewTransactions.filter((t) => t.direction === 'OUT').length,
+    [viewTransactions],
+  );
+  const viewIncome = useMemo(
+    () =>
+      viewTransactions
+        .filter((t) => t.direction === 'IN')
+        .reduce((s, t) => s + Number(t.amount), 0),
+    [viewTransactions],
+  );
+  const viewOutgo = useMemo(
+    () =>
+      viewTransactions
+        .filter((t) => t.direction === 'OUT')
+        .reduce((s, t) => s + Number(t.amount), 0),
+    [viewTransactions],
   );
 
   useEffect(() => {
@@ -85,6 +129,7 @@ export function CashPage() {
         setAccount(a);
         setTransactions(await listCashTransactions(a.id));
         loadStaffDirectory().then(setStaffMap).catch(() => {});
+        listProperties().then(setProperties).catch(() => {});
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Yüklenemedi');
       } finally {
@@ -116,7 +161,11 @@ export function CashPage() {
     }
   };
 
+  // Overall kasa balance — always from the full set, never from the view cut.
   const balance = balanceOf(transactions);
+  // Balance scoped to the current view (today only / one mülk only). Used by
+  // the headline figure inside Bugün / Mülk modes.
+  const viewBalance = viewIncome - viewOutgo;
 
   return (
     <div className="space-y-6">
@@ -169,6 +218,91 @@ export function CashPage() {
               </Button>
             )}
           </Card>
+
+          {/* View-mode buttons — Genel / Bugün / Mülk Bazlı. */}
+          <div className="flex flex-wrap gap-2">
+            {(['general', 'today', 'property'] as const).map((v) => {
+              const label =
+                v === 'general' ? 'Genel Kasa' : v === 'today' ? 'Bugünün Cirosu' : 'Mülk Bazlı';
+              const isActive = kasaView === v;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    setKasaView(v);
+                    // Reset property pick when leaving property mode so a
+                    // stale selection doesn't bleed into a future Mülk Bazlı
+                    // session.
+                    if (v !== 'property') setPropertyFilter('');
+                  }}
+                  className={cn(
+                    'rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+                    isActive
+                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                      : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {kasaView === 'property' && (
+            <Card>
+              <Select
+                label="Mülk"
+                name="cash_property_filter"
+                value={propertyFilter}
+                onChange={setPropertyFilter}
+                options={[
+                  { value: '', label: 'Mülk seçin' },
+                  ...sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name })),
+                ]}
+                searchable
+              />
+            </Card>
+          )}
+
+          {/* View summary — today and property modes show their own headline. */}
+          {kasaView === 'today' && (
+            <Card className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
+                Bugünün Cirosu
+              </p>
+              <div className="flex flex-wrap items-baseline gap-4">
+                <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
+                  +{formatTRY(viewIncome)}
+                </p>
+                <p className="text-2xl font-semibold text-red-600 dark:text-red-400">
+                  −{formatTRY(viewOutgo)}
+                </p>
+                <p className="text-sm text-stone-700 dark:text-stone-300">
+                  Net: <strong>{formatTRY(viewBalance)}</strong>
+                </p>
+              </div>
+            </Card>
+          )}
+
+          {kasaView === 'property' && propertyFilter && (
+            <Card className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
+                {properties.find((p) => p.id === propertyFilter)?.name ?? 'Mülk'} bakiyesi
+              </p>
+              <div className="flex flex-wrap items-baseline gap-4">
+                <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
+                  +{formatTRY(viewIncome)}
+                </p>
+                <p className="text-2xl font-semibold text-red-600 dark:text-red-400">
+                  −{formatTRY(viewOutgo)}
+                </p>
+                <p className="text-sm text-stone-700 dark:text-stone-300">
+                  Net: <strong>{formatTRY(viewBalance)}</strong>
+                </p>
+              </div>
+            </Card>
+          )}
 
           {/* Transactions */}
           <section className="space-y-2">

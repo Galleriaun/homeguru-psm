@@ -980,6 +980,7 @@ export type Database = {
           reviewed_by: string | null;
           reviewed_at: string | null;
           rejection_reason: string | null;
+          property_id: string | null;
         };
         Insert: {
           id?: string;
@@ -997,6 +998,7 @@ export type Database = {
           reviewed_by?: string | null;
           reviewed_at?: string | null;
           rejection_reason?: string | null;
+          property_id?: string | null;
         };
         Update: {
           // Direct UPDATE on cash_transactions has no RLS policy — admin
@@ -1017,6 +1019,7 @@ export type Database = {
           reviewed_by?: string | null;
           reviewed_at?: string | null;
           rejection_reason?: string | null;
+          property_id?: string | null;
         };
         Relationships: [];
       };

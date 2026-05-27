@@ -103,6 +103,24 @@ export async function confirmPayment(paymentId: string): Promise<PaymentCollecti
 }
 
 /**
+ * Counts payment_collections rows that represent money the operator has
+ * already attempted to collect for this reservation — UNCONFIRMED + CONFIRMED.
+ * DISPUTED rows are excluded (those were rejected and never moved money).
+ * Used by the detail page to warn before a second Ödeme Topla.
+ */
+export async function countActivePaymentsForReservation(
+  reservationId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('payment_collections')
+    .select('id', { count: 'exact', head: true })
+    .eq('reservation_id', reservationId)
+    .in('status', ['UNCONFIRMED', 'CONFIRMED'] satisfies PaymentStatus[]);
+  if (error) throw wrapErr(error);
+  return count ?? 0;
+}
+
+/**
  * Manager rejects a pending payment. Row is marked DISPUTED; no ledger/cash
  * entries are ever created. The row stays as an audit record.
  */
