@@ -224,15 +224,22 @@ export function HousekeepingPage() {
                     ? cleanCount
                     : issuesCount;
           const isActive = filter === f;
+          // Kirli + Sorunlu get a red palette so a real "needs attention"
+          // signal sticks out from the neutral other filters.
+          const isAlert = f === 'DIRTY' || f === 'ISSUES';
           return (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={cn(
                 'rounded-full border px-4 py-1 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-stone-900 bg-stone-900 text-white dark:border-stone-100 dark:bg-stone-100 dark:text-stone-900'
-                  : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                isActive && isAlert
+                  ? 'border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-600'
+                  : isActive
+                    ? 'border-stone-900 bg-stone-900 text-white dark:border-stone-100 dark:bg-stone-100 dark:text-stone-900'
+                    : isAlert && count > 0
+                      ? 'border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30'
+                      : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
               )}
             >
               {FILTER_LABELS[f]}{' '}

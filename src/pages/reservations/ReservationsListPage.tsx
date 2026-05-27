@@ -71,12 +71,18 @@ export function ReservationsListPage() {
     return reservations.filter((r) => r.status === filter);
   }, [reservations, filter]);
 
-  // The "Tümü" view: one section per status. Yakında is sorted soonest-first
-  // (what's coming up next); every other group keeps most-recent-first.
+  // The "Tümü" view: one section per status, plus a virtual "Bugün Çıkış"
+  // section inserted right after Aktif (rezervasyonlar bugün çıkıyor — same
+  // semantic as the standalone CHECKOUT_TODAY filter chip).
   const groups = useMemo(() => {
     if (!reservations) return [];
-    return GROUP_ORDER.map((status) => ({
-      status,
+    const today = istanbulToday();
+    const checkoutTodayItems = reservations
+      .filter((r) => r.stay_end.slice(0, 10) === today && r.status !== 'cancelled')
+      .sort((a, b) => a.stay_end.localeCompare(b.stay_end));
+
+    const byStatus = GROUP_ORDER.map((status) => ({
+      key: status as string,
       label: STATUS_LABELS[status],
       items: reservations
         .filter((r) => r.status === status)
@@ -85,7 +91,22 @@ export function ReservationsListPage() {
             ? a.stay_start.localeCompare(b.stay_start)
             : b.stay_start.localeCompare(a.stay_start),
         ),
-    })).filter((g) => g.items.length > 0);
+    }));
+
+    const result: { key: string; label: string; items: ReservationWithRefs[] }[] = [];
+    for (const g of byStatus) {
+      result.push(g);
+      // Insert Bugün Çıkış right after the Aktif section so the receptionist
+      // sees today's departures next to the live stays.
+      if (g.key === 'active' && checkoutTodayItems.length > 0) {
+        result.push({
+          key: 'checkout_today',
+          label: 'Bugün Çıkış',
+          items: checkoutTodayItems,
+        });
+      }
+    }
+    return result.filter((g) => g.items.length > 0);
   }, [reservations]);
 
   return (
@@ -111,7 +132,7 @@ export function ReservationsListPage() {
 
       <div className="flex flex-wrap gap-2">
         {(
-          ['ALL', 'CHECKOUT_TODAY', 'active', 'upcoming', 'completed', 'pending', 'cancelled'] as const
+          ['ALL', 'active', 'CHECKOUT_TODAY', 'upcoming', 'completed', 'pending', 'cancelled'] as const
         ).map((f) => {
           const isActive = filter === f;
           const label =
@@ -159,7 +180,7 @@ export function ReservationsListPage() {
         (filter === 'ALL' ? (
           <div className="space-y-6">
             {groups.map((g) => (
-              <section key={g.status} className="space-y-2">
+              <section key={g.key} className="space-y-2">
                 <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
                   {g.label}
                   <span className="ml-2 text-sm font-normal text-stone-500 dark:text-stone-400">

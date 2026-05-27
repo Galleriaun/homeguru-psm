@@ -10,7 +10,6 @@ import {
 import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { FinanceTabs } from './FinanceTabs';
 import { formatTRY, formatDate } from '@/lib/utils';
@@ -78,6 +77,24 @@ export function ExpensesListPage() {
     [],
   );
 
+  // Render Ay as a Select (matches Mülk + Kategori). Native <input type="month">
+  // looked over-tall on iOS Safari. Show last 24 months newest-first.
+  const monthOptions = useMemo(() => {
+    const monthFmt = new Intl.DateTimeFormat('tr-TR', {
+      month: 'long',
+      year: 'numeric',
+    });
+    const now = new Date();
+    const out: { value: string; label: string }[] = [];
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      out.push({ value: `${y}-${m}`, label: monthFmt.format(d) });
+    }
+    return out;
+  }, []);
+
   const total = expenses ? totalAmount(expenses) : 0;
 
   // Split into Genel (no property) vs Mülk (tied to a property) so the list
@@ -122,12 +139,12 @@ export function ExpensesListPage() {
             onChange={setPropertyId}
             options={propertyOptions}
           />
-          <Input
+          <Select
             label="Ay"
             name="filter_month"
-            type="month"
             value={month}
-            onChange={(e) => setMonth(e.target.value)}
+            onChange={setMonth}
+            options={monthOptions}
           />
           <Select
             label="Kategori"
