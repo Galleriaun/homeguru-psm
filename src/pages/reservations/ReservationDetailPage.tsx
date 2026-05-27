@@ -752,9 +752,16 @@ function LedgerSection({
                       );
                       if (methods.length === 0) return null;
                       return (
-                        <span className="block text-xs text-stone-500 dark:text-stone-400">
-                          {methods.map((m) => METHOD_TR[m]).join(' · ')}
-                        </span>
+                        <div className="mt-1 flex flex-wrap justify-end gap-1">
+                          {methods.map((m) => (
+                            <span
+                              key={m}
+                              className="rounded bg-stone-200 px-1.5 py-0.5 text-[11px] font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+                            >
+                              {METHOD_TR[m]}
+                            </span>
+                          ))}
+                        </div>
                       );
                     })()}
                   </div>

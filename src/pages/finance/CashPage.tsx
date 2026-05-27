@@ -96,9 +96,14 @@ export function CashPage() {
       const today = istanbulToday();
       const monday = istanbulMondayOfWeek();
       const monthPrefix = today.slice(0, 7);
+      // Bugün is now a rolling 24h window (so a tx at 02:00 still counts as
+      // "today" until 02:00 the next day). Hafta / Ay stay calendar-based.
+      const dayCutoff = Date.now() - 24 * 60 * 60 * 1000;
       return transactions.filter((t) => {
+        if (timeRange === 'day') {
+          return new Date(t.created_at).getTime() >= dayCutoff;
+        }
         const txDate = toIstanbulDate(t.created_at);
-        if (timeRange === 'day') return txDate === today;
         if (timeRange === 'week') return txDate >= monday && txDate <= today;
         return txDate.slice(0, 7) === monthPrefix;
       });

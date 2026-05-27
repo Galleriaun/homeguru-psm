@@ -121,6 +121,25 @@ export async function countActivePaymentsForReservation(
 }
 
 /**
+ * Returns a Set of reservation_ids that have at least one active (UNCONFIRMED
+ * or CONFIRMED) payment_collections row. Lets the reservation list quickly
+ * render an "Ödeme Alındı" / "Ödeme Alınmadı" badge per card without an N+1
+ * query loop. DISPUTED payments are excluded — those were rejected.
+ */
+export async function loadReservationsWithPayments(): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('payment_collections')
+    .select('reservation_id')
+    .in('status', ['UNCONFIRMED', 'CONFIRMED'] satisfies PaymentStatus[]);
+  if (error) throw wrapErr(error);
+  const set = new Set<string>();
+  for (const row of data ?? []) {
+    if (row.reservation_id) set.add(row.reservation_id);
+  }
+  return set;
+}
+
+/**
  * Manager rejects a pending payment. Row is marked DISPUTED; no ledger/cash
  * entries are ever created. The row stays as an audit record.
  */

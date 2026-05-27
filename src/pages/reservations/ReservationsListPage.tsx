@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { ReservationsViewTabs } from './ViewTabs';
 import { formatTRY, formatDate, checkoutTimeLabel, istanbulToday } from '@/lib/utils';
 import { loadStaffDirectory } from '@/lib/queries/staff_directory';
+import { loadReservationsWithPayments } from '@/lib/queries/payments';
 import type { ReservationStatus } from '@/types/database';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', { timeStyle: 'short' });
@@ -46,6 +47,9 @@ export function ReservationsListPage() {
   const [reservations, setReservations] = useState<ReservationWithRefs[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
+  /** Set of reservation ids that have at least one active payment — drives
+      the "Ödeme Alındı / Alınmadı" badge on each card. */
+  const [paidIds, setPaidIds] = useState<Set<string>>(() => new Set());
   // 'CHECKOUT_TODAY' is a virtual filter — it cuts across statuses and shows
   // any reservation whose stay_end is on today's Istanbul calendar date.
   // Cancelled stays are excluded — "bugün çıkacaklar" is a reception-desk
@@ -58,6 +62,7 @@ export function ReservationsListPage() {
       .catch((e) => setError(e?.message ?? 'Rezervasyonlar yüklenemedi'));
     // Best-effort: staff directory powers the "Oluşturan: X" line.
     loadStaffDirectory().then(setStaffMap).catch(() => {});
+    loadReservationsWithPayments().then(setPaidIds).catch(() => {});
   }, []);
 
   const canCreate = profile && can(profile.role, 'reservation:create');
@@ -191,12 +196,12 @@ export function ReservationsListPage() {
                     {g.items.length}
                   </span>
                 </h2>
-                <ReservationRows items={g.items} staffMap={staffMap} />
+                <ReservationRows items={g.items} staffMap={staffMap} paidIds={paidIds} />
               </section>
             ))}
           </div>
         ) : (
-          <ReservationRows items={filtered} staffMap={staffMap} />
+          <ReservationRows items={filtered} staffMap={staffMap} paidIds={paidIds} />
         ))}
     </div>
   );
@@ -206,9 +211,11 @@ export function ReservationsListPage() {
 function ReservationRows({
   items,
   staffMap,
+  paidIds,
 }: {
   items: ReservationWithRefs[];
   staffMap: Map<string, string>;
+  paidIds: Set<string>;
 }) {
   return (
     <>
@@ -244,8 +251,19 @@ function ReservationRows({
                   ? `${formatDate(r.stay_start)} · ${formatTime(r.stay_start)}–${formatTime(r.stay_end)}`
                   : `${formatDate(r.stay_start)} → ${formatDate(r.stay_end)} · Çıkış ${checkoutTimeLabel(r.late_checkout_hours)}`}
               </span>
-              <span className="font-semibold text-stone-900 dark:text-stone-100">
-                {formatTRY(Number(r.total_amount))}
+              <span className="flex flex-col items-end gap-0.5">
+                <span className="font-semibold text-stone-900 dark:text-stone-100">
+                  {formatTRY(Number(r.total_amount))}
+                </span>
+                <span
+                  className={
+                    paidIds.has(r.id)
+                      ? 'rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                      : 'rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                  }
+                >
+                  {paidIds.has(r.id) ? 'Ödeme Alındı' : 'Ödeme Alınmadı'}
+                </span>
               </span>
             </p>
             {staffMap.get(r.created_by) && (
