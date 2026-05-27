@@ -19,7 +19,7 @@ import {
   countActivePaymentsForReservation,
 } from '@/lib/queries/payments';
 import { supabase } from '@/lib/supabase';
-import type { Database, ReservationStatus } from '@/types/database';
+import type { Database, ReservationStatus, PaymentMethod } from '@/types/database';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -730,9 +730,34 @@ function LedgerSection({
                   <span className="text-xs text-stone-600 dark:text-stone-300">
                     {ledger.length} hareket
                   </span>
-                  <span className={`text-sm font-medium ${balanceColor}`}>
-                    {balanceLabel}
-                  </span>
+                  <div className="text-right">
+                    <span className={`block text-sm font-medium ${balanceColor}`}>
+                      {balanceLabel}
+                    </span>
+                    {balance < 0 && (() => {
+                      // Distinct payment methods used on this reservation —
+                      // shown below "Misafirden Alındı" so the operator sees
+                      // HOW the money came in without digging into the rows.
+                      const METHOD_TR: Record<PaymentMethod, string> = {
+                        CASH: 'Nakit',
+                        TRANSFER: 'Havale/EFT',
+                        CARD: 'Kart',
+                      };
+                      const methods = Array.from(
+                        new Set(
+                          ledger
+                            .filter((e) => e.type === 'PAYMENT' && e.payment_collection?.method)
+                            .map((e) => e.payment_collection!.method),
+                        ),
+                      );
+                      if (methods.length === 0) return null;
+                      return (
+                        <span className="block text-xs text-stone-500 dark:text-stone-400">
+                          {methods.map((m) => METHOD_TR[m]).join(' · ')}
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>
