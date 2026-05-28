@@ -117,7 +117,7 @@ export function ArrowsLeftRightIcon({ className = 'h-5 w-5', ...rest }: IconProp
   );
 }
 
-/** Clock face — used by the Günübirlik (day-use) status badges. */
+/** Clock face — used by the Güniçi (day-use) status badges. */
 export function ClockIcon({ className = 'h-5 w-5', ...rest }: IconProps) {
   return (
     <svg {...BASE_PROPS} className={className} {...rest}>

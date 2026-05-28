@@ -134,7 +134,7 @@ export function MoveReservationModal({
         <form onSubmit={handleSubmit} className="space-y-3" noValidate>
           <p className="text-xs text-stone-500 dark:text-stone-400">
             {stayType === 'DAYUSE'
-              ? 'Günübirlik konaklamada saatler korunur, sadece tarih değişir.'
+              ? 'Güniçi konaklamada saatler korunur, sadece tarih değişir.'
               : 'Konaklamanın süresi (gece sayısı) korunur, tarih kaydırılır.'}
           </p>
 

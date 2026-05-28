@@ -343,7 +343,7 @@ export function ReservationFormPage() {
         return;
       }
       if (endTime <= startTime) {
-        setError('Günübirlik konaklamada çıkış saati, giriş saatinden sonra olmalıdır.');
+        setError('Güniçi konaklamada çıkış saati, giriş saatinden sonra olmalıdır.');
         return;
       }
     }
@@ -556,7 +556,7 @@ export function ReservationFormPage() {
             />
           </div>
 
-          {/* Günübirlik (day-use) toggle. When on, replace nights with start/end
+          {/* Güniçi (day-use) toggle. When on, replace nights with start/end
               times on a single calendar date. Stays under ~4 hours typical. */}
           <label className="flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 text-sm text-stone-700 dark:border-stone-700 dark:text-stone-300">
             <input
@@ -565,7 +565,7 @@ export function ReservationFormPage() {
               onChange={(e) => setStayType(e.target.checked ? 'DAYUSE' : 'OVERNIGHT')}
               className="h-4 w-4 rounded border-stone-300 text-amber-600 focus:ring-amber-500"
             />
-            Günübirlik konaklama (saatlik)
+            Güniçi konaklama (saatlik)
           </label>
 
           {stayType === 'OVERNIGHT' ? (

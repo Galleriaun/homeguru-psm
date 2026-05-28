@@ -232,7 +232,7 @@ function ReservationRows({
                 {r.guest?.full_name ?? '—'}
                 {r.stay_type === 'DAYUSE' && (
                   <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                    Günübirlik
+                    Güniçi
                   </span>
                 )}
               </p>
@@ -296,7 +296,7 @@ function ReservationRows({
                       {r.guest?.full_name ?? '—'}
                       {r.stay_type === 'DAYUSE' && (
                         <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                          Günübirlik
+                          Güniçi
                         </span>
                       )}
                     </Link>

@@ -151,7 +151,7 @@ export function ReservationActionSheet({
               {stayType === 'DAYUSE' && (
                 <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                   <ClockIcon className="h-3 w-3" />
-                  Günübirlik
+                  Güniçi
                 </span>
               )}
             </p>

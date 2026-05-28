@@ -365,7 +365,7 @@ export function ReservationDetailPage() {
           {reservation.stay_type === 'DAYUSE' ? (
             <p className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
               <ClockIcon className="h-3.5 w-3.5" />
-              Günübirlik konaklama
+              Güniçi konaklama
             </p>
           ) : (
             <span />
