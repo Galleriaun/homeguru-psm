@@ -26,6 +26,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { LateCheckoutModal } from './LateCheckoutModal';
 import { LedgerEntryModal } from './LedgerEntryModal';
 import { PaymentCollectModal } from './PaymentCollectModal';
+import { CompanionListModal } from './CompanionListModal';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
@@ -87,6 +88,8 @@ export function ReservationDetailPage() {
   const [showDoubleCollectConfirm, setShowDoubleCollectConfirm] = useState(false);
   /** Geç Çıkış picker — sets reservations.late_checkout_hours (0..4). */
   const [showLateCheckout, setShowLateCheckout] = useState(false);
+  /** Ek Misafir list — read-mostly inline view of the guest's companions. */
+  const [showCompanions, setShowCompanions] = useState(false);
 
   // Per-row ledger deletion (SUPER_ADMIN only — see migration 017)
   const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
@@ -358,12 +361,23 @@ export function ReservationDetailPage() {
       </div>
 
       <Card>
-        {reservation.stay_type === 'DAYUSE' && (
-          <p className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-            <ClockIcon className="h-3.5 w-3.5" />
-            Günübirlik konaklama
-          </p>
-        )}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          {reservation.stay_type === 'DAYUSE' ? (
+            <p className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              <ClockIcon className="h-3.5 w-3.5" />
+              Günübirlik konaklama
+            </p>
+          ) : (
+            <span />
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowCompanions(true)}
+          >
+            Ek Misafir
+          </Button>
+        </div>
         <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
           <Field
             label="Giriş"
@@ -458,6 +472,15 @@ export function ReservationDetailPage() {
             );
             setShowLateCheckout(false);
           }}
+        />
+      )}
+
+      {showCompanions && (
+        <CompanionListModal
+          guestId={reservation.guest_id}
+          guestName={guestName}
+          canEdit={canEditGuest}
+          onClose={() => setShowCompanions(false)}
         />
       )}
 
