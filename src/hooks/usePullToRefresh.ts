@@ -31,6 +31,19 @@ export function usePullToRefresh(): number {
       setDistance(d);
     };
 
+    // The app scrolls inside <body>, not the window: index.css pins
+    // html/body/#root to height:100% and sets overflow-x:hidden, which makes
+    // overflow-y compute to `auto` on body. So window.scrollY stays 0 and the
+    // real offset lives on body.scrollTop. Read all three roots so the
+    // "are we at the very top?" check is correct whatever owns the scroll —
+    // without this, window.scrollY===0 made the guard below never fire and
+    // every downward swipe got hijacked into a pull-to-refresh.
+    const scrollTop = () =>
+      window.scrollY ||
+      document.documentElement.scrollTop ||
+      document.body.scrollTop ||
+      0;
+
     // True when the touch begins inside an element that scrolls vertically on
     // its own (the FullCalendar timeline, a long modal body, a table wrapper).
     // Those own the gesture — pull-to-refresh must stay out of their way.
@@ -50,7 +63,7 @@ export function usePullToRefresh(): number {
       tracking.current = false;
       startY.current = null;
       if (e.touches.length !== 1) return;
-      if (window.scrollY > 0) return;
+      if (scrollTop() > 0) return;
       // A modal / drawer is open — let it own the gesture.
       if (document.querySelector('.fixed.inset-0')) return;
       if (startsInScrollable(e.target)) return;
