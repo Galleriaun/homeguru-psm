@@ -1,10 +1,10 @@
 import { PULL_TRIGGER, usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 /**
- * Visual half of pull-to-refresh: a circular spinner that drops in from the top
- * edge and follows the finger. The arrow points down while pulling and flips up
- * once you've pulled far enough ("bırak → yenile"). The actual reload is fired
- * by the hook on release. Renders nothing when idle, so it has zero cost on the
+ * Visual half of pull-to-refresh: a classic circular refresh arrow that drops
+ * in from the top edge and follows the finger. It spins a half-turn once you've
+ * pulled far enough ("bırak → yenile"). The actual reload is fired by the hook
+ * on release. Renders nothing when idle, so it has zero cost on the
  * (mouse-driven) desktop path.
  */
 export function PullToRefresh() {
@@ -30,8 +30,15 @@ export function PullToRefresh() {
             transition: 'transform 0.15s ease',
           }}
         >
+          <polyline
+            points="23 4 23 10 17 10"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
           <path
-            d="M12 5v14M6 13l6 6 6-6"
+            d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"

@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import {
@@ -53,7 +54,12 @@ export function HousekeepingPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [tasks, setTasks] = useState<TaskWithRefs[]>([]);
-  const [filter, setFilter] = useState<FilterOption>('ALL');
+  // Honour ?filter=issues so the dashboard "Açık Sorun" tile lands straight
+  // on the Sorunlu view instead of the default Tümü list.
+  const [searchParams] = useSearchParams();
+  const [filter, setFilter] = useState<FilterOption>(
+    searchParams.get('filter') === 'issues' ? 'ISSUES' : 'ALL',
+  );
   /** Cross-cutting filter: scope rendering to Binalar only, Daireler only, or both. */
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'HOTEL' | 'APARTMENT'>('ALL');
 

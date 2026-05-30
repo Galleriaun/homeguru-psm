@@ -116,6 +116,12 @@ export function ReservationFormPage() {
   const [guestId, setGuestId] = useState('');
   const [checkin, setCheckin] = useState(istanbulToday());
   const [nights, setNights] = useState(1);
+  // Istanbul-local check-in time (HH:MM) for overnight stays. Defaults to the
+  // current time so a new booking records the real giriş hour automatically;
+  // the operator can edit it. On edit it's loaded from the stored stay_start.
+  const [checkinTime, setCheckinTime] = useState(
+    () => toIstanbulDateAndTime(new Date().toISOString()).time,
+  );
   /** OVERNIGHT (default) | DAYUSE — drives whether we collect nights or HH:MM. */
   const [stayType, setStayType] = useState<StayType>('OVERNIGHT');
   /** Istanbul-local start/end times — only used when stayType === 'DAYUSE'. */
@@ -198,10 +204,14 @@ export function ReservationFormPage() {
             setEndTime(endLocal.time);
             setNights(1);
           } else {
-            const start = r.stay_start.slice(0, 10);
-            const end = r.stay_end.slice(0, 10);
-            setCheckin(start);
-            setNights(daysBetween(start, end));
+            // Surface the Istanbul-local check-in date AND time back into the
+            // form so editing preserves the recorded giriş hour (a raw UTC
+            // slice would mis-date a stay stamped near midnight).
+            const startLocal = toIstanbulDateAndTime(r.stay_start);
+            const end = toIstanbulDateAndTime(r.stay_end).date;
+            setCheckin(startLocal.date);
+            setNights(daysBetween(startLocal.date, end));
+            setCheckinTime(startLocal.time);
           }
           setTotalAmount(Number(r.total_amount));
           setDeposit(Number(r.deposit));
@@ -346,6 +356,9 @@ export function ReservationFormPage() {
         setError('Güniçi konaklamada çıkış saati, giriş saatinden sonra olmalıdır.');
         return;
       }
+    } else if (!TIME_HHMM_RE.test(checkinTime)) {
+      setError('Giriş saati HH:MM olmalıdır (örn: 14:30).');
+      return;
     }
 
     setSaving(true);
@@ -357,7 +370,10 @@ export function ReservationFormPage() {
         stay_start = new Date(`${checkin}T${startTime}:00+03:00`).toISOString();
         stay_end = new Date(`${checkin}T${endTime}:00+03:00`).toISOString();
       } else {
-        stay_start = new Date(checkin + 'T00:00:00Z').toISOString();
+        // Overnight stays now carry an explicit Istanbul-local check-in time
+        // (defaults to creation time, operator-editable). Istanbul is fixed
+        // UTC+3. Checkout keeps its date-only midnight boundary.
+        stay_start = new Date(`${checkin}T${checkinTime}:00+03:00`).toISOString();
         stay_end = new Date(checkout + 'T00:00:00Z').toISOString();
       }
 
@@ -587,6 +603,31 @@ export function ReservationFormPage() {
                   value={nights}
                   onChange={setNights}
                 />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="checkin_time"
+                  className="block text-sm font-medium text-stone-700 dark:text-stone-300"
+                >
+                  Giriş saati<span className="ml-0.5 text-red-500">*</span>
+                </label>
+                <input
+                  id="checkin_time"
+                  name="checkin_time"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-2][0-9]:[0-5][0-9]"
+                  maxLength={5}
+                  placeholder="14:00"
+                  required
+                  value={checkinTime}
+                  onChange={(e) => setCheckinTime(maskTime(e.target.value))}
+                  className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder-stone-500"
+                />
+                <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                  Oluşturma saatiyle otomatik dolar; gerekiyorsa değiştirin.
+                </p>
               </div>
 
               <p className="text-xs text-stone-600 dark:text-stone-300">

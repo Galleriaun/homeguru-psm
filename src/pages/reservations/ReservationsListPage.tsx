@@ -295,10 +295,21 @@ function ReservationRows({
               {r.property?.name} · {r.unit?.name}
             </p>
             <p className="mt-1 flex items-center justify-between gap-2 text-xs text-stone-700 dark:text-stone-300">
-              <span>
-                {r.stay_type === 'DAYUSE'
-                  ? `${formatDate(r.stay_start)} · ${formatTime(r.stay_start)}–${formatTime(r.stay_end)}`
-                  : `${formatDate(r.stay_start)} · Giriş ${formatTime(r.stay_start)} → ${formatDate(r.stay_end)} · Çıkış ${checkoutTimeLabel(r.late_checkout_hours)}`}
+              <span className="flex flex-col gap-0.5">
+                {r.stay_type === 'DAYUSE' ? (
+                  <span>
+                    {`${formatDate(r.stay_start)} · ${formatTime(r.stay_start)}–${formatTime(r.stay_end)}`}
+                  </span>
+                ) : (
+                  <>
+                    <span>
+                      {formatDate(r.stay_start)} {formatTime(r.stay_start)} Giriş
+                    </span>
+                    <span>
+                      {formatDate(r.stay_end)} {checkoutTimeLabel(r.late_checkout_hours)} Çıkış
+                    </span>
+                  </>
+                )}
               </span>
               <span className="flex flex-col items-end gap-0.5">
                 <span className="font-semibold text-stone-900 dark:text-stone-100">

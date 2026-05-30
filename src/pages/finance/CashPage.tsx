@@ -65,6 +65,8 @@ export function CashPage() {
   const [calendarDate, setCalendarDate] = useState<string>(() => istanbulToday());
   /** Selected property id when kasaView === 'property'. */
   const [propertyFilter, setPropertyFilter] = useState<string>('');
+  /** Selected day (ISO) for the Mülk Bazlı view — defaults to today. */
+  const [propertyDate, setPropertyDate] = useState<string>(() => istanbulToday());
   const [properties, setProperties] = useState<Property[]>([]);
 
   // Per-row tx deletion (SUPER_ADMIN only — see migration 015).
@@ -119,7 +121,8 @@ export function CashPage() {
     if (kasaView === 'calendar') {
       // Ciro for one chosen calendar day. Same basis as Bugün: anchor guest
       // payments on the reservation's check-in date (stay_start), manual /
-      // expense entries on created_at.
+      // expense entries on created_at — so a day's ciro reflects the stays that
+      // belong to it, not when the cash happened to be collected.
       return transactions.filter((t) => {
         const basis = t.payment_collection?.reservation?.stay_start ?? t.created_at;
         return toIstanbulDate(basis) === calendarDate;
@@ -127,10 +130,17 @@ export function CashPage() {
     }
     if (kasaView === 'property') {
       if (!propertyFilter) return [];
-      return transactions.filter((t) => t.property_id === propertyFilter);
+      // One property's movements for one chosen day. Same date basis as the
+      // other views: guest payments anchor on the reservation's check-in date
+      // (stay_start), manual / expense entries on created_at.
+      return transactions.filter((t) => {
+        if (t.property_id !== propertyFilter) return false;
+        const basis = t.payment_collection?.reservation?.stay_start ?? t.created_at;
+        return toIstanbulDate(basis) === propertyDate;
+      });
     }
     return transactions;
-  }, [transactions, kasaView, propertyFilter, timeRange, calendarDate]);
+  }, [transactions, kasaView, propertyFilter, propertyDate, timeRange, calendarDate]);
 
   const filteredTransactions = useMemo(() => {
     if (directionFilter === 'ALL') return viewTransactions;
@@ -324,7 +334,7 @@ export function CashPage() {
           )}
 
           {kasaView === 'property' && (
-            <Card>
+            <Card className="space-y-4">
               <Select
                 label="Mülk"
                 name="cash_property_filter"
@@ -336,6 +346,15 @@ export function CashPage() {
                 ]}
                 searchable
               />
+              {propertyFilter && (
+                <DateInput
+                  label="Gün seçin"
+                  name="cash_property_date"
+                  value={propertyDate}
+                  onChange={(iso) => iso && setPropertyDate(iso)}
+                  max={istanbulToday()}
+                />
+              )}
             </Card>
           )}
 
@@ -378,7 +397,8 @@ export function CashPage() {
           {kasaView === 'property' && propertyFilter && (
             <Card className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
-                {properties.find((p) => p.id === propertyFilter)?.name ?? 'Mülk'} bakiyesi
+                {properties.find((p) => p.id === propertyFilter)?.name ?? 'Mülk'} ·{' '}
+                {formatDate(propertyDate)} Cirosu
               </p>
               <div className="flex flex-wrap items-baseline gap-4">
                 <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">

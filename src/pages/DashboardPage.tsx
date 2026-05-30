@@ -82,7 +82,7 @@ export function DashboardPage() {
           )}
           {canReadHousekeeping && (
             <Tile
-              to="/housekeeping"
+              to="/housekeeping?filter=issues"
               label="Açık Sorun"
               value={counts?.openIssues}
               watchTone="red"

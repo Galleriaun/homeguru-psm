@@ -76,6 +76,14 @@ const STATUS_LABELS: Record<ReservationStatus, string> = {
   cancelled: 'İptal',
 };
 
+/** "HH:MM" in Istanbul time (UTC+3, fixed — no DST since 2016) from a stored
+ *  timestamptz ISO. Güniçi stays carry a real clock time, so we surface it. */
+function istanbulClock(iso: string): string {
+  return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(11, 16);
+}
+
 // --- date helpers: work purely in YYYY-MM-DD UTC-day space, matching how
 // stay_start / stay_end are stored (UTC midnight). "Today" comes from the
 // shared istanbulToday() helper so it never drifts past midnight Istanbul. ---
@@ -293,6 +301,17 @@ export function ReservationsCalendarPage() {
     }
     return map;
   }, [reservations]);
+
+  // Güniçi (DAYUSE) stays start and end on the same calendar day, so they
+  // collapse to a zero-width bar on the Gantt (sIdx === eIdx → skipped). List
+  // them separately below the timeline, sorted by giriş time.
+  const dayUseStays = useMemo(
+    () =>
+      reservations
+        .filter((r) => r.stay_type === 'DAYUSE' && r.status !== 'cancelled')
+        .sort((a, b) => a.stay_start.localeCompare(b.stay_start)),
+    [reservations],
+  );
 
   const blocksByUnit = useMemo(() => {
     const map = new Map<string, PropertyBlock[]>();
@@ -708,10 +727,10 @@ export function ReservationsCalendarPage() {
                             className="sticky left-0 z-10 flex shrink-0 items-center gap-1.5 bg-white px-3 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200"
                             style={{ width: labelW, height: ROW_H }}
                           >
+                            <span className="truncate">{u.name}</span>
                             <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
                               {formatRoomType(u.room_type)}
                             </span>
-                            <span className="truncate">{u.name}</span>
                           </div>
                           <div
                             className="relative"
@@ -886,6 +905,45 @@ export function ReservationsCalendarPage() {
               })}
             </div>
           </div>
+        </Card>
+      )}
+
+      {/* Güniçi (gündüz kullanımı) stays — these never appear as bars on the
+          timeline above because giriş ve çıkış aynı gündedir, so they get their
+          own list for the same window. */}
+      {!error && properties.length > 0 && dayUseStays.length > 0 && (
+        <Card className="p-0">
+          <div className="border-b border-stone-300 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700 dark:border-stone-600 dark:bg-stone-800/40 dark:text-stone-200">
+            Güniçi konaklamalar
+          </div>
+          <ul className="divide-y divide-stone-200 dark:divide-stone-700">
+            {dayUseStays.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => handleReservationBarClick(r)}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/40"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-stone-800 dark:text-stone-100">
+                      {r.guest?.full_name ?? '—'}
+                    </span>
+                    <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                      {r.unit?.name ?? '—'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm text-stone-700 dark:text-stone-200">
+                      {formatDate(r.stay_start)}
+                    </span>
+                    <span className="block text-xs text-stone-500 dark:text-stone-400">
+                      {istanbulClock(r.stay_start)}–{istanbulClock(r.stay_end)}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 
