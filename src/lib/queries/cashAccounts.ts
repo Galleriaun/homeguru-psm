@@ -43,6 +43,7 @@ export interface CashTransactionWithRefs extends CashTxRow {
     created_at: string;
     reservation: {
       id: string;
+      stay_start: string;
       guest: { full_name: string } | null;
       unit: { name: string } | null;
     } | null;
@@ -60,7 +61,7 @@ export async function listCashTransactions(
   const { data, error } = await supabase
     .from('cash_transactions')
     .select(
-      '*, payment_collection:payment_collections(created_at, reservation:reservations(id, guest:guests(full_name), unit:units(name)))',
+      '*, payment_collection:payment_collections(created_at, reservation:reservations(id, stay_start, guest:guests(full_name), unit:units(name)))',
     )
     .eq('cash_account_id', accountId)
     .eq('approval_status', 'approved')
@@ -70,10 +71,10 @@ export async function listCashTransactions(
 }
 
 /**
- * Submit a manual kasa entry via the submit_cash_tx RPC. The RPC decides
- * approval_status from the caller's role: SUPER_ADMIN → 'approved' (posts
- * to balance immediately), PROPERTY_MANAGER → 'pending' (waits for admin
- * review at /finance/pending).
+ * Submit a manual kasa entry via the submit_cash_tx RPC. Since migration 067
+ * EVERY caller's entry (SUPER_ADMIN included) lands as approval_status='pending'
+ * and waits for yönetici onay at /finance/pending — it only posts to the kasa
+ * balance once approved.
  */
 export async function submitCashTransaction(input: {
   cash_account_id: string;

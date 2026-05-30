@@ -23,6 +23,7 @@ import { CashPage } from '@/pages/finance/CashPage';
 import { ExpensesListPage } from '@/pages/finance/ExpensesListPage';
 import { ExpenseFormPage } from '@/pages/finance/ExpenseFormPage';
 import { PendingPaymentsPage } from '@/pages/finance/PendingPaymentsPage';
+import { DebtorsPage } from '@/pages/finance/DebtorsPage';
 import { HousekeepingPage } from '@/pages/housekeeping/HousekeepingPage';
 import { StaffListPage } from '@/pages/finance/StaffListPage';
 import { StaffDetailPage } from '@/pages/finance/StaffDetailPage';
@@ -196,6 +197,16 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
                 <StaffDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Borçlar — reservations with an outstanding balance (collected < total) */}
+          <Route
+            path="/finance/debts"
+            element={
+              <ProtectedRoute allowedRoles={[...FINANCE_ACCESS]}>
+                <DebtorsPage />
               </ProtectedRoute>
             }
           />

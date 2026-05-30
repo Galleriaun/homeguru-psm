@@ -42,7 +42,7 @@ import { BlockDatesModal } from './BlockDatesModal';
 import { DateNoteModal } from './DateNoteModal';
 import { NightlyPriceModal } from './NightlyPriceModal';
 import { MoveReservationModal } from './MoveReservationModal';
-import { cn, formatDate, istanbulToday } from '@/lib/utils';
+import { cn, formatDate, formatRoomType, istanbulToday } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
 const WINDOW_DAYS = 28;
@@ -705,9 +705,12 @@ export function ReservationsCalendarPage() {
                           className="flex border-b border-stone-200 dark:border-stone-700"
                         >
                           <div
-                            className="sticky left-0 z-10 flex shrink-0 items-center bg-white px-3 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200"
+                            className="sticky left-0 z-10 flex shrink-0 items-center gap-1.5 bg-white px-3 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200"
                             style={{ width: labelW, height: ROW_H }}
                           >
+                            <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
+                              {formatRoomType(u.room_type)}
+                            </span>
                             <span className="truncate">{u.name}</span>
                           </div>
                           <div

@@ -5,6 +5,7 @@ import { can } from '@/lib/rbac';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
+import { PullToRefresh } from '@/components/PullToRefresh';
 import { PendingApprovalPage } from '@/pages/PendingApprovalPage';
 import { cn, formatRole } from '@/lib/utils';
 
@@ -147,6 +148,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
+      <PullToRefresh />
       <header className="border-b border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           {/* Logo — always visible */}

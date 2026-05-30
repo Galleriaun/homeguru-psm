@@ -65,6 +65,34 @@ export async function listPendingCashTransactions(): Promise<PendingCashTx[]> {
   return (data as unknown as PendingCashTx[]) ?? [];
 }
 
+/**
+ * Total count of everything still awaiting manager approval — pending expenses
+ * + pending manual cash entries + UNCONFIRMED payment collections. Three
+ * head-only count queries (no rows transferred) so it's cheap enough to run on
+ * every finance page load to badge the "Onaylar" tab. RLS scopes the counts to
+ * the caller's branch automatically.
+ */
+export async function countPendingApprovals(): Promise<number> {
+  const [exp, cash, pay] = await Promise.all([
+    supabase
+      .from('expenses')
+      .select('id', { count: 'exact', head: true })
+      .eq('approval_status', 'pending'),
+    supabase
+      .from('cash_transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('approval_status', 'pending'),
+    supabase
+      .from('payment_collections')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'UNCONFIRMED'),
+  ]);
+  if (exp.error) throw wrapErr(exp.error);
+  if (cash.error) throw wrapErr(cash.error);
+  if (pay.error) throw wrapErr(pay.error);
+  return (exp.count ?? 0) + (cash.count ?? 0) + (pay.count ?? 0);
+}
+
 export async function approveCashTransaction(id: string): Promise<CashTxRow> {
   const { data, error } = await supabase.rpc('approve_cash_tx', { _cash_tx_id: id });
   if (error) throw wrapErr(error);

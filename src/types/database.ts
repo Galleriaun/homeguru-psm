@@ -385,6 +385,7 @@ export type Database = {
           consent_given_at: string | null;
           consent_version: string | null;
           created_at: string;
+          created_by: string | null;
         };
         // NOTE: tc_kimlik_encrypted and passport_encrypted are intentionally
         // omitted from Insert/Update — use the create_guest / update_guest RPCs

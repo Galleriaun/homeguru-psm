@@ -11,6 +11,7 @@ export interface GuestSummary {
   nationality: string | null;
   is_problematic: boolean;
   created_at: string;
+  created_by: string | null;
 }
 
 export interface GuestInput {
@@ -34,7 +35,7 @@ export interface GuestInput {
 export async function listGuests(): Promise<GuestSummary[]> {
   const { data, error } = await supabase
     .from('guests')
-    .select('id, full_name, phone, email, nationality, is_problematic, created_at')
+    .select('id, full_name, phone, email, nationality, is_problematic, created_at, created_by')
     .order('full_name');
   if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
   return data ?? [];

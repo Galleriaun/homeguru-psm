@@ -11,6 +11,7 @@ import {
   UserIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
+  CurrencyLiraIcon,
 } from '@/components/icons/ActionIcons';
 import { QuickIssueModal } from '@/components/QuickIssueModal';
 
@@ -132,6 +133,14 @@ export function DashboardPage() {
               icon={<CheckCircleIcon className="h-5 w-5" />}
               label="Tahsilat Onayları"
               description="Personel tarafından toplanan tahsilatları onayla"
+            />
+          )}
+          {canReadFinance && (
+            <QuickAction
+              to="/finance/expenses/new"
+              icon={<CurrencyLiraIcon className="h-5 w-5" />}
+              label="Gider Ekle"
+              description="Yapılan harcamayı hızlıca kaydet"
             />
           )}
           {profile?.role === 'SUPER_ADMIN' && (

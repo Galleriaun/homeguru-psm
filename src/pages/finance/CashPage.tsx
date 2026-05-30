@@ -22,6 +22,7 @@ import { exportRowsToCsv } from '@/lib/csvExport';
 import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
 import { Select } from '@/components/ui/Select';
+import { DateInput } from '@/components/ui/DateInput';
 import type { TxDirection } from '@/types/database';
 
 const DIRECTION_LABEL: Record<TxDirection, string> = {
@@ -55,9 +56,13 @@ export function CashPage() {
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
   /** Top-level view mode — Genel kasa (default), Gün Bazlı (time-window cut)
       or Mülk Bazlı (single-property cut). The bottom direction filter stacks. */
-  const [kasaView, setKasaView] = useState<'general' | 'today' | 'property'>('general');
+  const [kasaView, setKasaView] = useState<'general' | 'today' | 'property' | 'calendar'>(
+    'general',
+  );
   /** Sub-range for the Gün Bazlı view: Bugün / Hafta / Ay. */
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('day');
+  /** Selected calendar day (ISO) when kasaView === 'calendar'. Defaults to today. */
+  const [calendarDate, setCalendarDate] = useState<string>(() => istanbulToday());
   /** Selected property id when kasaView === 'property'. */
   const [propertyFilter, setPropertyFilter] = useState<string>('');
   const [properties, setProperties] = useState<Property[]>([]);
@@ -96,16 +101,28 @@ export function CashPage() {
       const today = istanbulToday();
       const monday = istanbulMondayOfWeek();
       const monthPrefix = today.slice(0, 7);
-      // Bugün is now a rolling 24h window (so a tx at 02:00 still counts as
-      // "today" until 02:00 the next day). Hafta / Ay stay calendar-based.
+      // Bugün is a rolling 24h window. For guest-payment movements we anchor on
+      // the reservation's check-in date (stay_start) rather than when the tx was
+      // recorded; manual / expense entries (no reservation) fall back to
+      // created_at. Hafta / Ay stay calendar-based on created_at.
       const dayCutoff = Date.now() - 24 * 60 * 60 * 1000;
       return transactions.filter((t) => {
         if (timeRange === 'day') {
-          return new Date(t.created_at).getTime() >= dayCutoff;
+          const basis = t.payment_collection?.reservation?.stay_start ?? t.created_at;
+          return new Date(basis).getTime() >= dayCutoff;
         }
         const txDate = toIstanbulDate(t.created_at);
         if (timeRange === 'week') return txDate >= monday && txDate <= today;
         return txDate.slice(0, 7) === monthPrefix;
+      });
+    }
+    if (kasaView === 'calendar') {
+      // Ciro for one chosen calendar day. Same basis as Bugün: anchor guest
+      // payments on the reservation's check-in date (stay_start), manual /
+      // expense entries on created_at.
+      return transactions.filter((t) => {
+        const basis = t.payment_collection?.reservation?.stay_start ?? t.created_at;
+        return toIstanbulDate(basis) === calendarDate;
       });
     }
     if (kasaView === 'property') {
@@ -113,7 +130,7 @@ export function CashPage() {
       return transactions.filter((t) => t.property_id === propertyFilter);
     }
     return transactions;
-  }, [transactions, kasaView, propertyFilter, timeRange]);
+  }, [transactions, kasaView, propertyFilter, timeRange, calendarDate]);
 
   const filteredTransactions = useMemo(() => {
     if (directionFilter === 'ALL') return viewTransactions;
@@ -247,9 +264,15 @@ export function CashPage() {
 
           {/* View-mode buttons — Genel / Gün Bazlı / Mülk Bazlı. */}
           <div className="flex flex-wrap gap-2">
-            {(['general', 'today', 'property'] as const).map((v) => {
+            {(['general', 'today', 'property', 'calendar'] as const).map((v) => {
               const label =
-                v === 'general' ? 'Genel Kasa' : v === 'today' ? 'Gün Bazlı' : 'Mülk Bazlı';
+                v === 'general'
+                  ? 'Genel Kasa'
+                  : v === 'today'
+                    ? 'Gün Bazlı'
+                    : v === 'property'
+                      ? 'Mülk Bazlı'
+                      : 'Takvim';
               const isActive = kasaView === v;
               return (
                 <button
@@ -316,7 +339,19 @@ export function CashPage() {
             </Card>
           )}
 
-          {/* View summary — gün and property modes show their own headline. */}
+          {kasaView === 'calendar' && (
+            <Card>
+              <DateInput
+                label="Gün seçin"
+                name="cash_calendar_date"
+                value={calendarDate}
+                onChange={(iso) => iso && setCalendarDate(iso)}
+                max={istanbulToday()}
+              />
+            </Card>
+          )}
+
+          {/* View summary — gün, property and calendar modes show their own headline. */}
           {kasaView === 'today' && (
             <Card className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
@@ -344,6 +379,25 @@ export function CashPage() {
             <Card className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
                 {properties.find((p) => p.id === propertyFilter)?.name ?? 'Mülk'} bakiyesi
+              </p>
+              <div className="flex flex-wrap items-baseline gap-4">
+                <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
+                  +{formatTRY(viewIncome)}
+                </p>
+                <p className="text-2xl font-semibold text-red-600 dark:text-red-400">
+                  −{formatTRY(viewOutgo)}
+                </p>
+                <p className="text-sm text-stone-700 dark:text-stone-300">
+                  Net: <strong>{formatTRY(viewBalance)}</strong>
+                </p>
+              </div>
+            </Card>
+          )}
+
+          {kasaView === 'calendar' && (
+            <Card className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
+                {formatDate(calendarDate)} Cirosu
               </p>
               <div className="flex flex-wrap items-baseline gap-4">
                 <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">

@@ -121,22 +121,24 @@ export async function countActivePaymentsForReservation(
 }
 
 /**
- * Returns a Set of reservation_ids that have at least one active (UNCONFIRMED
- * or CONFIRMED) payment_collections row. Lets the reservation list quickly
- * render an "Ödeme Alındı" / "Ödeme Alınmadı" badge per card without an N+1
+ * Returns a Map of reservation_id → total collected amount across active
+ * (UNCONFIRMED or CONFIRMED) payment_collections rows. Lets the reservation
+ * list render a "Kısmi / tam / fazladan Ödeme Alındı" badge per card by
+ * comparing the collected sum against the reservation total, without an N+1
  * query loop. DISPUTED payments are excluded — those were rejected.
  */
-export async function loadReservationsWithPayments(): Promise<Set<string>> {
+export async function loadReservationsWithPayments(): Promise<Map<string, number>> {
   const { data, error } = await supabase
     .from('payment_collections')
-    .select('reservation_id')
+    .select('reservation_id, amount')
     .in('status', ['UNCONFIRMED', 'CONFIRMED'] satisfies PaymentStatus[]);
   if (error) throw wrapErr(error);
-  const set = new Set<string>();
+  const map = new Map<string, number>();
   for (const row of data ?? []) {
-    if (row.reservation_id) set.add(row.reservation_id);
+    if (!row.reservation_id) continue;
+    map.set(row.reservation_id, (map.get(row.reservation_id) ?? 0) + Number(row.amount));
   }
-  return set;
+  return map;
 }
 
 /**

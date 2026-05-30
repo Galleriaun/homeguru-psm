@@ -3,21 +3,26 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import { listGuests, type GuestSummary } from '@/lib/queries/guests';
+import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
+import { formatDate } from '@/lib/utils';
 
 export function GuestsListPage() {
   const { profile } = useAuth();
   const [guests, setGuests] = useState<GuestSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   useEffect(() => {
     listGuests()
       .then(setGuests)
       .catch((e) => setError(e?.message ?? 'Misafirler yüklenemedi'));
+    // Best-effort: powers the "Oluşturan: X" line on each guest box.
+    loadStaffDirectory().then(setStaffMap).catch(() => {});
   }, []);
 
   const canCreate = profile && can(profile.role, 'guest:create');
@@ -107,6 +112,11 @@ export function GuestsListPage() {
                     </span>
                   )}
                 </div>
+                <p className="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+                  {g.created_by && staffMap.get(g.created_by)
+                    ? `Oluşturan: ${staffMap.get(g.created_by)} · ${formatDate(g.created_at)}`
+                    : `Eklendi: ${formatDate(g.created_at)}`}
+                </p>
               </Link>
             ))}
           </div>
@@ -121,6 +131,7 @@ export function GuestsListPage() {
                     <th className="px-6 py-3 font-medium">Telefon</th>
                     <th className="px-6 py-3 font-medium">E-posta</th>
                     <th className="px-6 py-3 font-medium">Uyruk</th>
+                    <th className="px-6 py-3 font-medium">Oluşturan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
@@ -148,6 +159,11 @@ export function GuestsListPage() {
                       </td>
                       <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                         {g.nationality ?? '—'}
+                      </td>
+                      <td className="px-6 py-3 text-stone-600 dark:text-stone-400">
+                        {g.created_by && staffMap.get(g.created_by)
+                          ? `${staffMap.get(g.created_by)} · ${formatDate(g.created_at)}`
+                          : formatDate(g.created_at)}
                       </td>
                     </tr>
                   ))}

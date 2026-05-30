@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { countPendingApprovals } from '@/lib/queries/pendingApprovals';
 import { cn } from '@/lib/utils';
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
@@ -57,6 +59,21 @@ function CheckIcon() {
   );
 }
 
+function DebtIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M10 6.5c-1.4 0-2.2.8-2.2 1.7s.8 1.3 2.2 1.6c1.4.3 2.2.7 2.2 1.6s-.8 1.7-2.2 1.7-2.2-.8-2.2-1.7M10 5.3v1.2M10 13.4v1.3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function PeopleIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -85,6 +102,16 @@ export function FinanceTabs() {
   // them anyway, but hiding the tabs avoids dead-end clicks.
   const isFullFinance =
     profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
+
+  // Badge the "Onaylar" tab with how many items still await approval.
+  const [pendingCount, setPendingCount] = useState(0);
+  useEffect(() => {
+    if (!isFullFinance) return;
+    countPendingApprovals()
+      .then(setPendingCount)
+      .catch(() => {});
+  }, [isFullFinance]);
+
   return (
     <div className="flex flex-wrap gap-2">
       {isFullFinance && (
@@ -104,9 +131,20 @@ export function FinanceTabs() {
         </NavLink>
       )}
       {isFullFinance && (
+        <NavLink to="/finance/debts" className={tabClass}>
+          <DebtIcon />
+          Borçlar
+        </NavLink>
+      )}
+      {isFullFinance && (
         <NavLink to="/finance/pending" className={tabClass}>
           <CheckIcon />
           Onaylar
+          {pendingCount > 0 && (
+            <span className="ml-0.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-semibold text-white">
+              {pendingCount}
+            </span>
+          )}
         </NavLink>
       )}
     </div>

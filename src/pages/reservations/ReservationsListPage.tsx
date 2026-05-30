@@ -24,6 +24,25 @@ function istanbulTomorrow(): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Payment badge: compares the collected sum against the reservation total.
+//   none → Ödeme Alınmadı, < total → Kısmi, = total → Ödeme Alındı, > total → Fazladan.
+// A small epsilon absorbs float rounding so an exact-amount payment reads "tam".
+function paymentBadge(
+  paid: number,
+  total: number,
+): { label: string; className: string } {
+  const amber =
+    'rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+  const emerald =
+    'rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
+  const sky =
+    'rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300';
+  if (paid <= 0) return { label: 'Ödeme Alınmadı', className: amber };
+  if (paid < total - 0.005) return { label: 'Kısmi Ödeme Alındı', className: amber };
+  if (paid > total + 0.005) return { label: 'Fazladan Ödeme Alındı', className: sky };
+  return { label: 'Ödeme Alındı', className: emerald };
+}
+
 const STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: 'Beklemede',
   upcoming: 'Yakında',
@@ -55,9 +74,9 @@ export function ReservationsListPage() {
   const [reservations, setReservations] = useState<ReservationWithRefs[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
-  /** Set of reservation ids that have at least one active payment — drives
-      the "Ödeme Alındı / Alınmadı" badge on each card. */
-  const [paidIds, setPaidIds] = useState<Set<string>>(() => new Set());
+  /** reservation_id → total collected (active payments) — drives the
+      "Kısmi / tam / fazladan Ödeme Alındı" badge on each card. */
+  const [paidMap, setPaidMap] = useState<Map<string, number>>(() => new Map());
   // 'CHECKOUT_TODAY' is a virtual filter — it cuts across statuses and shows
   // any reservation whose stay_end is on today's Istanbul calendar date.
   // Cancelled stays are excluded — "bugün çıkacaklar" is a reception-desk
@@ -72,7 +91,7 @@ export function ReservationsListPage() {
       .catch((e) => setError(e?.message ?? 'Rezervasyonlar yüklenemedi'));
     // Best-effort: staff directory powers the "Oluşturan: X" line.
     loadStaffDirectory().then(setStaffMap).catch(() => {});
-    loadReservationsWithPayments().then(setPaidIds).catch(() => {});
+    loadReservationsWithPayments().then(setPaidMap).catch(() => {});
   }, []);
 
   const canCreate = profile && can(profile.role, 'reservation:create');
@@ -226,12 +245,12 @@ export function ReservationsListPage() {
                     {g.items.length}
                   </span>
                 </h2>
-                <ReservationRows items={g.items} staffMap={staffMap} paidIds={paidIds} />
+                <ReservationRows items={g.items} staffMap={staffMap} paidMap={paidMap} />
               </section>
             ))}
           </div>
         ) : (
-          <ReservationRows items={filtered} staffMap={staffMap} paidIds={paidIds} />
+          <ReservationRows items={filtered} staffMap={staffMap} paidMap={paidMap} />
         ))}
     </div>
   );
@@ -241,11 +260,11 @@ export function ReservationsListPage() {
 function ReservationRows({
   items,
   staffMap,
-  paidIds,
+  paidMap,
 }: {
   items: ReservationWithRefs[];
   staffMap: Map<string, string>;
-  paidIds: Set<string>;
+  paidMap: Map<string, number>;
 }) {
   return (
     <>
@@ -279,21 +298,19 @@ function ReservationRows({
               <span>
                 {r.stay_type === 'DAYUSE'
                   ? `${formatDate(r.stay_start)} · ${formatTime(r.stay_start)}–${formatTime(r.stay_end)}`
-                  : `${formatDate(r.stay_start)} → ${formatDate(r.stay_end)} · Çıkış ${checkoutTimeLabel(r.late_checkout_hours)}`}
+                  : `${formatDate(r.stay_start)} · Giriş ${formatTime(r.stay_start)} → ${formatDate(r.stay_end)} · Çıkış ${checkoutTimeLabel(r.late_checkout_hours)}`}
               </span>
               <span className="flex flex-col items-end gap-0.5">
                 <span className="font-semibold text-stone-900 dark:text-stone-100">
                   {formatTRY(Number(r.total_amount))}
                 </span>
-                <span
-                  className={
-                    paidIds.has(r.id)
-                      ? 'rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                      : 'rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
-                  }
-                >
-                  {paidIds.has(r.id) ? 'Ödeme Alındı' : 'Ödeme Alınmadı'}
-                </span>
+                {(() => {
+                  const badge = paymentBadge(
+                    paidMap.get(r.id) ?? 0,
+                    Number(r.total_amount),
+                  );
+                  return <span className={badge.className}>{badge.label}</span>;
+                })()}
               </span>
             </p>
             {staffMap.get(r.created_by) && (
@@ -349,7 +366,7 @@ function ReservationRows({
                       </>
                     ) : (
                       <>
-                        <div>{formatDate(r.stay_start)}</div>
+                        <div>{formatDate(r.stay_start)} · Giriş {formatTime(r.stay_start)}</div>
                         <div className="text-xs text-stone-600 dark:text-stone-400">
                           → {formatDate(r.stay_end)} · Çıkış {checkoutTimeLabel(r.late_checkout_hours)}
                         </div>

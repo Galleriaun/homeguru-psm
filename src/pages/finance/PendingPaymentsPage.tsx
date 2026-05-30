@@ -16,6 +16,7 @@ import {
   type PendingCashTx,
   type PendingExpense,
 } from '@/lib/queries/pendingApprovals';
+import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -57,6 +58,7 @@ export function PendingPaymentsPage() {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [inFlight, setInFlight] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   const refreshAll = useCallback(() => {
     setLoadError(null);
@@ -76,6 +78,8 @@ export function PendingPaymentsPage() {
 
   useEffect(() => {
     refreshAll();
+    // Best-effort: powers the "Oluşturan: X" line on each Tahsilat box.
+    loadStaffDirectory().then(setStaffMap).catch(() => {});
   }, [refreshAll]);
 
   const handleConfirm = async () => {
@@ -148,6 +152,7 @@ export function PendingPaymentsPage() {
       {tab === 'payments' && (
         <PaymentsList
           items={payments}
+          staffMap={staffMap}
           onConfirm={(it) => {
             setDialogError(null);
             setPending({ type: 'confirm-payment', item: it });
@@ -260,10 +265,12 @@ function SubTabs({
 // ----------------------------------------------------------------------------
 function PaymentsList({
   items,
+  staffMap,
   onConfirm,
   onDispute,
 }: {
   items: PendingPaymentWithRefs[] | null;
+  staffMap: Map<string, string>;
   onConfirm: (it: PendingPaymentWithRefs) => void;
   onDispute: (it: PendingPaymentWithRefs) => void;
 }) {
@@ -300,6 +307,11 @@ function PaymentsList({
               <p className="mt-1 text-xs text-stone-700 dark:text-stone-300">
                 {METHOD_LABELS[it.method]} · {formatDate(it.created_at)}
               </p>
+              {staffMap.get(it.collected_by_user_id) && (
+                <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                  Oluşturan: {staffMap.get(it.collected_by_user_id)}
+                </p>
+              )}
             </div>
             <p className="font-semibold text-stone-900 dark:text-stone-100">
               {formatTRY(Number(it.amount))}

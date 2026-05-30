@@ -70,6 +70,7 @@ export function QuickAddGuestModal({ onClose, onCreated }: Props) {
         nationality: row.nationality,
         is_problematic: row.is_problematic,
         created_at: row.created_at,
+        created_by: row.created_by,
       };
       onCreated(summary);
     } catch (err) {
