@@ -16,6 +16,14 @@ function formatTime(iso: string): string {
   return timeFmt.format(new Date(iso));
 }
 
+// Tomorrow's Istanbul calendar date as YYYY-MM-DD. Anchored at noon UTC so the
+// +1 day shift can never cross a DST/offset edge (Turkey is UTC+3 fixed).
+function istanbulTomorrow(): string {
+  const d = new Date(istanbulToday() + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 const STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: 'Beklemede',
   upcoming: 'Yakında',
@@ -54,7 +62,9 @@ export function ReservationsListPage() {
   // any reservation whose stay_end is on today's Istanbul calendar date.
   // Cancelled stays are excluded — "bugün çıkacaklar" is a reception-desk
   // view that should only highlight guests who are actually leaving.
-  const [filter, setFilter] = useState<'ALL' | 'CHECKOUT_TODAY' | ReservationStatus>('ALL');
+  const [filter, setFilter] = useState<
+    'ALL' | 'CHECKOUT_TODAY' | 'CHECKOUT_TOMORROW' | ReservationStatus
+  >('ALL');
 
   useEffect(() => {
     listReservations()
@@ -77,6 +87,12 @@ export function ReservationsListPage() {
         (r) => r.stay_end.slice(0, 10) === today && r.status !== 'cancelled',
       );
     }
+    if (filter === 'CHECKOUT_TOMORROW') {
+      const tomorrow = istanbulTomorrow();
+      return reservations.filter(
+        (r) => r.stay_end.slice(0, 10) === tomorrow && r.status !== 'cancelled',
+      );
+    }
     return reservations.filter((r) => r.status === filter);
   }, [reservations, filter]);
 
@@ -86,8 +102,12 @@ export function ReservationsListPage() {
   const groups = useMemo(() => {
     if (!reservations) return [];
     const today = istanbulToday();
+    const tomorrow = istanbulTomorrow();
     const checkoutTodayItems = reservations
       .filter((r) => r.stay_end.slice(0, 10) === today && r.status !== 'cancelled')
+      .sort((a, b) => a.stay_end.localeCompare(b.stay_end));
+    const checkoutTomorrowItems = reservations
+      .filter((r) => r.stay_end.slice(0, 10) === tomorrow && r.status !== 'cancelled')
       .sort((a, b) => a.stay_end.localeCompare(b.stay_end));
 
     const byStatus = GROUP_ORDER.map((status) => ({
@@ -112,6 +132,14 @@ export function ReservationsListPage() {
           key: 'checkout_today',
           label: 'Bugün Çıkış',
           items: checkoutTodayItems,
+        });
+      }
+      // Yarın Çıkış follows Bugün Çıkış so departures read today → tomorrow.
+      if (g.key === 'active' && checkoutTomorrowItems.length > 0) {
+        result.push({
+          key: 'checkout_tomorrow',
+          label: 'Yarın Çıkış',
+          items: checkoutTomorrowItems,
         });
       }
     }
@@ -141,7 +169,7 @@ export function ReservationsListPage() {
 
       <div className="flex flex-wrap gap-2">
         {(
-          ['ALL', 'active', 'CHECKOUT_TODAY', 'upcoming', 'completed', 'pending', 'cancelled'] as const
+          ['ALL', 'active', 'CHECKOUT_TODAY', 'CHECKOUT_TOMORROW', 'upcoming', 'completed', 'pending', 'cancelled'] as const
         ).map((f) => {
           const isActive = filter === f;
           const label =
@@ -149,7 +177,9 @@ export function ReservationsListPage() {
               ? 'Tümü'
               : f === 'CHECKOUT_TODAY'
                 ? 'Bugün Çıkış'
-                : STATUS_LABELS[f];
+                : f === 'CHECKOUT_TOMORROW'
+                  ? 'Yarın Çıkış'
+                  : STATUS_LABELS[f];
           return (
             <button
               key={f}
