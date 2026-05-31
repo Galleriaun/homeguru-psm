@@ -611,6 +611,12 @@ export function CashPage() {
                                 </span>
                               )}
                             </div>
+                            {t.payment_collection?.reservation?.stay_start && (
+                              <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+                                Aktif olma:{' '}
+                                {formatDate(t.payment_collection.reservation.stay_start)}
+                              </p>
+                            )}
                             <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
                               {tPaymentMethods(t.description)}
                             </p>
@@ -699,6 +705,10 @@ export function CashPage() {
                                     <div className="text-xs text-stone-500 dark:text-stone-400">
                                       Onaylandı: {formatDate(t.created_at)}{' '}
                                       {formatTime(t.created_at)}
+                                    </div>
+                                    <div className="text-xs text-stone-500 dark:text-stone-400">
+                                      Aktif olma:{' '}
+                                      {formatDate(t.payment_collection.reservation.stay_start)}
                                     </div>
                                   </>
                                 ) : (
