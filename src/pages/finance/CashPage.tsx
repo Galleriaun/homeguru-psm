@@ -706,10 +706,12 @@ export function CashPage() {
                                       Onaylandı: {formatDate(t.created_at)}{' '}
                                       {formatTime(t.created_at)}
                                     </div>
-                                    <div className="text-xs text-stone-500 dark:text-stone-400">
-                                      Aktif olma:{' '}
-                                      {formatDate(t.payment_collection.reservation.stay_start)}
-                                    </div>
+                                    {t.payment_collection.reservation?.stay_start && (
+                                      <div className="text-xs text-stone-500 dark:text-stone-400">
+                                        Aktif olma:{' '}
+                                        {formatDate(t.payment_collection.reservation.stay_start)}
+                                      </div>
+                                    )}
                                   </>
                                 ) : (
                                   <>
