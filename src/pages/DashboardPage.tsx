@@ -250,7 +250,7 @@ function QuickAction({ to, onClick, icon, label, description }: QuickActionProps
   // Shared styling between the Link and button modes so the grid stays
   // visually uniform whichever shape the action takes.
   const className =
-    'flex items-center gap-3 rounded-lg border border-emerald-300 bg-white p-4 text-left text-stone-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-stone-900 dark:text-stone-100 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30';
+    'flex items-center gap-3 rounded-lg border border-emerald-300 bg-white p-4 text-left text-stone-900 transition-colors hover:border-emerald-400 hover:bg-emerald-50 active:border-emerald-400 active:bg-emerald-50 dark:border-emerald-800 dark:bg-stone-900 dark:text-stone-100 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/30 dark:active:border-emerald-700 dark:active:bg-emerald-950/30';
 
   const body = (
     <>

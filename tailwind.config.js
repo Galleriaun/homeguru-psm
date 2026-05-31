@@ -2,6 +2,10 @@
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   darkMode: 'class',
+  // Touch devices simulate :hover on tap and keep it until you tap elsewhere,
+  // leaving cards stuck in their hover (green) state. Scoping hover utilities
+  // to `@media (hover: hover)` means they apply only on real pointers (desktop).
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
       colors: {
