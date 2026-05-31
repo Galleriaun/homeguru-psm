@@ -42,6 +42,7 @@ import { BlockDatesModal } from './BlockDatesModal';
 import { DateNoteModal } from './DateNoteModal';
 import { NightlyPriceModal } from './NightlyPriceModal';
 import { MoveReservationModal } from './MoveReservationModal';
+import { DayUseMonthCalendar } from './DayUseMonthCalendar';
 import { cn, formatDate, formatRoomType, istanbulToday } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
@@ -76,27 +77,12 @@ const STATUS_LABELS: Record<ReservationStatus, string> = {
   cancelled: 'İptal',
 };
 
-/** "HH:MM" in Istanbul time (UTC+3, fixed — no DST since 2016) from a stored
- *  timestamptz ISO. Güniçi stays carry a real clock time, so we surface it. */
-function istanbulClock(iso: string): string {
-  return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(11, 16);
-}
-
 // --- date helpers: work purely in YYYY-MM-DD UTC-day space, matching how
 // stay_start / stay_end are stored (UTC midnight). "Today" comes from the
 // shared istanbulToday() helper so it never drifts past midnight Istanbul. ---
 function addDaysStr(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-function mondayOf(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00Z');
-  const dow = d.getUTCDay(); // 0=Sun..6=Sat
-  const diff = dow === 0 ? -6 : 1 - dow;
-  d.setUTCDate(d.getUTCDate() + diff);
   return d.toISOString().slice(0, 10);
 }
 function dayIndex(fromStr: string, toStr: string): number {
@@ -127,7 +113,9 @@ export function ReservationsCalendarPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
-  const [windowStart, setWindowStart] = useState(() => mondayOf(istanbulToday()));
+  // Open on yesterday (one day before today) so the just-passed day sits at the
+  // left edge; the user scrolls back/forward with the week buttons.
+  const [windowStart, setWindowStart] = useState(() => addDaysStr(istanbulToday(), -1));
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [reservations, setReservations] = useState<ReservationWithRefs[]>([]);
@@ -301,17 +289,6 @@ export function ReservationsCalendarPage() {
     }
     return map;
   }, [reservations]);
-
-  // Güniçi (DAYUSE) stays start and end on the same calendar day, so they
-  // collapse to a zero-width bar on the Gantt (sIdx === eIdx → skipped). List
-  // them separately below the timeline, sorted by giriş time.
-  const dayUseStays = useMemo(
-    () =>
-      reservations
-        .filter((r) => r.stay_type === 'DAYUSE' && r.status !== 'cancelled')
-        .sort((a, b) => a.stay_start.localeCompare(b.stay_start)),
-    [reservations],
-  );
 
   const blocksByUnit = useMemo(() => {
     const map = new Map<string, PropertyBlock[]>();
@@ -532,7 +509,7 @@ export function ReservationsCalendarPage() {
           >
             ‹ Önceki
           </Button>
-          <Button variant="secondary" onClick={() => setWindowStart(mondayOf(today))}>
+          <Button variant="secondary" onClick={() => setWindowStart(addDaysStr(today, -1))}>
             Bugün
           </Button>
           <Button
@@ -908,44 +885,10 @@ export function ReservationsCalendarPage() {
         </Card>
       )}
 
-      {/* Güniçi (gündüz kullanımı) stays — these never appear as bars on the
-          timeline above because giriş ve çıkış aynı gündedir, so they get their
-          own list for the same window. */}
-      {!error && properties.length > 0 && dayUseStays.length > 0 && (
-        <Card className="p-0">
-          <div className="border-b border-stone-300 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700 dark:border-stone-600 dark:bg-stone-800/40 dark:text-stone-200">
-            Güniçi konaklamalar
-          </div>
-          <ul className="divide-y divide-stone-200 dark:divide-stone-700">
-            {dayUseStays.map((r) => (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => handleReservationBarClick(r)}
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/40"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-stone-800 dark:text-stone-100">
-                      {r.guest?.full_name ?? '—'}
-                    </span>
-                    <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
-                      {r.unit?.name ?? '—'}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-sm text-stone-700 dark:text-stone-200">
-                      {formatDate(r.stay_start)}
-                    </span>
-                    <span className="block text-xs text-stone-500 dark:text-stone-400">
-                      {istanbulClock(r.stay_start)}–{istanbulClock(r.stay_end)}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {/* Güniçi (gündüz kullanımı) stays never appear as bars on the timeline
+          above (giriş ve çıkış aynı gündedir → zero-width), so they get their
+          own month-grid calendar with a timed chip per stay. */}
+      {!error && <DayUseMonthCalendar refreshKey={reservationVersion} />}
 
       {loading && (
         <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
