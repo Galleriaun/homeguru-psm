@@ -1,0 +1,56 @@
+name: Database backup
+
+# Logical backup of the Supabase Postgres database. The free tier has NO
+# automated backups, so this is the only safety net until the project moves
+# to the Pro plan (managed daily backups).
+#
+# KVKK note: the dump contains guest PII (phone/email/address) plus the
+# encrypted TC/passport columns. It is GPG AES-256 encrypted ON THE RUNNER
+# before upload — GitHub only ever stores ciphertext, and the passphrase
+# never leaves the BACKUP_GPG_PASSPHRASE secret. Because this repo is public,
+# treat the artifact as semi-public: the encryption is the security boundary,
+# so use a long, random passphrase and never commit it anywhere.
+
+on:
+  schedule:
+    - cron: '30 2 * * *'   # daily at 02:30 UTC (05:30 Istanbul, low activity)
+  workflow_dispatch:
+
+# upload-artifact uses the Actions runtime token, not GITHUB_TOKEN, so no
+# repo permissions are needed.
+permissions: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Timestamp
+        id: ts
+        run: echo "stamp=$(date -u +'%Y%m%d-%H%M')" >> "$GITHUB_OUTPUT"
+
+      - name: Dump database (custom format, compressed)
+        run: |
+          docker run --rm \
+            -e PGCONN="$SUPABASE_DB_URL" \
+            postgres:17-alpine \
+            sh -c 'pg_dump "$PGCONN" -Fc' > backup.dump
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Encrypt (GPG AES-256)
+        run: |
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$BACKUP_GPG_PASSPHRASE" \
+            --cipher-algo AES256 --symmetric \
+            -o backup.dump.gpg backup.dump
+          rm -f backup.dump
+        env:
+          BACKUP_GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ steps.ts.outputs.stamp }}
+          path: backup.dump.gpg
+          retention-days: 30
+          if-no-files-found: error
