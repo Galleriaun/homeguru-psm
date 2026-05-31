@@ -192,6 +192,13 @@ export function PendingPaymentsPage() {
         />
       )}
 
+      {/* Bottom summary — total pending count for the active sub-tab. */}
+      {counts[tab] > 0 && (
+        <p className="text-right text-sm font-medium text-stone-600 dark:text-stone-300">
+          Toplam {counts[tab]} onay bekliyor
+        </p>
+      )}
+
       <ConfirmDialog
         open={pending !== null}
         title={pending ? actionTitle(pending) : ''}
