@@ -5,7 +5,7 @@ import {
   type ReservationWithRefs,
 } from '@/lib/queries/reservations';
 import { Card } from '@/components/ui/Card';
-import { cn, istanbulToday } from '@/lib/utils';
+import { cn, formatDate, istanbulToday } from '@/lib/utils';
 
 // --- date helpers in YYYY-MM-DD UTC-day space (stay_* are stored at UTC) ---
 function addDaysStr(dateStr: string, days: number): string {
@@ -53,20 +53,24 @@ interface DayUseMonthCalendarProps {
 }
 
 /**
- * Month-grid calendar dedicated to güniçi (DAYUSE) stays. They begin and end on
- * the same day, so they collapse to a zero-width bar on the resource-timeline
- * Gantt and can't be shown there. Here each one renders as a timed chip
- * (14:00–16:00) on its day. Self-contained — it fetches its own month range so
- * it stays decoupled from the Gantt's 28-day window and navigation.
+ * Güniçi (DAYUSE) stays panel. They begin and end on the same day, so they
+ * collapse to a zero-width bar on the resource-timeline Gantt and can't be shown
+ * there. This panel shows them two ways, switchable via a toggle:
+ *   • Takvim — a month grid with a one-line timed chip per stay.
+ *   • Liste  — a compact newest-first list with the full time range.
+ * Self-contained: it fetches its own month range so it stays decoupled from the
+ * Gantt's window and navigation.
  */
 export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps) {
   const navigate = useNavigate();
+  const [view, setView] = useState<'calendar' | 'list'>('calendar');
   const [monthStart, setMonthStart] = useState(() => istanbulToday().slice(0, 7) + '-01');
   const [stays, setStays] = useState<ReservationWithRefs[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const today = istanbulToday();
+  const monthPrefix = monthStart.slice(0, 7);
   // The visible grid is always 6 weeks (42 days) from the Monday on/before the
   // 1st — enough rows for any month layout.
   const gridStart = useMemo(() => mondayOnOrBefore(monthStart), [monthStart]);
@@ -97,7 +101,7 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
     };
   }, [gridStart, refreshKey]);
 
-  // Bucket stays by their Istanbul calendar day, earliest giriş first.
+  // Calendar: bucket stays by their Istanbul calendar day, earliest giriş first.
   const byDay = useMemo(() => {
     const m = new Map<string, ReservationWithRefs[]>();
     for (const r of stays) {
@@ -112,6 +116,15 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
     return m;
   }, [stays]);
 
+  // List: only the displayed month's stays, newest first.
+  const listStays = useMemo(
+    () =>
+      stays
+        .filter((r) => istanbulDay(r.stay_start).slice(0, 7) === monthPrefix)
+        .sort((a, b) => b.stay_start.localeCompare(a.stay_start)),
+    [stays, monthPrefix],
+  );
+
   const cells = useMemo(
     () =>
       Array.from({ length: 42 }, (_, i) => {
@@ -119,11 +132,11 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
         return {
           dateStr,
           dayNum: Number(dateStr.slice(8, 10)),
-          inMonth: dateStr.slice(0, 7) === monthStart.slice(0, 7),
+          inMonth: dateStr.slice(0, 7) === monthPrefix,
           isToday: dateStr === today,
         };
       }),
-    [gridStart, monthStart, today],
+    [gridStart, monthPrefix, today],
   );
 
   const monthLabel = monthYearFmt.format(new Date(monthStart + 'T00:00:00Z'));
@@ -132,35 +145,56 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
 
   return (
     <Card className="p-0">
-      {/* Header: month label + navigation */}
-      <div className="flex items-center justify-between border-b border-stone-300 bg-stone-50 px-3 py-2 dark:border-stone-600 dark:bg-stone-800/40">
+      {/* Header: title, view toggle, month navigation */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-300 bg-stone-50 px-3 py-2 dark:border-stone-600 dark:bg-stone-800/40">
         <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
           Güniçi konaklamalar — {monthLabel}
         </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setMonthStart((m) => addMonths(m, -1))}
-            aria-label="Önceki ay"
-            className={cn(navBtn, 'text-base leading-none')}
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            onClick={() => setMonthStart(istanbulToday().slice(0, 7) + '-01')}
-            className={cn(navBtn, 'text-xs font-medium')}
-          >
-            Bugün
-          </button>
-          <button
-            type="button"
-            onClick={() => setMonthStart((m) => addMonths(m, 1))}
-            aria-label="Sonraki ay"
-            className={cn(navBtn, 'text-base leading-none')}
-          >
-            ›
-          </button>
+        <div className="flex items-center gap-2">
+          {/* Liste / Takvim toggle */}
+          <div className="flex overflow-hidden rounded-md border border-stone-300 text-xs dark:border-stone-600">
+            {(['list', 'calendar'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={cn(
+                  'px-2 py-1 font-medium',
+                  view === v
+                    ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
+                    : 'text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-700',
+                )}
+              >
+                {v === 'list' ? 'Liste' : 'Takvim'}
+              </button>
+            ))}
+          </div>
+          {/* Month navigation */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setMonthStart((m) => addMonths(m, -1))}
+              aria-label="Önceki ay"
+              className={cn(navBtn, 'text-base leading-none')}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => setMonthStart(istanbulToday().slice(0, 7) + '-01')}
+              className={cn(navBtn, 'text-xs font-medium')}
+            >
+              Bugün
+            </button>
+            <button
+              type="button"
+              onClick={() => setMonthStart((m) => addMonths(m, 1))}
+              aria-label="Sonraki ay"
+              className={cn(navBtn, 'text-base leading-none')}
+            >
+              ›
+            </button>
+          </div>
         </div>
       </div>
 
@@ -168,70 +202,100 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
         <p className="px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
 
-      {/* min-w keeps each column readable; the grid scrolls horizontally on
-          phones and fills the width on tablet/desktop. */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[640px]">
-          {/* Weekday header */}
-          <div className="grid grid-cols-7 border-b border-stone-200 text-center text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:border-stone-700 dark:text-stone-400">
-            {WEEKDAYS.map((w) => (
-              <div key={w} className="py-1">
-                {w}
-              </div>
-            ))}
-          </div>
-
-          {/* Day cells */}
-          <div className="grid grid-cols-7">
-            {cells.map((c) => {
-              const chips = byDay.get(c.dateStr) ?? [];
-              return (
-                <div
-                  key={c.dateStr}
-                  className={cn(
-                    'min-h-[72px] border-b border-r border-stone-200 p-1 dark:border-stone-700',
-                    !c.inMonth && 'bg-stone-50 dark:bg-stone-900/40',
-                  )}
-                >
-                  <div className="mb-0.5 flex justify-end">
-                    <span
-                      className={cn(
-                        'text-[11px] leading-none',
-                        c.isToday
-                          ? 'rounded bg-emerald-600 px-1 py-0.5 font-semibold text-white dark:bg-emerald-500'
-                          : c.inMonth
-                            ? 'text-stone-600 dark:text-stone-300'
-                            : 'text-stone-400 dark:text-stone-600',
-                      )}
-                    >
-                      {c.dayNum}
-                    </span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {chips.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => navigate(`/reservations/${r.id}`)}
-                        title={`${r.guest?.full_name ?? ''} · ${r.unit?.name ?? ''} · ${istanbulClock(r.stay_start)}–${istanbulClock(r.stay_end)}`}
-                        className="block w-full rounded bg-emerald-100 px-1 py-0.5 text-left text-[10px] leading-tight text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:hover:bg-emerald-900/70"
-                      >
-                        <span className="block font-semibold">
-                          {istanbulClock(r.stay_start)}–{istanbulClock(r.stay_end)}
-                        </span>
-                        <span className="block truncate">
-                          {r.guest?.full_name ?? '—'}
-                          {r.unit?.name ? ` · ${r.unit.name}` : ''}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+      {view === 'calendar' ? (
+        /* min-w keeps each column readable; the grid scrolls horizontally on
+           phones and fills the width on tablet/desktop. */
+        <div className="overflow-x-auto">
+          <div className="min-w-[640px]">
+            <div className="grid grid-cols-7 border-b border-stone-200 text-center text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:border-stone-700 dark:text-stone-400">
+              {WEEKDAYS.map((w) => (
+                <div key={w} className="py-1">
+                  {w}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {cells.map((c) => {
+                const chips = byDay.get(c.dateStr) ?? [];
+                return (
+                  <div
+                    key={c.dateStr}
+                    className={cn(
+                      'min-h-[72px] border-b border-r border-stone-200 p-1 dark:border-stone-700',
+                      !c.inMonth && 'bg-stone-50 dark:bg-stone-900/40',
+                    )}
+                  >
+                    <div className="mb-0.5 flex justify-end">
+                      <span
+                        className={cn(
+                          'text-[11px] leading-none',
+                          c.isToday
+                            ? 'rounded bg-emerald-600 px-1 py-0.5 font-semibold text-white dark:bg-emerald-500'
+                            : c.inMonth
+                              ? 'text-stone-600 dark:text-stone-300'
+                              : 'text-stone-400 dark:text-stone-600',
+                        )}
+                      >
+                        {c.dayNum}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {chips.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => navigate(`/reservations/${r.id}`)}
+                          title={`${r.guest?.full_name ?? ''} · ${r.unit?.name ?? ''} · ${istanbulClock(r.stay_start)}–${istanbulClock(r.stay_end)}`}
+                          className="block w-full truncate rounded bg-emerald-100 px-1 py-0.5 text-left text-[10px] leading-tight text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:hover:bg-emerald-900/70"
+                        >
+                          <span className="font-semibold">{istanbulClock(r.stay_start)}</span>{' '}
+                          {r.guest?.full_name ?? '—'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* Liste — compact, newest-first, only the displayed month. */
+        listStays.length === 0 ? (
+          <p className="px-3 py-4 text-center text-sm text-stone-500 dark:text-stone-400">
+            Bu ay güniçi konaklama yok.
+          </p>
+        ) : (
+          <ul className="divide-y divide-stone-200 dark:divide-stone-700">
+            {listStays.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/reservations/${r.id}`)}
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/40"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-stone-800 dark:text-stone-100">
+                      {r.guest?.full_name ?? '—'}
+                    </span>
+                    <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                      {r.unit?.name ?? '—'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm text-stone-700 dark:text-stone-200">
+                      {formatDate(r.stay_start)}
+                    </span>
+                    <span className="block text-xs text-stone-500 dark:text-stone-400">
+                      {istanbulClock(r.stay_start)}–{istanbulClock(r.stay_end)}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
 
       {loading && (
         <p className="px-3 py-2 text-xs text-stone-500 dark:text-stone-400">Yükleniyor…</p>
