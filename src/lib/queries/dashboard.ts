@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { istanbulToday } from '@/lib/utils';
+import { listAllUnits } from '@/lib/queries/units';
+import { listAllTasks, latestPerUnit, DEFAULT_STATUS } from '@/lib/queries/housekeeping';
 
 /**
  * Compact counts that the Panel renders as today's-at-a-glance tiles.
@@ -12,6 +14,7 @@ export interface DashboardCounts {
   activeNow: number;
   pendingPayments: number;
   openIssues: number;
+  dirtyUnits: number;
 }
 
 function addDaysStr(dateStr: string, days: number): string {
@@ -44,8 +47,28 @@ export async function loadDashboardCounts(): Promise<DashboardCounts> {
     }
   };
 
-  const [checkInsToday, checkOutsToday, activeNow, pendingPayments, openIssues] =
-    await Promise.all([
+  // Dirty units = units whose latest housekeeping status is DIRTY (units with
+  // no task history default to DIRTY). Mirrors the Temizlik page's Kirli count.
+  const dirtyUnitsCount = async (): Promise<number> => {
+    try {
+      const [units, tasks] = await Promise.all([listAllUnits(), listAllTasks()]);
+      const latest = latestPerUnit(tasks);
+      return units.filter(
+        (u) => (latest.get(u.id)?.status ?? DEFAULT_STATUS) === 'DIRTY',
+      ).length;
+    } catch {
+      return 0;
+    }
+  };
+
+  const [
+    checkInsToday,
+    checkOutsToday,
+    activeNow,
+    pendingPayments,
+    openIssues,
+    dirtyUnits,
+  ] = await Promise.all([
       countOr0(
         supabase
           .from('reservations')
@@ -85,7 +108,15 @@ export async function loadDashboardCounts(): Promise<DashboardCounts> {
           .select('id', { count: 'exact', head: true })
           .neq('status', 'RESOLVED'),
       ),
+      dirtyUnitsCount(),
     ]);
 
-  return { checkInsToday, checkOutsToday, activeNow, pendingPayments, openIssues };
+  return {
+    checkInsToday,
+    checkOutsToday,
+    activeNow,
+    pendingPayments,
+    openIssues,
+    dirtyUnits,
+  };
 }

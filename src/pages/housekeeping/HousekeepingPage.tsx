@@ -54,11 +54,12 @@ export function HousekeepingPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [tasks, setTasks] = useState<TaskWithRefs[]>([]);
-  // Honour ?filter=issues so the dashboard "Açık Sorun" tile lands straight
-  // on the Sorunlu view instead of the default Tümü list.
+  // Honour ?filter=… so the dashboard tiles land on the right view:
+  // "Açık Sorun" → Sorunlu, "Kirli Daireler" → Kirli; otherwise Tümü.
   const [searchParams] = useSearchParams();
+  const filterParam = searchParams.get('filter');
   const [filter, setFilter] = useState<FilterOption>(
-    searchParams.get('filter') === 'issues' ? 'ISSUES' : 'ALL',
+    filterParam === 'issues' ? 'ISSUES' : filterParam === 'dirty' ? 'DIRTY' : 'ALL',
   );
   /** Cross-cutting filter: scope rendering to Binalar only, Daireler only, or both. */
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'HOTEL' | 'APARTMENT'>('ALL');

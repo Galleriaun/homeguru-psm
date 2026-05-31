@@ -37,12 +37,13 @@ function formatTime(iso: string): string {
   return timeFmt.format(new Date(iso));
 }
 
-// A transaction's anchor day for the date-based kasa views: the moment a guest
-// payment was COLLECTED (payment_collection.created_at = "Toplandı"), falling
-// back to the row's own created_at for manual / expense entries that have no
-// collection record. So a day's ciro tracks when the cash actually came in.
+// A transaction's anchor day for the date-based kasa views. For a guest payment
+// (Misafir ödemesi) this is the reservation's check-in = "aktif olma" date
+// (payment_collection.reservation.stay_start), so its ciro lands on the day the
+// stay became active rather than the day the cash happened to be collected.
+// Manual / expense entries (no collection) fall back to their own created_at.
 function txDateBasis(t: CashTransactionWithRefs): string {
-  return t.payment_collection?.created_at ?? t.created_at;
+  return t.payment_collection?.reservation?.stay_start ?? t.created_at;
 }
 
 /**
@@ -73,8 +74,12 @@ export function CashPage() {
   const [calendarDate, setCalendarDate] = useState<string>(() => istanbulToday());
   /** Selected property id when kasaView === 'property'. */
   const [propertyFilter, setPropertyFilter] = useState<string>('');
-  /** Selected day (ISO) for the Mülk Bazlı view — defaults to today. */
+  /** Selected day (ISO) for the Mülk Bazlı view — used only when range is Takvim. */
   const [propertyDate, setPropertyDate] = useState<string>(() => istanbulToday());
+  /** Sub-range for the Mülk Bazlı view: Bugün / Hafta / Ay / Takvim. */
+  const [propertyRange, setPropertyRange] = useState<'day' | 'week' | 'month' | 'calendar'>(
+    'day',
+  );
   const [properties, setProperties] = useState<Property[]>([]);
 
   // Per-row tx deletion (SUPER_ADMIN only — see migration 015).
@@ -111,11 +116,10 @@ export function CashPage() {
       const today = istanbulToday();
       const monday = istanbulMondayOfWeek();
       const monthPrefix = today.slice(0, 7);
-      // All Gün Bazlı ranges anchor on the COLLECTION date (Toplandı) for guest
-      // payments, falling back to created_at for manual / expense entries — so a
-      // day's / week's / month's ciro reflects when the cash actually came in.
-      // Bugün is the Istanbul calendar day (matches Takvim for today), not a
-      // rolling 24h window.
+      // All Gün Bazlı ranges anchor on each tx's date (see txDateBasis): guest
+      // payments on the reservation's aktif olma / check-in date, manual entries
+      // on created_at. Bugün is the Istanbul calendar day (matches Takvim for
+      // today), not a rolling 24h window.
       return transactions.filter((t) => {
         const txDate = toIstanbulDate(txDateBasis(t));
         if (timeRange === 'day') return txDate === today;
@@ -124,24 +128,40 @@ export function CashPage() {
       });
     }
     if (kasaView === 'calendar') {
-      // Ciro for one chosen calendar day, anchored on the COLLECTION date
-      // (Toplandı) for guest payments / created_at for manual entries — so the
-      // day you pick matches the transactions whose collection falls on it.
+      // Ciro for one chosen calendar day, anchored on each tx's date (see
+      // txDateBasis): guest payments on the reservation's aktif olma date,
+      // manual entries on created_at.
       return transactions.filter(
         (t) => toIstanbulDate(txDateBasis(t)) === calendarDate,
       );
     }
     if (kasaView === 'property') {
       if (!propertyFilter) return [];
-      // One property's movements for one chosen day, same COLLECTION-date basis.
-      return transactions.filter(
-        (t) =>
-          t.property_id === propertyFilter &&
-          toIstanbulDate(txDateBasis(t)) === propertyDate,
-      );
+      // One property's movements over the chosen range — same Bugün/Hafta/Ay
+      // logic as Gün Bazlı (txDateBasis: aktif olma date for guest payments),
+      // or one picked day for Takvim.
+      const today = istanbulToday();
+      const monday = istanbulMondayOfWeek();
+      const monthPrefix = today.slice(0, 7);
+      return transactions.filter((t) => {
+        if (t.property_id !== propertyFilter) return false;
+        const txDate = toIstanbulDate(txDateBasis(t));
+        if (propertyRange === 'calendar') return txDate === propertyDate;
+        if (propertyRange === 'day') return txDate === today;
+        if (propertyRange === 'week') return txDate >= monday && txDate <= today;
+        return txDate.slice(0, 7) === monthPrefix;
+      });
     }
     return transactions;
-  }, [transactions, kasaView, propertyFilter, propertyDate, timeRange, calendarDate]);
+  }, [
+    transactions,
+    kasaView,
+    propertyFilter,
+    propertyDate,
+    propertyRange,
+    timeRange,
+    calendarDate,
+  ]);
 
   const filteredTransactions = useMemo(() => {
     if (directionFilter === 'ALL') return viewTransactions;
@@ -348,13 +368,45 @@ export function CashPage() {
                 searchable
               />
               {propertyFilter && (
-                <DateInput
-                  label="Gün seçin"
-                  name="cash_property_date"
-                  value={propertyDate}
-                  onChange={(iso) => iso && setPropertyDate(iso)}
-                  max={istanbulToday()}
-                />
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {(['day', 'week', 'month', 'calendar'] as const).map((r) => {
+                      const label =
+                        r === 'day'
+                          ? 'Bugün'
+                          : r === 'week'
+                            ? 'Hafta'
+                            : r === 'month'
+                              ? 'Ay'
+                              : 'Takvim';
+                      const isActive = propertyRange === r;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setPropertyRange(r)}
+                          className={cn(
+                            'rounded-full border px-3 py-1 text-sm font-medium transition-colors',
+                            isActive
+                              ? 'border-stone-900 bg-stone-900 text-white dark:border-stone-100 dark:bg-stone-100 dark:text-stone-900'
+                              : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                          )}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {propertyRange === 'calendar' && (
+                    <DateInput
+                      label="Gün seçin"
+                      name="cash_property_date"
+                      value={propertyDate}
+                      onChange={(iso) => iso && setPropertyDate(iso)}
+                      max={istanbulToday()}
+                    />
+                  )}
+                </>
               )}
             </Card>
           )}
@@ -399,7 +451,14 @@ export function CashPage() {
             <Card className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
                 {properties.find((p) => p.id === propertyFilter)?.name ?? 'Mülk'} ·{' '}
-                {formatDate(propertyDate)} Cirosu
+                {propertyRange === 'calendar'
+                  ? formatDate(propertyDate)
+                  : propertyRange === 'day'
+                    ? 'Bugün'
+                    : propertyRange === 'week'
+                      ? 'Bu Hafta'
+                      : 'Bu Ay'}{' '}
+                Cirosu
               </p>
               <div className="flex flex-wrap items-baseline gap-4">
                 <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">

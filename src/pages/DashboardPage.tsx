@@ -88,6 +88,14 @@ export function DashboardPage() {
               watchTone="red"
             />
           )}
+          {canReadHousekeeping && (
+            <Tile
+              to="/housekeeping?filter=dirty"
+              label="Kirli Daireler"
+              value={counts?.dirtyUnits}
+              watchTone="amber"
+            />
+          )}
         </div>
       </section>
 
