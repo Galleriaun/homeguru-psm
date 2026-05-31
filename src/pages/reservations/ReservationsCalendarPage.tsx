@@ -885,6 +885,12 @@ export function ReservationsCalendarPage() {
         </Card>
       )}
 
+      {canCreate && (
+        <p className="text-xs text-stone-500 dark:text-stone-400">
+          Boş bir güne tıklayarak yeni rezervasyon, blok, not veya fiyat ekleyebilirsiniz.
+        </p>
+      )}
+
       {/* Güniçi (gündüz kullanımı) stays never appear as bars on the timeline
           above (giriş ve çıkış aynı gündedir → zero-width), so they get their
           own month-grid calendar with a timed chip per stay. */}
@@ -892,12 +898,6 @@ export function ReservationsCalendarPage() {
 
       {loading && (
         <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
-      )}
-
-      {canCreate && (
-        <p className="text-xs text-stone-500 dark:text-stone-400">
-          Boş bir güne tıklayarak yeni rezervasyon, blok, not veya fiyat ekleyebilirsiniz.
-        </p>
       )}
 
       {/* Cell action sheet — pops on any empty-cell click. All four actions

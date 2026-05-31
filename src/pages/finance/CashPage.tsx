@@ -699,14 +699,9 @@ export function CashPage() {
                                 )}
                                 {t.payment_collection?.created_at ? (
                                   <>
-                                    <div>
-                                      <span className="text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-400">
-                                        Toplandı:
-                                      </span>{' '}
-                                      {formatDate(t.payment_collection.created_at)}{' '}
-                                      <span className="text-xs text-stone-600 dark:text-stone-300">
-                                        {formatTime(t.payment_collection.created_at)}
-                                      </span>
+                                    <div className="text-xs text-stone-500 dark:text-stone-400">
+                                      Toplandı: {formatDate(t.payment_collection.created_at)}{' '}
+                                      {formatTime(t.payment_collection.created_at)}
                                     </div>
                                     <div className="text-xs text-stone-500 dark:text-stone-400">
                                       Onaylandı: {formatDate(t.created_at)}{' '}

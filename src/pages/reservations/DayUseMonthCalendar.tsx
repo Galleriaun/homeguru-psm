@@ -253,6 +253,7 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
                     className={cn(
                       'min-h-[72px] border-b border-r border-stone-200 p-1 dark:border-stone-700',
                       !c.inMonth && 'bg-stone-50 dark:bg-stone-900/40',
+                      c.isToday && 'bg-emerald-50 dark:bg-emerald-950/30',
                     )}
                   >
                     <div className="mb-0.5 flex justify-end">
