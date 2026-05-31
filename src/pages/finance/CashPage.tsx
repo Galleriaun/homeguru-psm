@@ -586,6 +586,12 @@ export function CashPage() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
+                            {t.payment_collection?.reservation?.stay_start && (
+                              <p className="mb-0.5 text-[11px] font-medium text-stone-700 dark:text-stone-200">
+                                Giriş günü:{' '}
+                                {formatDate(t.payment_collection.reservation.stay_start)}
+                              </p>
+                            )}
                             <div className="flex flex-wrap items-center gap-2">
                               <span
                                 className={
@@ -611,12 +617,6 @@ export function CashPage() {
                                 </span>
                               )}
                             </div>
-                            {t.payment_collection?.reservation?.stay_start && (
-                              <p className="mt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
-                                Aktif olma:{' '}
-                                {formatDate(t.payment_collection.reservation.stay_start)}
-                              </p>
-                            )}
                             <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
                               {tPaymentMethods(t.description)}
                             </p>
@@ -691,6 +691,12 @@ export function CashPage() {
                           return (
                             <tr key={t.id}>
                               <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                                {t.payment_collection?.reservation?.stay_start && (
+                                  <div className="text-xs font-medium text-stone-700 dark:text-stone-200">
+                                    Giriş günü:{' '}
+                                    {formatDate(t.payment_collection.reservation.stay_start)}
+                                  </div>
+                                )}
                                 {t.payment_collection?.created_at ? (
                                   <>
                                     <div>
@@ -706,12 +712,6 @@ export function CashPage() {
                                       Onaylandı: {formatDate(t.created_at)}{' '}
                                       {formatTime(t.created_at)}
                                     </div>
-                                    {t.payment_collection.reservation?.stay_start && (
-                                      <div className="text-xs text-stone-500 dark:text-stone-400">
-                                        Aktif olma:{' '}
-                                        {formatDate(t.payment_collection.reservation.stay_start)}
-                                      </div>
-                                    )}
                                   </>
                                 ) : (
                                   <>
