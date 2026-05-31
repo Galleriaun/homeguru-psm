@@ -114,12 +114,11 @@ export function CashPage() {
       // All Gün Bazlı ranges anchor on the COLLECTION date (Toplandı) for guest
       // payments, falling back to created_at for manual / expense entries — so a
       // day's / week's / month's ciro reflects when the cash actually came in.
-      const dayCutoff = Date.now() - 24 * 60 * 60 * 1000;
+      // Bugün is the Istanbul calendar day (matches Takvim for today), not a
+      // rolling 24h window.
       return transactions.filter((t) => {
-        if (timeRange === 'day') {
-          return new Date(txDateBasis(t)).getTime() >= dayCutoff;
-        }
         const txDate = toIstanbulDate(txDateBasis(t));
+        if (timeRange === 'day') return txDate === today;
         if (timeRange === 'week') return txDate >= monday && txDate <= today;
         return txDate.slice(0, 7) === monthPrefix;
       });
