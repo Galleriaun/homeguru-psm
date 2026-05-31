@@ -37,6 +37,14 @@ function formatTime(iso: string): string {
   return timeFmt.format(new Date(iso));
 }
 
+// A transaction's anchor day for the date-based kasa views: the moment a guest
+// payment was COLLECTED (payment_collection.created_at = "Toplandı"), falling
+// back to the row's own created_at for manual / expense entries that have no
+// collection record. So a day's ciro tracks when the cash actually came in.
+function txDateBasis(t: CashTransactionWithRefs): string {
+  return t.payment_collection?.created_at ?? t.created_at;
+}
+
 /**
  * The single general kasa (migration 036). One cash pot for the whole
  * business — no per-property accounts. Shows the running balance and every
@@ -103,41 +111,35 @@ export function CashPage() {
       const today = istanbulToday();
       const monday = istanbulMondayOfWeek();
       const monthPrefix = today.slice(0, 7);
-      // Bugün is a rolling 24h window. For guest-payment movements we anchor on
-      // the reservation's check-in date (stay_start) rather than when the tx was
-      // recorded; manual / expense entries (no reservation) fall back to
-      // created_at. Hafta / Ay stay calendar-based on created_at.
+      // All Gün Bazlı ranges anchor on the COLLECTION date (Toplandı) for guest
+      // payments, falling back to created_at for manual / expense entries — so a
+      // day's / week's / month's ciro reflects when the cash actually came in.
       const dayCutoff = Date.now() - 24 * 60 * 60 * 1000;
       return transactions.filter((t) => {
         if (timeRange === 'day') {
-          const basis = t.payment_collection?.reservation?.stay_start ?? t.created_at;
-          return new Date(basis).getTime() >= dayCutoff;
+          return new Date(txDateBasis(t)).getTime() >= dayCutoff;
         }
-        const txDate = toIstanbulDate(t.created_at);
+        const txDate = toIstanbulDate(txDateBasis(t));
         if (timeRange === 'week') return txDate >= monday && txDate <= today;
         return txDate.slice(0, 7) === monthPrefix;
       });
     }
     if (kasaView === 'calendar') {
-      // Ciro for one chosen calendar day. Same basis as Bugün: anchor guest
-      // payments on the reservation's check-in date (stay_start), manual /
-      // expense entries on created_at — so a day's ciro reflects the stays that
-      // belong to it, not when the cash happened to be collected.
-      return transactions.filter((t) => {
-        const basis = t.payment_collection?.reservation?.stay_start ?? t.created_at;
-        return toIstanbulDate(basis) === calendarDate;
-      });
+      // Ciro for one chosen calendar day, anchored on the COLLECTION date
+      // (Toplandı) for guest payments / created_at for manual entries — so the
+      // day you pick matches the transactions whose collection falls on it.
+      return transactions.filter(
+        (t) => toIstanbulDate(txDateBasis(t)) === calendarDate,
+      );
     }
     if (kasaView === 'property') {
       if (!propertyFilter) return [];
-      // One property's movements for one chosen day. Same date basis as the
-      // other views: guest payments anchor on the reservation's check-in date
-      // (stay_start), manual / expense entries on created_at.
-      return transactions.filter((t) => {
-        if (t.property_id !== propertyFilter) return false;
-        const basis = t.payment_collection?.reservation?.stay_start ?? t.created_at;
-        return toIstanbulDate(basis) === propertyDate;
-      });
+      // One property's movements for one chosen day, same COLLECTION-date basis.
+      return transactions.filter(
+        (t) =>
+          t.property_id === propertyFilter &&
+          toIstanbulDate(txDateBasis(t)) === propertyDate,
+      );
     }
     return transactions;
   }, [transactions, kasaView, propertyFilter, propertyDate, timeRange, calendarDate]);
@@ -480,7 +482,7 @@ export function CashPage() {
                 {(['ALL', 'IN', 'OUT'] as const).map((f) => {
                   const isActive = directionFilter === f;
                   const count =
-                    f === 'ALL' ? transactions.length : f === 'IN' ? gelirCount : giderCount;
+                    f === 'ALL' ? viewTransactions.length : f === 'IN' ? gelirCount : giderCount;
                   const label = f === 'ALL' ? 'Tümü' : DIRECTION_LABEL[f];
                   return (
                     <button
