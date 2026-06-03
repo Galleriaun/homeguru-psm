@@ -28,8 +28,8 @@ export function ExpensesListPage() {
   const { profile } = useAuth();
 
   const [properties, setProperties] = useState<Property[]>([]);
-  /** Gider tipi: GENEL (property_id null) or MULK (property-tied). */
-  const [expenseType, setExpenseType] = useState<'GENEL' | 'MULK'>('MULK');
+  /** Gider tipi: ALL (everything), GENEL (property_id null) or MULK (property-tied). */
+  const [expenseType, setExpenseType] = useState<'ALL' | 'GENEL' | 'MULK'>('ALL');
   const [propertyId, setPropertyId] = useState(''); // '' = all mülkler (within MULK)
   const [month, setMonth] = useState(currentMonthStr());
   const [category, setCategory] = useState(''); // '' = all
@@ -69,6 +69,7 @@ export function ExpensesListPage() {
   }, [expenseType, propertyId, month, category]);
 
   const giderTipiOptions = [
+    { value: 'ALL', label: 'Tümü' },
     { value: 'GENEL', label: 'Genel' },
     { value: 'MULK', label: 'Mülk' },
   ];
@@ -148,7 +149,7 @@ export function ExpensesListPage() {
             label="Gider Tipi"
             name="filter_expense_type"
             value={expenseType}
-            onChange={(v) => setExpenseType(v as 'GENEL' | 'MULK')}
+            onChange={(v) => setExpenseType(v as 'ALL' | 'GENEL' | 'MULK')}
             options={giderTipiOptions}
           />
           {expenseType === 'MULK' && (
