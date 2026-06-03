@@ -164,8 +164,11 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
     <Card className="p-0">
       {/* Header: title + Liste / Takvim toggle */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-300 bg-stone-50 px-3 py-2 dark:border-stone-600 dark:bg-stone-800/40">
-        <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
           Güniçi konaklamalar
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+            Güniçi
+          </span>
         </span>
         <div className="flex overflow-hidden rounded-md border border-stone-300 text-xs dark:border-stone-600">
           {(['list', 'calendar'] as const).map((v) => (

@@ -30,7 +30,7 @@ import { CompanionListModal } from './CompanionListModal';
 import { SendWhatsAppModal } from '@/components/SendWhatsAppModal';
 import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
-import { ClockIcon } from '@/components/icons/ActionIcons';
+import { ClockIcon, PhoneIcon } from '@/components/icons/ActionIcons';
 import { ProblematicFlagModal } from '@/pages/guests/ProblematicFlagModal';
 import { formatDate, formatTRY, checkoutTimeLabel, tPaymentMethods } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
@@ -370,13 +370,23 @@ export function ReservationDetailPage() {
           ) : (
             <span />
           )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowCompanions(true)}
-          >
-            Ek Misafir
-          </Button>
+          <div className="flex items-center gap-2">
+            {guestPhone && (
+              <a href={`tel:${guestPhone.replace(/[^\d+]/g, '')}`}>
+                <Button variant="secondary" size="sm">
+                  <PhoneIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
+                  Ara
+                </Button>
+              </a>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowCompanions(true)}
+            >
+              Ek Misafir
+            </Button>
+          </div>
         </div>
         <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
           <Field

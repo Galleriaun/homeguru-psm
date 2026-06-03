@@ -42,6 +42,10 @@ const wrapErr = (e: { message: string; details?: string; hint?: string; code?: s
  */
 export interface ListExpenseFilters {
   propertyId?: string;
+  /** When true (and no propertyId), only general expenses (property_id IS NULL). */
+  genelOnly?: boolean;
+  /** When true (and no propertyId), only property-tied expenses (property_id IS NOT NULL). */
+  mulkOnly?: boolean;
   month?: string; // 'YYYY-MM'
   category?: string;
 }
@@ -59,6 +63,10 @@ export async function listExpenses(
 
   if (filters.propertyId) {
     q = q.eq('property_id', filters.propertyId);
+  } else if (filters.genelOnly) {
+    q = q.is('property_id', null);
+  } else if (filters.mulkOnly) {
+    q = q.not('property_id', 'is', null);
   }
   if (filters.category) {
     q = q.eq('category', filters.category);

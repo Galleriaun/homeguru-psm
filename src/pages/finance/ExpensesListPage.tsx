@@ -28,7 +28,9 @@ export function ExpensesListPage() {
   const { profile } = useAuth();
 
   const [properties, setProperties] = useState<Property[]>([]);
-  const [propertyId, setPropertyId] = useState(''); // '' = all
+  /** Gider tipi: GENEL (property_id null) or MULK (property-tied). */
+  const [expenseType, setExpenseType] = useState<'GENEL' | 'MULK'>('MULK');
+  const [propertyId, setPropertyId] = useState(''); // '' = all mülkler (within MULK)
   const [month, setMonth] = useState(currentMonthStr());
   const [category, setCategory] = useState(''); // '' = all
 
@@ -56,13 +58,20 @@ export function ExpensesListPage() {
     setError(null);
     setExpenses(null);
     listExpenses({
-      propertyId: propertyId || undefined,
+      propertyId: expenseType === 'MULK' && propertyId ? propertyId : undefined,
+      genelOnly: expenseType === 'GENEL',
+      mulkOnly: expenseType === 'MULK' && !propertyId,
       month: month || undefined,
       category: category || undefined,
     })
       .then(setExpenses)
       .catch((e) => setError(e?.message ?? 'Giderler yüklenemedi'));
-  }, [propertyId, month, category]);
+  }, [expenseType, propertyId, month, category]);
+
+  const giderTipiOptions = [
+    { value: 'GENEL', label: 'Genel' },
+    { value: 'MULK', label: 'Mülk' },
+  ];
 
   const propertyOptions = useMemo(
     () => [
@@ -134,14 +143,23 @@ export function ExpensesListPage() {
       </div>
 
       <Card>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Select
-            label="Mülk"
-            name="filter_property"
-            value={propertyId}
-            onChange={setPropertyId}
-            options={propertyOptions}
+            label="Gider Tipi"
+            name="filter_expense_type"
+            value={expenseType}
+            onChange={(v) => setExpenseType(v as 'GENEL' | 'MULK')}
+            options={giderTipiOptions}
           />
+          {expenseType === 'MULK' && (
+            <Select
+              label="Mülk"
+              name="filter_property"
+              value={propertyId}
+              onChange={setPropertyId}
+              options={propertyOptions}
+            />
+          )}
           <Select
             label="Ay"
             name="filter_month"
@@ -204,7 +222,10 @@ export function ExpensesListPage() {
                   }));
                   const parts = [
                     'giderler',
-                    propertyId ? properties.find((p) => p.id === propertyId)?.name : null,
+                    expenseType === 'GENEL' ? 'genel' : null,
+                    expenseType === 'MULK' && propertyId
+                      ? properties.find((p) => p.id === propertyId)?.name
+                      : null,
                     month || null,
                     category || null,
                   ]

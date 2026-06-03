@@ -377,7 +377,7 @@ export function ReservationFormPage() {
         stay_end = new Date(checkout + 'T00:00:00Z').toISOString();
       }
 
-      // Day-use stays don't get the nightly auto-debit cron; force off so a
+      // Day-use stays don't expose the auto-debit toggle; force off so a
       // checkbox toggled before flipping to day-use doesn't leak through.
       const effectiveAutoDebit = stayType === 'DAYUSE' ? false : autoDebit;
 
@@ -743,8 +743,9 @@ export function ReservationFormPage() {
             options={STATUS_OPTIONS}
           />
 
-          {/* Auto-debit charges the nightly fee at 00:05 — day-use stays
-              aren't nightly so the checkbox is hidden in that mode. */}
+          {/* Auto-debit posts the full amount to the guest's cari the moment the
+              reservation becomes active (at check-in). Day-use stays don't expose
+              the toggle. */}
           {stayType === 'OVERNIGHT' && (
             <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
               <input
@@ -753,7 +754,7 @@ export function ReservationFormPage() {
                 onChange={(e) => setAutoDebit(e.target.checked)}
                 className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
               />
-              Otomatik borçlandır (her gece 00:05'te günlük ücreti carisine işler)
+              Otomatik borçlandır (rezervasyon aktif olunca tutarın tamamı carisine işlenir)
             </label>
           )}
 

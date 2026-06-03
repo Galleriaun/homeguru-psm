@@ -305,7 +305,13 @@ If zero units match the exact window, try shifts of ±1, ±2, ±3 days at either
 
 Return top 3 suggestions. Implemented client-side after a single batched query.
 
-### 7.3 Nightly auto-debit (`pg_cron`)
+### 7.3 Auto-debit
+
+> **Updated (migration 077):** auto-debit no longer accrues nightly. The full
+> `total_amount` is now posted to the guest's cari **once, when the reservation
+> becomes `active`** (at check-in), via the `reservations_auto_debit_trg`
+> trigger. The nightly `pg_cron` job below was unscheduled. The original design
+> is kept here for history.
 
 Postgres scheduler runs in UTC. Turkey = UTC+3 year-round (no DST since 2016). So `00:00 Istanbul = 21:00 UTC`. Schedule at `21:05 UTC` for clock-drift safety:
 

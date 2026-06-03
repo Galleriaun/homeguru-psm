@@ -586,12 +586,6 @@ export function CashPage() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            {t.payment_collection?.reservation?.stay_start && (
-                              <p className="mb-0.5 text-[11px] font-medium text-stone-700 dark:text-stone-200">
-                                Giriş günü:{' '}
-                                {formatDate(t.payment_collection.reservation.stay_start)}
-                              </p>
-                            )}
                             <div className="flex flex-wrap items-center gap-2">
                               <span
                                 className={
@@ -617,6 +611,12 @@ export function CashPage() {
                                 </span>
                               )}
                             </div>
+                            {t.payment_collection?.reservation?.stay_start && (
+                              <p className="mt-0.5 text-[11px] font-medium text-stone-700 dark:text-stone-200">
+                                Giriş günü:{' '}
+                                {formatDate(t.payment_collection.reservation.stay_start)}
+                              </p>
+                            )}
                             <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
                               {tPaymentMethods(t.description)}
                             </p>
