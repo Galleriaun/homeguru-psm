@@ -6,6 +6,7 @@ import {
   cancelReservation,
   deleteReservation,
   getReservation,
+  setCariBlocked,
 } from '@/lib/queries/reservations';
 import { getProperty, type Property } from '@/lib/queries/properties';
 import { getUnit, type Unit } from '@/lib/queries/units';
@@ -90,6 +91,9 @@ export function ReservationDetailPage() {
   const [showLateCheckout, setShowLateCheckout] = useState(false);
   /** Ek Misafir list — read-mostly inline view of the guest's companions. */
   const [showCompanions, setShowCompanions] = useState(false);
+  /** Cari hesap lock (SUPER_ADMIN only). */
+  const [blocking, setBlocking] = useState(false);
+  const [blockError, setBlockError] = useState<string | null>(null);
 
   // Per-row ledger deletion (SUPER_ADMIN only — see migration 017)
   const [entryToDelete, setEntryToDelete] = useState<LedgerEntry | null>(null);
@@ -187,6 +191,39 @@ export function ReservationDetailPage() {
     profile && property && canCollectPayment(profile.role, property.type),
   );
   const isCancelled = reservation.status === 'cancelled';
+  // Cari hesap lock — only Yönetici (SUPER_ADMIN) can toggle it.
+  const isBlocked = reservation.cari_blocked;
+  const canBlockCari = profile?.role === 'SUPER_ADMIN';
+
+  const handleToggleBlock = async () => {
+    setBlockError(null);
+    // Locking needs a settled (zero) balance — the RPC re-checks server-side;
+    // this is the friendly upfront guard / warning.
+    if (!isBlocked) {
+      const bal = (ledger ?? []).reduce(
+        (s, e) =>
+          e.type === 'DEBT'
+            ? s + Number(e.amount)
+            : e.type === 'PAYMENT'
+              ? s - Number(e.amount)
+              : s,
+        0,
+      );
+      if (Math.abs(bal) > 0.005) {
+        setBlockError('Cari hesap bakiyesi sıfır olmadan hesap kilitlenemez.');
+        return;
+      }
+    }
+    setBlocking(true);
+    try {
+      await setCariBlocked(reservation.id, !isBlocked);
+      setReservation({ ...reservation, cari_blocked: !isBlocked });
+    } catch (e) {
+      setBlockError(e instanceof Error ? e.message : 'İşlem başarısız');
+    } finally {
+      setBlocking(false);
+    }
+  };
 
   const handleCancel = async () => {
     if (!id) return;
@@ -294,7 +331,7 @@ export function ReservationDetailPage() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {canCollect && !isCancelled && (
+          {canCollect && !isCancelled && !isBlocked && (
             <Button
               size="sm"
               onClick={() => {
@@ -311,14 +348,6 @@ export function ReservationDetailPage() {
               Ödeme Topla
             </Button>
           )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setShowWhatsApp(true)}
-          >
-            <WhatsAppIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
-            WhatsApp
-          </Button>
           {canEdit && !isCancelled && (
             <Link to={`/reservations/${reservation.id}/edit`}>
               <Button variant="secondary" size="sm">
@@ -386,6 +415,14 @@ export function ReservationDetailPage() {
             >
               Ek Misafir
             </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowWhatsApp(true)}
+            >
+              <WhatsAppIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
+              WhatsApp
+            </Button>
           </div>
         </div>
         <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
@@ -423,6 +460,11 @@ export function ReservationDetailPage() {
           canDelete={canDeleteLedger}
           guestName={guestName}
           stayStart={reservation.stay_start}
+          isBlocked={isBlocked}
+          canBlock={canBlockCari}
+          blocking={blocking}
+          blockError={blockError}
+          onToggleBlock={handleToggleBlock}
           onAddClick={() => setShowLedgerModal(true)}
           onDeleteClick={(entry) => {
             setEntryDeleteError(null);
@@ -629,6 +671,12 @@ interface LedgerSectionProps {
   /** Used to build the CSV download filename. */
   guestName: string;
   stayStart: string;
+  /** Cari hesap lock state + controls (SUPER_ADMIN only). */
+  isBlocked: boolean;
+  canBlock: boolean;
+  blocking: boolean;
+  blockError: string | null;
+  onToggleBlock: () => void;
   onAddClick: () => void;
   onDeleteClick: (entry: LedgerEntry) => void;
 }
@@ -640,6 +688,11 @@ function LedgerSection({
   canDelete,
   guestName,
   stayStart,
+  isBlocked,
+  canBlock,
+  blocking,
+  blockError,
+  onToggleBlock,
   onAddClick,
   onDeleteClick,
 }: LedgerSectionProps) {
@@ -676,9 +729,16 @@ function LedgerSection({
   return (
     <section className="space-y-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-          Cari Hesap
-        </h2>
+        <span className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
+            Cari Hesap
+          </h2>
+          {isBlocked && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">
+              Kilitli
+            </span>
+          )}
+        </span>
         {ledger !== null && (
           <div className="flex flex-wrap gap-2">
             {entries.length > 0 && (
@@ -710,15 +770,36 @@ function LedgerSection({
               <Button
                 size="sm"
                 variant="secondary"
+                disabled={isBlocked}
                 className="border-transparent bg-stone-200 hover:bg-stone-300 dark:border-transparent dark:bg-stone-700 dark:hover:bg-stone-600"
                 onClick={onAddClick}
               >
                 + Ekstra Ücret
               </Button>
             )}
+            {canBlock && (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={blocking}
+                onClick={onToggleBlock}
+                className={
+                  isBlocked
+                    ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30'
+                    : 'border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30'
+                }
+              >
+                {isBlocked ? 'Kilidi Aç' : 'Hesabı Kilitle'}
+              </Button>
+            )}
           </div>
         )}
       </div>
+      {blockError && (
+        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
+          {blockError}
+        </p>
+      )}
 
       {error && (
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">

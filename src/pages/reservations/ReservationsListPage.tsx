@@ -84,6 +84,8 @@ export function ReservationsListPage() {
   const [filter, setFilter] = useState<
     'ALL' | 'CHECKOUT_TODAY' | 'CHECKOUT_TOMORROW' | ReservationStatus
   >('ALL');
+  /** Free-text search over guest name. Applied before status filtering. */
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     listReservations()
@@ -96,43 +98,54 @@ export function ReservationsListPage() {
 
   const canCreate = profile && can(profile.role, 'reservation:create');
 
+  // Name search — applied before status filtering/grouping so it works in both
+  // the "Tümü" grouped view and the single-status views.
+  const searched = useMemo(() => {
+    if (!reservations) return null;
+    const q = search.trim().toLocaleLowerCase('tr');
+    if (!q) return reservations;
+    return reservations.filter((r) =>
+      (r.guest?.full_name ?? '').toLocaleLowerCase('tr').includes(q),
+    );
+  }, [reservations, search]);
+
   // The flat list for a specific status filter — also drives the empty check.
   const filtered = useMemo(() => {
-    if (!reservations) return [];
-    if (filter === 'ALL') return reservations;
+    if (!searched) return [];
+    if (filter === 'ALL') return searched;
     if (filter === 'CHECKOUT_TODAY') {
       const today = istanbulToday();
-      return reservations.filter(
+      return searched.filter(
         (r) => r.stay_end.slice(0, 10) === today && r.status !== 'cancelled',
       );
     }
     if (filter === 'CHECKOUT_TOMORROW') {
       const tomorrow = istanbulTomorrow();
-      return reservations.filter(
+      return searched.filter(
         (r) => r.stay_end.slice(0, 10) === tomorrow && r.status !== 'cancelled',
       );
     }
-    return reservations.filter((r) => r.status === filter);
-  }, [reservations, filter]);
+    return searched.filter((r) => r.status === filter);
+  }, [searched, filter]);
 
   // The "Tümü" view: one section per status, plus a virtual "Bugün Çıkış"
   // section inserted right after Aktif (rezervasyonlar bugün çıkıyor — same
   // semantic as the standalone CHECKOUT_TODAY filter chip).
   const groups = useMemo(() => {
-    if (!reservations) return [];
+    if (!searched) return [];
     const today = istanbulToday();
     const tomorrow = istanbulTomorrow();
-    const checkoutTodayItems = reservations
+    const checkoutTodayItems = searched
       .filter((r) => r.stay_end.slice(0, 10) === today && r.status !== 'cancelled')
       .sort((a, b) => a.stay_end.localeCompare(b.stay_end));
-    const checkoutTomorrowItems = reservations
+    const checkoutTomorrowItems = searched
       .filter((r) => r.stay_end.slice(0, 10) === tomorrow && r.status !== 'cancelled')
       .sort((a, b) => a.stay_end.localeCompare(b.stay_end));
 
     const byStatus = GROUP_ORDER.map((status) => ({
       key: status as string,
       label: STATUS_LABELS[status],
-      items: reservations
+      items: searched
         .filter((r) => r.status === status)
         .sort((a, b) =>
           status === 'upcoming'
@@ -163,7 +176,7 @@ export function ReservationsListPage() {
       }
     }
     return result.filter((g) => g.items.length > 0);
-  }, [reservations]);
+  }, [searched]);
 
   return (
     <div className="space-y-6">
@@ -214,6 +227,14 @@ export function ReservationsListPage() {
           );
         })}
       </div>
+
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="İsimle ara…"
+        className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 focus:border-emerald-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+      />
 
       {error && (
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">

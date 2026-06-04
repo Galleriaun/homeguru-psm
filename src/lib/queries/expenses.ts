@@ -88,6 +88,22 @@ export async function listExpenses(
   return (data as unknown as ExpenseWithProperty[]) ?? [];
 }
 
+/**
+ * Active recurring templates (is_recurring, no recurring_source_id). Used to
+ * project upcoming "Beklenen" recurring expenses into future months in the UI.
+ */
+export async function listRecurringTemplates(): Promise<ExpenseWithProperty[]> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .select(
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, property:properties(name, type)',
+    )
+    .eq('is_recurring', true)
+    .is('recurring_source_id', null);
+  if (error) throw wrapErr(error);
+  return (data as unknown as ExpenseWithProperty[]) ?? [];
+}
+
 export async function getExpense(id: string): Promise<ExpenseRow | null> {
   const { data, error } = await supabase
     .from('expenses')

@@ -16,6 +16,7 @@ import {
   type TaskWithRefs,
 } from '@/lib/queries/housekeeping';
 import { listOpenIssueCountsByUnit } from '@/lib/queries/housekeepingIssues';
+import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { IssuesModal } from './IssuesModal';
@@ -75,6 +76,8 @@ export function HousekeepingPage() {
     () => new Map(),
   );
   const [issueModalUnit, setIssueModalUnit] = useState<Unit | null>(null);
+  /** user_id → staff name, for the "Son Değiştiren" line on each card. */
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   const canWrite = Boolean(profile && can(profile.role, 'housekeeping:write'));
   const canDelete = profile?.role === 'SUPER_ADMIN';
@@ -95,6 +98,11 @@ export function HousekeepingPage() {
       })
       .catch((e) => setError(e?.message ?? 'Yüklenemedi'))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Best-effort: resolves updated_by → staff name for the "Son Değiştiren" line.
+  useEffect(() => {
+    loadStaffDirectory().then(setStaffMap).catch(() => {});
   }, []);
 
   // Called by IssuesModal after a create or resolve so the badge updates
@@ -333,6 +341,17 @@ export function HousekeepingPage() {
                                       ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
                                       : 'Henüz kayıt yok'}
                                   </p>
+                                  {(() => {
+                                    const changer = latest?.updated_by
+                                      ? staffMap.get(latest.updated_by)
+                                      : undefined;
+                                    if (!changer) return null;
+                                    return (
+                                      <p className="text-xs text-stone-500 dark:text-stone-400">
+                                        Son Değiştiren: {changer}
+                                      </p>
+                                    );
+                                  })()}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {isSaving && (

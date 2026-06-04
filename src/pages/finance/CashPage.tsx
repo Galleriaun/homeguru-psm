@@ -596,25 +596,25 @@ export function CashPage() {
                               >
                                 {DIRECTION_LABEL[t.direction]}
                               </span>
-                              {t.payment_collection?.created_at ? (
-                                <span className="text-xs text-stone-600 dark:text-stone-300">
-                                  Toplandı: {formatDate(t.payment_collection.created_at)} ·{' '}
-                                  {formatTime(t.payment_collection.created_at)}
-                                  <span className="ml-1 text-stone-500 dark:text-stone-400">
-                                    · Onaylandı: {formatDate(t.created_at)} ·{' '}
-                                    {formatTime(t.created_at)}
-                                  </span>
-                                </span>
-                              ) : (
-                                <span className="text-xs text-stone-600 dark:text-stone-300">
-                                  {formatDate(t.created_at)} · {formatTime(t.created_at)}
-                                </span>
-                              )}
                             </div>
                             {t.payment_collection?.reservation?.stay_start && (
                               <p className="mt-0.5 text-[11px] font-medium text-stone-700 dark:text-stone-200">
                                 Giriş günü:{' '}
                                 {formatDate(t.payment_collection.reservation.stay_start)}
+                              </p>
+                            )}
+                            {t.payment_collection?.created_at ? (
+                              <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-300">
+                                Toplandı: {formatDate(t.payment_collection.created_at)} ·{' '}
+                                {formatTime(t.payment_collection.created_at)}
+                                <span className="ml-1 text-stone-500 dark:text-stone-400">
+                                  · Onaylandı: {formatDate(t.created_at)} ·{' '}
+                                  {formatTime(t.created_at)}
+                                </span>
+                              </p>
+                            ) : (
+                              <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-300">
+                                {formatDate(t.created_at)} · {formatTime(t.created_at)}
                               </p>
                             )}
                             <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">

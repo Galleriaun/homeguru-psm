@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   listExpenses,
+  listRecurringTemplates,
   totalAmount,
   EXPENSE_CATEGORIES,
   type ExpenseWithProperty,
@@ -24,19 +25,39 @@ function currentMonthStr(): string {
   return `${y}-${m}`;
 }
 
+/**
+ * Filters persist across a round-trip into a gider's edit page (and back) via
+ * this module-level cache — it survives the unmount/remount that navigation
+ * causes. It resets on a full refresh (the module reloads) and is cleared when
+ * the user leaves the Giderler area entirely (see the unmount effect below).
+ */
+let cachedFilters: {
+  expenseType: 'ALL' | 'GENEL' | 'MULK';
+  propertyId: string;
+  month: string;
+  category: string;
+} | null = null;
+
+/** A real expense row, or a projected ("Beklenen") recurring one for a future month. */
+type DisplayExpense = ExpenseWithProperty & { __projected?: boolean };
+
 export function ExpensesListPage() {
   const { profile } = useAuth();
 
   const [properties, setProperties] = useState<Property[]>([]);
   /** Gider tipi: ALL (everything), GENEL (property_id null) or MULK (property-tied). */
-  const [expenseType, setExpenseType] = useState<'ALL' | 'GENEL' | 'MULK'>('ALL');
-  const [propertyId, setPropertyId] = useState(''); // '' = all mülkler (within MULK)
-  const [month, setMonth] = useState(currentMonthStr());
-  const [category, setCategory] = useState(''); // '' = all
+  const [expenseType, setExpenseType] = useState<'ALL' | 'GENEL' | 'MULK'>(
+    () => cachedFilters?.expenseType ?? 'ALL',
+  );
+  const [propertyId, setPropertyId] = useState(() => cachedFilters?.propertyId ?? '');
+  const [month, setMonth] = useState(() => cachedFilters?.month ?? currentMonthStr());
+  const [category, setCategory] = useState(() => cachedFilters?.category ?? '');
 
   const [expenses, setExpenses] = useState<ExpenseWithProperty[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
+  /** Recurring templates — projected into future months as "Beklenen" rows. */
+  const [templates, setTemplates] = useState<ExpenseWithProperty[] | null>(null);
 
   // YETKILI may *submit* a gider (queues pending), but doesn't have
   // finance:write for edits. Surface the "+ Yeni Gider" button for them too.
@@ -51,6 +72,23 @@ export function ExpensesListPage() {
       .then(setProperties)
       .catch((e) => setError(e?.message ?? 'Mülkler yüklenemedi'));
     loadStaffDirectory().then(setStaffMap).catch(() => {});
+    listRecurringTemplates().then(setTemplates).catch(() => {});
+  }, []);
+
+  // Remember the current filters so a round-trip into a gider keeps them.
+  useEffect(() => {
+    cachedFilters = { expenseType, propertyId, month, category };
+  }, [expenseType, propertyId, month, category]);
+
+  // On leaving the Giderler area (any non-expenses route), forget the filters
+  // so returning later starts fresh. Going into a gider edit / + Yeni Gider
+  // (both under /finance/expenses) keeps them.
+  useEffect(() => {
+    return () => {
+      if (!window.location.pathname.includes('/finance/expenses')) {
+        cachedFilters = null;
+      }
+    };
   }, []);
 
   // Refetch whenever filters change
@@ -91,7 +129,8 @@ export function ExpensesListPage() {
   );
 
   // Render Ay as a Select (matches Mülk + Kategori). Native <input type="month">
-  // looked over-tall on iOS Safari. Show last 24 months newest-first.
+  // looked over-tall on iOS Safari. Show the last 24 months newest-first, but
+  // never list pre-2025 months — there's no data before launch.
   const monthOptions = useMemo(() => {
     const monthFmt = new Intl.DateTimeFormat('tr-TR', {
       month: 'long',
@@ -99,27 +138,77 @@ export function ExpensesListPage() {
     });
     const now = new Date();
     const out: { value: string; label: string }[] = [];
+    // Next 3 months ahead (newest first) so recurring expenses can be planned.
+    for (let i = 3; i >= 1; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      out.push({ value: `${y}-${m}`, label: monthFmt.format(d) });
+    }
+    // Current month + last 24, but never pre-2025 (no data before launch).
     for (let i = 0; i < 24; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const y = d.getFullYear();
+      if (y < 2025) break;
       const m = String(d.getMonth() + 1).padStart(2, '0');
       out.push({ value: `${y}-${m}`, label: monthFmt.format(d) });
     }
     return out;
   }, []);
 
-  const total = expenses ? totalAmount(expenses) : 0;
+  // Project active recurring templates as "Beklenen" rows for the CURRENT and
+  // FUTURE months (matching the current Gider Tipi / Mülk / Kategori filters),
+  // skipping any template already represented this month — its own row or a
+  // cron-generated instance — so there are never duplicates. Past months show
+  // only real data. Display only; the real expense still posts on its day.
+  const projected = useMemo<DisplayExpense[]>(() => {
+    if (!templates || !expenses || month < currentMonthStr()) return [];
+    const postedTemplateIds = new Set<string>();
+    for (const e of expenses) {
+      postedTemplateIds.add(e.id);
+      if (e.recurring_source_id) postedTemplateIds.add(e.recurring_source_id);
+    }
+    const [y, mm] = month.split('-');
+    const lastDay = new Date(Number(y), Number(mm), 0).getDate();
+    return templates
+      .filter((t) => !postedTemplateIds.has(t.id))
+      .filter((t) => {
+        if (expenseType === 'GENEL') return t.property_id === null;
+        if (expenseType === 'MULK')
+          return propertyId ? t.property_id === propertyId : t.property_id !== null;
+        return true;
+      })
+      .filter((t) => !category || t.category === category)
+      .map((t) => {
+        const day = Math.min(t.recurring_day ?? 1, lastDay);
+        return {
+          ...t,
+          id: `proj:${t.id}:${month}`,
+          expense_date: `${y}-${mm}-${String(day).padStart(2, '0')}`,
+          __projected: true,
+        };
+      });
+  }, [templates, expenses, month, expenseType, propertyId, category]);
+
+  // Real expenses for the month + projected ones. Projections count toward the
+  // total (a future month is all projection anyway).
+  const displayExpenses = useMemo<DisplayExpense[]>(
+    () => [...(expenses ?? []), ...projected],
+    [expenses, projected],
+  );
+
+  const total = totalAmount(displayExpenses);
 
   // Split into Genel (no property) vs Mülk (tied to a property) so the list
   // can render two stacked sections with their own subtotals. The user-facing
   // contract: Genel first at the top, Mülk giderleri underneath.
   const genelExpenses = useMemo(
-    () => expenses?.filter((e) => e.property_id === null) ?? [],
-    [expenses],
+    () => displayExpenses.filter((e) => e.property_id === null),
+    [displayExpenses],
   );
   const mulkExpenses = useMemo(
-    () => expenses?.filter((e) => e.property_id !== null) ?? [],
-    [expenses],
+    () => displayExpenses.filter((e) => e.property_id !== null),
+    [displayExpenses],
   );
 
   return (
@@ -188,7 +277,7 @@ export function ExpensesListPage() {
         <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
       )}
 
-      {expenses && expenses.length === 0 && (
+      {expenses && displayExpenses.length === 0 && (
         <Card>
           <p className="text-center text-sm text-stone-600 dark:text-stone-300">
             Bu kriterlerle kayıt bulunamadı.
@@ -196,11 +285,11 @@ export function ExpensesListPage() {
         </Card>
       )}
 
-      {expenses && expenses.length > 0 && (
+      {expenses && displayExpenses.length > 0 && (
         <>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-sm text-stone-600 dark:text-stone-300">
-              {expenses.length} kayıt
+              {displayExpenses.length} kayıt
             </p>
             <div className="flex items-baseline gap-3">
               <p className="text-sm">
@@ -209,6 +298,7 @@ export function ExpensesListPage() {
                   {formatTRY(total)}
                 </strong>
               </p>
+              {expenses.length > 0 && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -244,6 +334,7 @@ export function ExpensesListPage() {
               >
                 CSV İndir
               </Button>
+              )}
             </div>
           </div>
 
@@ -284,7 +375,7 @@ function ExpenseSection({
   staffMap,
 }: {
   title: string;
-  items: ExpenseWithProperty[];
+  items: DisplayExpense[];
   subtotal: number;
   staffMap: Map<string, string>;
 }) {
@@ -306,12 +397,8 @@ function ExpenseSection({
 
       {/* Mobile: stacked cards */}
       <div className="space-y-2 sm:hidden">
-        {items.map((e) => (
-          <Link
-            key={e.id}
-            to={`/finance/expenses/${e.id}/edit`}
-            className="block rounded-lg border border-stone-200 bg-white p-3 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800/50"
-          >
+        {items.map((e) => {
+          const body = (
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -321,6 +408,11 @@ function ExpenseSection({
                   {e.is_recurring && (
                     <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
                       Düzenli
+                    </span>
+                  )}
+                  {e.__projected && (
+                    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      Beklenen
                     </span>
                   )}
                   <span className="text-xs text-stone-600 dark:text-stone-300">
@@ -345,8 +437,23 @@ function ExpenseSection({
                 {formatTRY(Number(e.amount))}
               </p>
             </div>
-          </Link>
-        ))}
+          );
+          const base =
+            'block rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900';
+          return e.__projected ? (
+            <div key={e.id} className={base}>
+              {body}
+            </div>
+          ) : (
+            <Link
+              key={e.id}
+              to={`/finance/expenses/${e.id}/edit`}
+              className={`${base} transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50`}
+            >
+              {body}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Tablet+ : table */}
@@ -366,12 +473,20 @@ function ExpenseSection({
               {items.map((e) => (
                 <tr
                   key={e.id}
-                  className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                  className={
+                    e.__projected
+                      ? ''
+                      : 'cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50'
+                  }
                 >
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                    <Link to={`/finance/expenses/${e.id}/edit`} className="block">
-                      {formatDate(e.expense_date)}
-                    </Link>
+                    {e.__projected ? (
+                      formatDate(e.expense_date)
+                    ) : (
+                      <Link to={`/finance/expenses/${e.id}/edit`} className="block">
+                        {formatDate(e.expense_date)}
+                      </Link>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                     {e.property?.name ?? 'Genel'}
@@ -387,6 +502,14 @@ function ExpenseSection({
                           className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
                         >
                           Düzenli
+                        </span>
+                      )}
+                      {e.__projected && (
+                        <span
+                          title="Bu ay henüz işlenmedi — beklenen"
+                          className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                        >
+                          Beklenen
                         </span>
                       )}
                     </span>

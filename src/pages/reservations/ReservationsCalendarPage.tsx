@@ -1,4 +1,12 @@
-import { Fragment, useEffect, useMemo, useState, type MouseEvent } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
@@ -46,7 +54,12 @@ import { DayUseMonthCalendar } from './DayUseMonthCalendar';
 import { cn, formatDate, formatRoomType, istanbulToday } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
-const WINDOW_DAYS = 28;
+// Days of past that sit to the LEFT of the default open position so the user
+// can scroll back ~a week into the previous month. The view auto-scrolls past
+// them on load, so the opening view is unchanged (yesterday at the left edge).
+const PAST_BUFFER_DAYS = 7;
+// Total rendered span: the 7-day past buffer + 28 forward days.
+const WINDOW_DAYS = PAST_BUFFER_DAYS + 28;
 // Roomier layout (Sprint 2): wider cells + taller rows for tactile feel and to
 // make room for per-date note/price indicators that land in Tasks 6–7. These
 // were 44 / 36 in v1 — bumping them ~30% gives the Airbnb-ish density the
@@ -113,9 +126,25 @@ export function ReservationsCalendarPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
-  // Open on yesterday (one day before today) so the just-passed day sits at the
-  // left edge; the user scrolls back/forward with the week buttons.
-  const [windowStart, setWindowStart] = useState(() => addDaysStr(istanbulToday(), -1));
+  // The rendered window starts PAST_BUFFER_DAYS before the open position
+  // (yesterday), so the prior week is scrollable to the left. The view
+  // auto-scrolls to the open position on load (see setScrollNode below).
+  const [windowStart, setWindowStart] = useState(() =>
+    addDaysStr(istanbulToday(), -1 - PAST_BUFFER_DAYS),
+  );
+
+  // Horizontal-scroll container. On first mount we scroll past the past-buffer
+  // so the timeline opens at the default position (yesterday at the left edge),
+  // while the prior week stays reachable by scrolling left.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const didInitScroll = useRef(false);
+  const setScrollNode = useCallback((node: HTMLDivElement | null) => {
+    scrollRef.current = node;
+    if (node && !didInitScroll.current) {
+      node.scrollLeft = PAST_BUFFER_DAYS * DAY_W;
+      didInitScroll.current = true;
+    }
+  }, []);
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [reservations, setReservations] = useState<ReservationWithRefs[]>([]);
@@ -509,7 +538,13 @@ export function ReservationsCalendarPage() {
           >
             ‹ Önceki
           </Button>
-          <Button variant="secondary" onClick={() => setWindowStart(addDaysStr(today, -1))}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setWindowStart(addDaysStr(today, -1 - PAST_BUFFER_DAYS));
+              if (scrollRef.current) scrollRef.current.scrollLeft = PAST_BUFFER_DAYS * DAY_W;
+            }}
+          >
             Bugün
           </Button>
           <Button
@@ -621,7 +656,7 @@ export function ReservationsCalendarPage() {
           <div className="border-b border-stone-300 bg-stone-50 px-3 py-2 text-center text-sm font-semibold text-stone-700 dark:border-stone-600 dark:bg-stone-800/40 dark:text-stone-200">
             {monthSpanLabel(windowStart, windowEndLabel)}
           </div>
-          <div className="overflow-x-auto">
+          <div ref={setScrollNode} className="overflow-x-auto">
             <div style={{ width: labelW + trackWidth }}>
               {/* Header row */}
               <div className="flex border-b border-stone-300 dark:border-stone-600">
@@ -683,7 +718,7 @@ export function ReservationsCalendarPage() {
                     {propUnits.length === 0 && (
                       <div className="flex border-b border-stone-200 dark:border-stone-700">
                         <div
-                          className="sticky left-0 z-10 shrink-0 bg-white px-3 py-2 text-xs italic text-stone-400 dark:bg-stone-900"
+                          className="sticky left-0 z-30 shrink-0 bg-white px-3 py-2 text-xs italic text-stone-400 dark:bg-stone-900"
                           style={{ width: labelW }}
                         >
                           birim yok
@@ -701,7 +736,7 @@ export function ReservationsCalendarPage() {
                           className="flex border-b border-stone-200 dark:border-stone-700"
                         >
                           <div
-                            className="sticky left-0 z-10 flex shrink-0 items-center gap-1.5 bg-white px-3 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200"
+                            className="sticky left-0 z-30 flex shrink-0 items-center gap-1.5 bg-white px-3 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200"
                             style={{ width: labelW, height: ROW_H }}
                           >
                             <span className="truncate">{u.name}</span>

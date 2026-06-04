@@ -88,6 +88,23 @@ export async function getReservation(id: string): Promise<ReservationRow | null>
   return data;
 }
 
+/**
+ * Lock / unlock a reservation's cari hesap. SUPER_ADMIN only and the ledger
+ * balance must be 0 to lock — both enforced server-side by the set_cari_blocked
+ * RPC (migration 078). While locked, the DB rejects any new ledger entry or
+ * payment collection for the reservation.
+ */
+export async function setCariBlocked(
+  reservationId: string,
+  blocked: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc('set_cari_blocked', {
+    _reservation_id: reservationId,
+    _blocked: blocked,
+  });
+  if (error) throw wrapErr(error);
+}
+
 export async function createReservation(input: ReservationInsert): Promise<ReservationRow> {
   const { data, error } = await supabase.from('reservations').insert(input).select().single();
   if (error) throw wrapErr(error);

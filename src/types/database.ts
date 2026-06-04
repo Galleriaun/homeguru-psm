@@ -470,6 +470,7 @@ export type Database = {
           notified_2d_before: string | null;
           late_checkout_hours: number;
           google_event_id: string | null;
+          cari_blocked: boolean;
         };
         Insert: {
           id?: string;
@@ -488,6 +489,7 @@ export type Database = {
           notified_2d_before?: string | null;
           late_checkout_hours?: number;
           google_event_id?: string | null;
+          cari_blocked?: boolean;
         };
         Update: {
           id?: string;
@@ -506,6 +508,7 @@ export type Database = {
           notified_2d_before?: string | null;
           late_checkout_hours?: number;
           google_event_id?: string | null;
+          cari_blocked?: boolean;
         };
         Relationships: [];
       };
@@ -1083,6 +1086,10 @@ export type Database = {
           _note?: string | null;
         };
         Returns: Database['public']['Tables']['guests']['Row'];
+      };
+      set_cari_blocked: {
+        Args: { _reservation_id: string; _blocked: boolean };
+        Returns: undefined;
       };
       set_nightly_price_range: {
         Args: {

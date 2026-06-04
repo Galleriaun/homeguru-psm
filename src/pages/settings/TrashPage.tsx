@@ -4,11 +4,15 @@ import {
   listTrash,
   restoreTrashEntry,
   purgeTrashEntry,
+  payloadField,
   TRASHABLE_LABELS,
   TRASHABLE_TYPES,
   type TrashEntry,
   type TrashableType,
 } from '@/lib/queries/trash';
+import { listProperties } from '@/lib/queries/properties';
+import { listAllUnits } from '@/lib/queries/units';
+import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -21,6 +25,10 @@ export function TrashPage() {
   const [entries, setEntries] = useState<TrashEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterOption>('ALL');
+  // Lookups to turn the payload's IDs into names + who deleted the row.
+  const [properties, setProperties] = useState<{ id: string; name: string }[]>([]);
+  const [units, setUnits] = useState<{ id: string; name: string }[]>([]);
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   // Per-row action state
   const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -41,7 +49,38 @@ export function TrashPage() {
 
   useEffect(() => {
     load();
+    // Best-effort lookups for the per-entry detail lines.
+    listProperties().then(setProperties).catch(() => {});
+    listAllUnits().then(setUnits).catch(() => {});
+    loadStaffDirectory().then(setStaffMap).catch(() => {});
   }, []);
+
+  const propMap = useMemo(
+    () => new Map(properties.map((p) => [p.id, p.name])),
+    [properties],
+  );
+  const unitMap = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
+
+  // Extra context lines per entry: mülk/birim for reservations + sorunlar, mülk
+  // for giderler (or "Genel"). Pulled from the deleted row's payload snapshot.
+  const entryMeta = (entry: TrashEntry): string[] => {
+    const propId = payloadField<string>(entry, 'property_id');
+    const unitId = payloadField<string>(entry, 'unit_id');
+    const propName = propId ? propMap.get(propId) : undefined;
+    const unitName = unitId ? unitMap.get(unitId) : undefined;
+    if (entry.entity_type === 'reservations') {
+      const parts = [propName, unitName].filter(Boolean);
+      return parts.length ? [`Mülk / Birim: ${parts.join(' · ')}`] : [];
+    }
+    if (entry.entity_type === 'expenses') {
+      return [propName ? `Mülk: ${propName}` : 'Genel gider'];
+    }
+    if (entry.entity_type === 'housekeeping_issues') {
+      const parts = [propName, unitName].filter(Boolean);
+      return parts.length ? [`Mülk: ${parts.join(' · ')}`] : [];
+    }
+    return [];
+  };
 
   const counts = useMemo(() => {
     const map = new Map<TrashableType, number>();
@@ -172,8 +211,16 @@ export function TrashPage() {
                 <p className="mt-1 break-words text-sm text-stone-900 dark:text-stone-100">
                   {entry.entity_label || <span className="italic opacity-60">(etiket yok)</span>}
                 </p>
+                {entryMeta(entry).map((line, i) => (
+                  <p key={i} className="mt-0.5 text-xs text-stone-600 dark:text-stone-300">
+                    {line}
+                  </p>
+                ))}
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
                   Silindi: {formatDateTime(entry.deleted_at)}
+                  {entry.deleted_by && staffMap.get(entry.deleted_by)
+                    ? ` · Silen: ${staffMap.get(entry.deleted_by)}`
+                    : ''}
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">

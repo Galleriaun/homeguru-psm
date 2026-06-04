@@ -88,9 +88,12 @@ export function DebtorsPage() {
         <>
           <Card className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-stone-700 dark:text-stone-300">
-              Toplam borç ({debtors.length} rezervasyon)
+              <span className="block">Toplam borç</span>
+              <span className="block text-xs font-normal text-stone-500 dark:text-stone-400">
+                ({debtors.length} rezervasyon)
+              </span>
             </span>
-            <span className="text-lg font-semibold text-red-700 dark:text-red-400">
+            <span className="shrink-0 whitespace-nowrap text-lg font-semibold text-red-700 dark:text-red-400">
               {formatTRY(totalDebt)}
             </span>
           </Card>
