@@ -28,6 +28,8 @@ interface SelectProps {
   className?: string;
   /** When true, the open dropdown shows a type-to-filter search box. */
   searchable?: boolean;
+  /** Option value to softly highlight (e.g. the current month) with a slight green tint. */
+  highlightValue?: string;
 }
 
 // Case- and diacritic-insensitive folding for Turkish search so a fast typist
@@ -63,6 +65,7 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
       disabled,
       className,
       searchable,
+      highlightValue,
     },
     ref,
   ) => {
@@ -266,6 +269,8 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
               {visibleOptions.map((opt, i) => {
                 const isSelected = opt.value === value;
                 const isHighlighted = i === highlighted;
+                const isCurrent =
+                  highlightValue !== undefined && opt.value === highlightValue;
                 return (
                   <li
                     key={opt.value}
@@ -282,7 +287,9 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(
                         ? 'bg-emerald-600 text-white'
                         : isSelected
                           ? 'bg-emerald-50 font-medium text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200'
-                          : 'text-stone-900 dark:text-stone-100',
+                          : isCurrent
+                            ? 'bg-emerald-50/50 text-stone-900 dark:bg-emerald-900/20 dark:text-stone-100'
+                            : 'text-stone-900 dark:text-stone-100',
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">

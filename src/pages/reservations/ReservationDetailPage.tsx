@@ -348,13 +348,6 @@ export function ReservationDetailPage() {
               Ödeme Topla
             </Button>
           )}
-          {canEdit && !isCancelled && (
-            <Link to={`/reservations/${reservation.id}/edit`}>
-              <Button variant="secondary" size="sm">
-                Düzenle
-              </Button>
-            </Link>
-          )}
           {canEdit && !isCancelled && reservation.stay_type !== 'DAYUSE' && (
             <Button
               variant="secondary"
@@ -363,6 +356,13 @@ export function ReservationDetailPage() {
             >
               Geç Çıkış: {checkoutTimeLabel(reservation.late_checkout_hours)}
             </Button>
+          )}
+          {canEdit && !isCancelled && (
+            <Link to={`/reservations/${reservation.id}/edit`}>
+              <Button variant="secondary" size="sm">
+                Düzenle
+              </Button>
+            </Link>
           )}
           {canCancel && !isCancelled && (
             <Button
@@ -795,6 +795,12 @@ function LedgerSection({
           </div>
         )}
       </div>
+      {isBlocked && (
+        <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          Bu cari hesap kilitli — yeni ödeme toplanamaz veya ekstra ücret eklenemez.
+          Kilidi yalnızca yönetici açabilir.
+        </p>
+      )}
       {blockError && (
         <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">
           {blockError}

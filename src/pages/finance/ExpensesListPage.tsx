@@ -256,6 +256,7 @@ export function ExpensesListPage() {
             value={month}
             onChange={setMonth}
             options={monthOptions}
+            highlightValue={currentMonthStr()}
           />
           <Select
             label="Kategori"

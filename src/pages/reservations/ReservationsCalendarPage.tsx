@@ -880,6 +880,10 @@ export function ReservationsCalendarPage() {
                               const clippedRight = eIdx > WINDOW_DAYS;
                               const padLeft = clippedLeft ? 0 : 2;
                               const padRight = clippedRight ? 0 : 2;
+                              // Long stays (≥10 days) get the name repeated at the
+                              // right end so it stays visible when the wide bar is
+                              // scrolled away from its start.
+                              const isLong = eIdx - sIdx >= 10;
                               return (
                                 <button
                                   key={r.id}
@@ -891,6 +895,7 @@ export function ReservationsCalendarPage() {
                                   )} → ${r.stay_end.slice(0, 10)} · ${STATUS_LABELS[r.status]}`}
                                   className={cn(
                                     'absolute z-10 flex items-center overflow-hidden px-1.5 text-xs font-medium text-white shadow-sm transition-colors',
+                                    isLong && 'justify-between gap-2',
                                     STATUS_BAR[r.status],
                                     clippedLeft ? '' : 'rounded-l',
                                     clippedRight ? '' : 'rounded-r',
@@ -905,6 +910,11 @@ export function ReservationsCalendarPage() {
                                   <span className="truncate">
                                     {r.guest?.full_name ?? '—'}
                                   </span>
+                                  {isLong && (
+                                    <span className="truncate">
+                                      {r.guest?.full_name ?? '—'}
+                                    </span>
+                                  )}
                                 </button>
                               );
                             })}

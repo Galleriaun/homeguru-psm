@@ -51,7 +51,20 @@ export async function updateProperty(id: string, input: PropertyUpdate) {
 
 export async function deleteProperty(id: string) {
   const { error } = await supabase.from('properties').delete().eq('id', id);
-  if (error) throw error;
+  if (error) {
+    // 23503 = foreign_key_violation: the mülk still has dependent records
+    // (reservations, cari hareketler, etc.). Those FKs are ON DELETE RESTRICT
+    // by design — even completed/cancelled reservations protect financial &
+    // audit history — so a hard delete is blocked. Give a clear reason instead
+    // of leaking the raw Postgres message.
+    if ((error as { code?: string }).code === '23503') {
+      throw new Error(
+        'Bu mülke bağlı kayıtlar (geçmiş rezervasyon, cari hareket vb.) olduğu için silinemez. ' +
+          'Geçmiş kayıtlar korunur — yalnızca hiç kaydı olmayan mülkler silinebilir.',
+      );
+    }
+    throw new Error(error.message || 'Silme başarısız');
+  }
 }
 
 /**
