@@ -424,12 +424,18 @@ export function PropertyDetailPage() {
         description={
           <>
             <p>
-              Bu işlem <strong>geri alınamaz</strong>. Mülke bağlı tüm birimler,
-              kasalar, giderler ve temizlik geçmişi de kalıcı olarak silinir.
-              Çöp Kutusu'na taşınmaz.
+              Bu işlem <strong>geri alınamaz</strong>. Mülkün birimleri, temizlik
+              geçmişi ve takvim verileri (bloklar, notlar, fiyatlar) kalıcı olarak
+              silinir. Çöp Kutusu'na taşınmaz.
+            </p>
+            <p className="mt-2">
+              Geçmiş{' '}
+              <strong>rezervasyonlar, kasa hareketleri ve giderler korunur</strong>{' '}
+              — mülkle bağları kopar ve “silinmiş olan {property.name}” olarak
+              görünmeye devam eder.
             </p>
             <p className="mt-2 font-medium">
-              Not: Aktif rezervasyonu olan mülkler silinemez.
+              Not: Aktif (devam eden) rezervasyonu olan mülkler silinemez.
             </p>
           </>
         }

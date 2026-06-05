@@ -49,22 +49,18 @@ export async function updateProperty(id: string, input: PropertyUpdate) {
   return data;
 }
 
+/**
+ * Delete a property via the `delete_property` RPC (migration 079). The RPC
+ * "breaks the tie" (bağı kopar) instead of cascading: reservations, cash
+ * transactions and expenses are PRESERVED — their property/unit reference is
+ * nulled and the property's name is snapshotted onto the row, so they keep
+ * showing as "silinmiş olan <isim>". Operational data (units, housekeeping,
+ * blocks, notes, nightly-prices) is removed with the property. SUPER_ADMIN only
+ * (enforced inside the RPC). This is irreversible.
+ */
 export async function deleteProperty(id: string) {
-  const { error } = await supabase.from('properties').delete().eq('id', id);
-  if (error) {
-    // 23503 = foreign_key_violation: the mülk still has dependent records
-    // (reservations, cari hareketler, etc.). Those FKs are ON DELETE RESTRICT
-    // by design — even completed/cancelled reservations protect financial &
-    // audit history — so a hard delete is blocked. Give a clear reason instead
-    // of leaking the raw Postgres message.
-    if ((error as { code?: string }).code === '23503') {
-      throw new Error(
-        'Bu mülke bağlı kayıtlar (geçmiş rezervasyon, cari hareket vb.) olduğu için silinemez. ' +
-          'Geçmiş kayıtlar korunur — yalnızca hiç kaydı olmayan mülkler silinebilir.',
-      );
-    }
-    throw new Error(error.message || 'Silme başarısız');
-  }
+  const { error } = await supabase.rpc('delete_property', { _property_id: id });
+  if (error) throw new Error(error.message || 'Silme başarısız');
 }
 
 /**

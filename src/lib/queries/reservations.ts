@@ -13,6 +13,35 @@ export interface ReservationWithRefs extends ReservationRow {
   property: { name: string; type: string } | null;
 }
 
+/** True when the reservation's property was deleted ("bağı kopar") — its
+ *  property/unit references are nulled and only the snapshotted names remain. */
+export function isOrphanedReservation(r: {
+  property_id: string | null;
+  deleted_property_name?: string | null;
+}): boolean {
+  return r.property_id == null && r.deleted_property_name != null;
+}
+
+/** Property display label — falls back to "silinmiş olan <isim>" for a
+ *  reservation whose mülk was deleted. */
+export function reservationPropertyLabel(r: {
+  property?: { name: string } | null;
+  deleted_property_name?: string | null;
+}): string {
+  if (r.property?.name) return r.property.name;
+  if (r.deleted_property_name) return `silinmiş olan ${r.deleted_property_name}`;
+  return '—';
+}
+
+/** Unit display label — falls back to the snapshotted unit name (no prefix; the
+ *  property label already carries the "silinmiş olan" note). */
+export function reservationUnitLabel(r: {
+  unit?: { name: string } | null;
+  deleted_unit_name?: string | null;
+}): string {
+  return r.unit?.name ?? r.deleted_unit_name ?? '—';
+}
+
 const wrapErr = (e: { message: string; details?: string; hint?: string; code?: string }) => {
   // Friendly translation for the most common DB error in this module
   if (e.code === '23P01') {
@@ -32,7 +61,7 @@ export async function listReservations(): Promise<ReservationWithRefs[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
     .order('stay_start', { ascending: false })
     .limit(1000);
@@ -50,7 +79,7 @@ export async function listActiveReservations(): Promise<ReservationWithRefs[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
     .eq('status', 'active')
     .order('stay_start', { ascending: false });
@@ -69,7 +98,7 @@ export async function listReservationsInRange(
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
     .lt('stay_start', endISO)
     .gt('stay_end', startISO)

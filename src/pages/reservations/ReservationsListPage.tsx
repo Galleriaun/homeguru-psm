@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
-import { listReservations, type ReservationWithRefs } from '@/lib/queries/reservations';
+import {
+  listReservations,
+  reservationPropertyLabel,
+  reservationUnitLabel,
+  type ReservationWithRefs,
+} from '@/lib/queries/reservations';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ReservationsViewTabs } from './ViewTabs';
@@ -313,7 +318,7 @@ function ReservationRows({
               </span>
             </div>
             <p className="mt-0.5 truncate text-xs text-stone-600 dark:text-stone-300">
-              {r.property?.name} · {r.unit?.name}
+              {reservationPropertyLabel(r)} · {reservationUnitLabel(r)}
             </p>
             <p className="mt-1 flex items-center justify-between gap-2 text-xs text-stone-700 dark:text-stone-300">
               <span className="flex flex-col gap-0.5">
@@ -382,10 +387,10 @@ function ReservationRows({
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                     <div className="text-base font-semibold text-stone-900 dark:text-stone-100">
-                      {r.unit?.name}
+                      {reservationUnitLabel(r)}
                     </div>
                     <div className="text-xs text-stone-600 dark:text-stone-400">
-                      {r.property?.name}
+                      {reservationPropertyLabel(r)}
                     </div>
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">

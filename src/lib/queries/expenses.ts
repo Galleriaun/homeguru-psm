@@ -56,7 +56,7 @@ export async function listExpenses(
   let q = supabase
     .from('expenses')
     .select(
-      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, property:properties(name, type)',
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, deleted_property_name, property:properties(name, type)',
     )
     .order('expense_date', { ascending: false })
     .order('created_at', { ascending: false });
@@ -64,9 +64,11 @@ export async function listExpenses(
   if (filters.propertyId) {
     q = q.eq('property_id', filters.propertyId);
   } else if (filters.genelOnly) {
-    q = q.is('property_id', null);
+    // Truly general = no property AND not orphaned from a deleted mülk.
+    q = q.is('property_id', null).is('deleted_property_name', null);
   } else if (filters.mulkOnly) {
-    q = q.not('property_id', 'is', null);
+    // Property-tied OR orphaned from a now-deleted mülk.
+    q = q.or('property_id.not.is.null,deleted_property_name.not.is.null');
   }
   if (filters.category) {
     q = q.eq('category', filters.category);
@@ -96,7 +98,7 @@ export async function listRecurringTemplates(): Promise<ExpenseWithProperty[]> {
   const { data, error } = await supabase
     .from('expenses')
     .select(
-      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, property:properties(name, type)',
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, deleted_property_name, property:properties(name, type)',
     )
     .eq('is_recurring', true)
     .is('recurring_source_id', null);

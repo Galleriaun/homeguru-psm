@@ -471,6 +471,8 @@ export type Database = {
           late_checkout_hours: number;
           google_event_id: string | null;
           cari_blocked: boolean;
+          deleted_property_name: string | null;
+          deleted_unit_name: string | null;
         };
         Insert: {
           id?: string;
@@ -490,6 +492,8 @@ export type Database = {
           late_checkout_hours?: number;
           google_event_id?: string | null;
           cari_blocked?: boolean;
+          deleted_property_name?: string | null;
+          deleted_unit_name?: string | null;
         };
         Update: {
           id?: string;
@@ -509,6 +513,8 @@ export type Database = {
           late_checkout_hours?: number;
           google_event_id?: string | null;
           cari_blocked?: boolean;
+          deleted_property_name?: string | null;
+          deleted_unit_name?: string | null;
         };
         Relationships: [];
       };
@@ -872,6 +878,7 @@ export type Database = {
         Row: {
           id: string;
           property_id: string | null;
+          deleted_property_name: string | null;
           category: string;
           amount: number;
           description: string | null;
@@ -890,6 +897,7 @@ export type Database = {
         Insert: {
           id?: string;
           property_id?: string | null;
+          deleted_property_name?: string | null;
           category: string;
           amount: number;
           description?: string | null;
@@ -908,6 +916,7 @@ export type Database = {
         Update: {
           id?: string;
           property_id?: string | null;
+          deleted_property_name?: string | null;
           category?: string;
           amount?: number;
           description?: string | null;
@@ -985,6 +994,7 @@ export type Database = {
           reviewed_at: string | null;
           rejection_reason: string | null;
           property_id: string | null;
+          deleted_property_name: string | null;
         };
         Insert: {
           id?: string;
@@ -1003,6 +1013,7 @@ export type Database = {
           reviewed_at?: string | null;
           rejection_reason?: string | null;
           property_id?: string | null;
+          deleted_property_name?: string | null;
         };
         Update: {
           // Direct UPDATE on cash_transactions has no RLS policy — admin
@@ -1024,6 +1035,7 @@ export type Database = {
           reviewed_at?: string | null;
           rejection_reason?: string | null;
           property_id?: string | null;
+          deleted_property_name?: string | null;
         };
         Relationships: [];
       };
@@ -1089,6 +1101,10 @@ export type Database = {
       };
       set_cari_blocked: {
         Args: { _reservation_id: string; _blocked: boolean };
+        Returns: undefined;
+      };
+      delete_property: {
+        Args: { _property_id: string };
         Returns: undefined;
       };
       set_nightly_price_range: {

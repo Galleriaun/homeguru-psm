@@ -7,6 +7,9 @@ import {
   deleteReservation,
   getReservation,
   setCariBlocked,
+  isOrphanedReservation,
+  reservationPropertyLabel,
+  reservationUnitLabel,
 } from '@/lib/queries/reservations';
 import { getProperty, type Property } from '@/lib/queries/properties';
 import { getUnit, type Unit } from '@/lib/queries/units';
@@ -114,9 +117,12 @@ export function ReservationDetailPage() {
           return;
         }
         setReservation(r);
+        // An orphaned reservation (deleted mülk) has null property_id/unit_id —
+        // skip those lookups (a null uuid filter would error) and fall back to
+        // the snapshotted names.
         const [p, u, g] = await Promise.all([
-          getProperty(r.property_id),
-          getUnit(r.unit_id),
+          r.property_id ? getProperty(r.property_id) : Promise.resolve(null),
+          r.unit_id ? getUnit(r.unit_id) : Promise.resolve(null),
           supabase
             .from('guests')
             .select('full_name, phone, is_problematic, problematic_note')
@@ -319,8 +325,26 @@ export function ReservationDetailPage() {
             )}
           </div>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-            {property?.name} · {unit?.name}
+            {reservationPropertyLabel({
+              property,
+              deleted_property_name: reservation.deleted_property_name,
+            })}{' '}
+            ·{' '}
+            {reservationUnitLabel({
+              unit,
+              deleted_unit_name: reservation.deleted_unit_name,
+            })}
           </p>
+          {/* The mülk this reservation belonged to was deleted ("bağı kopar").
+              The financial record is preserved but no longer tied to a mülk. */}
+          {isOrphanedReservation(reservation) && (
+            <p className="mt-1 flex items-start gap-1.5 text-sm text-amber-700 dark:text-amber-400">
+              <WarningTriangleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span className="break-words">
+                {`Bu rezervasyon silinmiş olan ${reservation.deleted_property_name}’e aittir. Kayıt geçmiş için korunuyor.`}
+              </span>
+            </p>
+          )}
           {/* Surface the warning note inline so housekeeping doesn't have to
               click the pill to read it. */}
           {guestIsProblematic && guestProblematicNote && (

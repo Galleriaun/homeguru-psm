@@ -41,6 +41,20 @@ let cachedFilters: {
 /** A real expense row, or a projected ("Beklenen") recurring one for a future month. */
 type DisplayExpense = ExpenseWithProperty & { __projected?: boolean };
 
+/** True when this expense belonged to a now-deleted mülk ("bağı kopar"):
+ *  property_id was nulled but the snapshotted name remains. */
+function isOrphanedExpense(e: DisplayExpense): boolean {
+  return e.property_id === null && e.deleted_property_name != null;
+}
+
+/** Property column label — falls back to "silinmiş olan <isim>" for an expense
+ *  whose mülk was deleted, and to "Genel" for a truly property-less expense. */
+function expensePropertyLabel(e: DisplayExpense): string {
+  if (e.property?.name) return e.property.name;
+  if (e.deleted_property_name) return `silinmiş olan ${e.deleted_property_name}`;
+  return 'Genel';
+}
+
 export function ExpensesListPage() {
   const { profile } = useAuth();
 
@@ -202,12 +216,14 @@ export function ExpensesListPage() {
   // Split into Genel (no property) vs Mülk (tied to a property) so the list
   // can render two stacked sections with their own subtotals. The user-facing
   // contract: Genel first at the top, Mülk giderleri underneath.
+  // Orphaned expenses (deleted mülk) keep property_id NULL but carry a
+  // deleted_property_name — they belong under Mülk ("silinmiş olan …"), not Genel.
   const genelExpenses = useMemo(
-    () => displayExpenses.filter((e) => e.property_id === null),
+    () => displayExpenses.filter((e) => e.property_id === null && !isOrphanedExpense(e)),
     [displayExpenses],
   );
   const mulkExpenses = useMemo(
-    () => displayExpenses.filter((e) => e.property_id !== null),
+    () => displayExpenses.filter((e) => e.property_id !== null || isOrphanedExpense(e)),
     [displayExpenses],
   );
 
@@ -306,7 +322,7 @@ export function ExpensesListPage() {
                 onClick={() => {
                   const rows = expenses.map((e) => ({
                     Tarih: formatDate(e.expense_date),
-                    Mülk: e.property?.name ?? 'Genel',
+                    Mülk: expensePropertyLabel(e),
                     Kategori: e.category,
                     Düzenli: e.is_recurring ? 'Evet' : 'Hayır',
                     Tutar: Number(e.amount).toFixed(2),
@@ -421,7 +437,7 @@ function ExpenseSection({
                   </span>
                 </div>
                 <p className="mt-1 truncate text-sm text-stone-700 dark:text-stone-300">
-                  {e.property?.name ?? 'Genel'}
+                  {expensePropertyLabel(e)}
                 </p>
                 {e.description && (
                   <p className="mt-0.5 truncate text-xs text-stone-500 dark:text-stone-400">
@@ -490,7 +506,7 @@ function ExpenseSection({
                     )}
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                    {e.property?.name ?? 'Genel'}
+                    {expensePropertyLabel(e)}
                   </td>
                   <td className="px-6 py-3">
                     <span className="inline-flex items-center gap-1.5">
