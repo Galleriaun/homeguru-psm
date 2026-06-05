@@ -116,7 +116,6 @@ export function ReservationDetailPage() {
           setError('Rezervasyon bulunamadı');
           return;
         }
-        setReservation(r);
         // An orphaned reservation (deleted mülk) has null property_id/unit_id —
         // skip those lookups (a null uuid filter would error) and fall back to
         // the snapshotted names.
@@ -129,6 +128,11 @@ export function ReservationDetailPage() {
             .eq('id', r.guest_id)
             .maybeSingle(),
         ]);
+        // Set reservation + property + unit together (one batched render) so the
+        // page paints complete. Setting reservation first made the layout render
+        // without property-dependent buttons (e.g. Ödeme Topla), which then
+        // popped in a beat later — the flash on entry.
+        setReservation(r);
         setProperty(p);
         setUnit(u);
         setGuestName(g.data?.full_name ?? '');

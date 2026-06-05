@@ -152,6 +152,10 @@ export function ReservationsCalendarPage() {
   const [notes, setNotes] = useState<PropertyDateNote[]>([]);
   const [prices, setPrices] = useState<NightlyPrice[]>([]);
   const [loading, setLoading] = useState(true);
+  // Whether the one-time properties+units fetch has finished. The "no mülk"
+  // empty state is gated on this so it only shows once we KNOW there are none —
+  // otherwise it flashes on entry (properties start []) before the grid appears.
+  const [propsLoaded, setPropsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /** Cell-action-sheet state: which cell was clicked, if any. */
@@ -250,7 +254,8 @@ export function ReservationsCalendarPage() {
         setProperties(p);
         setUnits(u);
       })
-      .catch((e) => setError(e?.message ?? 'Yüklenemedi'));
+      .catch((e) => setError(e?.message ?? 'Yüklenemedi'))
+      .finally(() => setPropsLoaded(true));
   }, []);
 
   // Reservations + blocks + notes + price overrides reload whenever the
@@ -639,7 +644,7 @@ export function ReservationsCalendarPage() {
         </Card>
       )}
 
-      {!error && properties.length === 0 && (
+      {!error && propsLoaded && properties.length === 0 && (
         <Card>
           <p className="text-center text-sm text-stone-600 dark:text-stone-300">
             Henüz mülk eklenmemiş.
