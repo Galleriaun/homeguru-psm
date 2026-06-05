@@ -78,7 +78,7 @@ export async function softDeleteEntity(
  * FK references a now-missing parent).
  */
 export async function restoreTrashEntry(trashId: string): Promise<void> {
-  const { error } = await supabase.rpc('restore_trash', { p_trash_id: trashId });
+  const { error } = await supabase.rpc('restore_trash', { _trash_id: trashId });
   if (error) throw wrapErr(error);
 }
 

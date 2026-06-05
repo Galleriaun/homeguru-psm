@@ -1133,8 +1133,8 @@ export type Database = {
         Returns: string; // trash_entries.id
       };
       restore_trash: {
-        Args: { p_trash_id: string };
-        Returns: void;
+        Args: { _trash_id: string };
+        Returns: string; // trash_entries.id (renamed param + uuid return in migration 065)
       };
       get_public_unit_gallery: {
         Args: { p_unit_id: string };
