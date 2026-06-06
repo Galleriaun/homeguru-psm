@@ -110,17 +110,11 @@ const monthFmt = new Intl.DateTimeFormat('tr-TR', { month: 'short', timeZone: 'U
 const monthLongFmt = new Intl.DateTimeFormat('tr-TR', { month: 'long', timeZone: 'UTC' });
 const yearFmt = new Intl.DateTimeFormat('tr-TR', { year: 'numeric', timeZone: 'UTC' });
 
-// Human label for the visible window, which can straddle two months / years.
-function monthSpanLabel(startStr: string, endStr: string): string {
-  const s = new Date(startStr + 'T00:00:00Z');
-  const e = new Date(endStr + 'T00:00:00Z');
-  const sM = monthLongFmt.format(s);
-  const eM = monthLongFmt.format(e);
-  const sY = yearFmt.format(s);
-  const eY = yearFmt.format(e);
-  if (sM === eM && sY === eY) return `${sM} ${sY}`;
-  if (sY === eY) return `${sM} – ${eM} ${eY}`;
-  return `${sM} ${sY} – ${eM} ${eY}`;
+/** "YYYY-MM-DD" → "Haziran 2026". Drives the dynamic month label that tracks
+ *  the leftmost visible day as the timeline scrolls. */
+function monthYearLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  return `${monthLongFmt.format(d)} ${yearFmt.format(d)}`;
 }
 
 export function ReservationsCalendarPage() {
@@ -138,6 +132,8 @@ export function ReservationsCalendarPage() {
   const lastDay = addDaysStr(RANGE_START, windowDays - 1);
   /** Shown when the user has scrolled to the right end — offers to add a year. */
   const [showAddYear, setShowAddYear] = useState(false);
+  /** Month+year of the leftmost visible day — the header label, updated on scroll. */
+  const [visibleMonth, setVisibleMonth] = useState(() => monthYearLabel(istanbulToday()));
 
   // Horizontal-scroll container. On first mount we scroll to today (yesterday at
   // the left edge), so the long past range and future range are both reachable.
@@ -152,10 +148,14 @@ export function ReservationsCalendarPage() {
     }
   }, []);
 
-  // Reveal the "Sene Ekle" button only once scrolled to the right edge.
+  // On scroll: reveal "Sene Ekle" at the right edge, and keep the header month
+  // label in step with the leftmost visible day (so it reads "Temmuz 2026" once
+  // July's first day passes the left edge, and back again when scrolling left).
   const handleTimelineScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     setShowAddYear(el.scrollLeft + el.clientWidth >= el.scrollWidth - 8);
+    const idx = Math.min(windowDays - 1, Math.max(0, Math.floor(el.scrollLeft / DAY_W)));
+    setVisibleMonth(monthYearLabel(addDaysStr(RANGE_START, idx)));
   };
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -659,10 +659,11 @@ export function ReservationsCalendarPage() {
           small screens (a contained scroll region, not page-level scroll). */}
       {!error && properties.length > 0 && (
         <Card className="relative p-0">
-          {/* Full range label — sits outside the scroll region so it stays put
-              while the grid scrolls horizontally. */}
+          {/* Current-month label — tracks the leftmost visible day as you scroll
+              so you always see which month/year you're looking at (Haziran 2026
+              → Temmuz 2026 as you pass into July, and back when scrolling left). */}
           <div className="border-b border-stone-300 bg-stone-50 px-3 py-2 text-center text-sm font-semibold text-stone-700 dark:border-stone-600 dark:bg-stone-800/40 dark:text-stone-200">
-            {monthSpanLabel(RANGE_START, lastDay)}
+            {visibleMonth}
           </div>
           {/* "Sene Ekle" — appears once scrolled to the right end of the range,
               extends it by a year so scrolling can continue. */}
@@ -673,15 +674,21 @@ export function ReservationsCalendarPage() {
                 setEndYear((y) => y + 1);
                 setShowAddYear(false);
               }}
-              className="absolute right-3 top-14 z-40 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-emerald-700"
+              className="absolute right-3 top-16 z-50 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-emerald-700"
             >
               + Sene Ekle
             </button>
           )}
-          <div ref={setScrollNode} onScroll={handleTimelineScroll} className="overflow-x-auto">
+          <div
+            ref={setScrollNode}
+            onScroll={handleTimelineScroll}
+            className="max-h-[70vh] overflow-auto"
+          >
             <div style={{ width: labelW + trackWidth }}>
-              {/* Header row */}
-              <div className="flex border-b border-stone-300 dark:border-stone-600">
+              {/* Header row — sticky to the top of the scroll box so the dates
+                  stay visible while scrolling down, and so the Birim column
+                  composites cleanly (no column-bleed flicker). */}
+              <div className="sticky top-0 z-40 flex border-b border-stone-300 bg-white dark:border-stone-600 dark:bg-stone-900">
                 <div
                   className="sticky left-0 z-30 shrink-0 bg-white px-3 py-2 text-xs font-medium uppercase text-stone-600 dark:bg-stone-900 dark:text-stone-300"
                   style={{ width: labelW, transform: 'translateZ(0)' }}
