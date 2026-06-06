@@ -743,9 +743,9 @@ export function ReservationFormPage() {
             options={STATUS_OPTIONS}
           />
 
-          {/* Auto-debit posts the full amount to the guest's cari the moment the
-              reservation becomes active (at check-in). Day-use stays don't expose
-              the toggle. */}
+          {/* Auto-debit accrues the stay night by night: each day, at the
+              check-in hour, one night's share (toplam / gece sayısı) is posted
+              to the guest's cari. Day-use stays don't expose the toggle. */}
           {stayType === 'OVERNIGHT' && (
             <label className="flex items-center gap-2 text-sm text-stone-700 dark:text-stone-300">
               <input
@@ -754,7 +754,7 @@ export function ReservationFormPage() {
                 onChange={(e) => setAutoDebit(e.target.checked)}
                 className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
               />
-              Otomatik borçlandır (rezervasyon aktif olunca tutarın tamamı carisine işlenir)
+              Otomatik borçlandır (her gün giriş saatinde bir gecelik ücret carisine işlenir)
             </label>
           )}
 
