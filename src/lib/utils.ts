@@ -94,14 +94,33 @@ export function formatRoomType(roomType: string): string {
 export function toWhatsAppPhone(phone: string | null | undefined): string | null {
   if (!phone) return null;
   let digits = phone.replace(/\D/g, '');
-  // Trim a leading 0 — Turkish local format "0555…" becomes "555…"
-  if (digits.startsWith('0')) digits = digits.slice(1);
-  // 10-digit number with no country code → assume Turkey (+90)
+  if (digits.startsWith('90')) {
+    // "90" country code, possibly followed by a stray trunk "0" — operators
+    // sometimes type "+90 05xx" instead of "+90 5xx". Collapse "90" + "0…" to
+    // "90" + "5…" so the call/WhatsApp number is valid.
+    digits = '90' + digits.slice(2).replace(/^0+/, '');
+  } else if (digits.startsWith('0')) {
+    // Turkish local format "0555…" → drop the leading 0.
+    digits = digits.slice(1);
+  }
+  // 10-digit national number with no country code → assume Turkey (+90).
   if (digits.length === 10 && !digits.startsWith('90')) {
     digits = '90' + digits;
   }
   if (digits.length < 10 || digits.length > 15) return null;
   return digits;
+}
+
+/**
+ * Build a `tel:` href from a stored phone number, normalized to E.164
+ * (e.g. "tel:+905551234567"). Reuses toWhatsAppPhone so a number saved as
+ * "+90 05xx" still dials correctly. Falls back to the raw digits (+ any leading
+ * +) when the number isn't a recognizable TR/international one.
+ */
+export function toTelHref(phone: string | null | undefined): string {
+  const normalized = toWhatsAppPhone(phone);
+  if (normalized) return `tel:+${normalized}`;
+  return `tel:${(phone ?? '').replace(/[^\d+]/g, '')}`;
 }
 
 /**
@@ -114,7 +133,14 @@ export function toWhatsAppPhone(phone: string | null | undefined): string | null
 export function maskPhoneInput(raw: string): string {
   const cleaned = raw.replace(/[^\d+ ()-]/g, '');
   if (!cleaned) return '';
-  if (cleaned.startsWith('+')) return cleaned;
+  if (cleaned.startsWith('+')) {
+    // Collapse a stray trunk "0" typed right after the +90 country code
+    // (operators type "+90 05xx" instead of "+90 5xx"). ONLY the +90-then-0
+    // position is touched: foreign numbers (+1…) don't match, and a 0 anywhere
+    // else in the number (e.g. "+90 50…") is left alone — a TR mobile never
+    // starts with 0 after the country code, so this can't corrupt a real number.
+    return cleaned.replace(/^\+90\s*0+/, '+90 ');
+  }
   // Local-format Turkish numbers (with or without leading 0) → add +90.
   return '+90 ' + cleaned.replace(/^0+/, '');
 }

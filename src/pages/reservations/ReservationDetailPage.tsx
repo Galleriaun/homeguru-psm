@@ -36,7 +36,7 @@ import { WhatsAppIcon } from '@/components/icons/WhatsAppIcon';
 import { WarningTriangleIcon } from '@/components/icons/WarningTriangleIcon';
 import { ClockIcon, PhoneIcon } from '@/components/icons/ActionIcons';
 import { ProblematicFlagModal } from '@/pages/guests/ProblematicFlagModal';
-import { formatDate, formatTRY, checkoutTimeLabel, tPaymentMethods } from '@/lib/utils';
+import { formatDate, formatTRY, checkoutTimeLabel, tPaymentMethods, toTelHref } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
 import { resolveKatalogLink } from '@/lib/gallery';
 
@@ -429,7 +429,7 @@ export function ReservationDetailPage() {
           )}
           <div className="flex items-center gap-2">
             {guestPhone && (
-              <a href={`tel:${guestPhone.replace(/[^\d+]/g, '')}`}>
+              <a href={toTelHref(guestPhone)}>
                 <Button variant="secondary" size="sm">
                   <PhoneIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
                   Ara
