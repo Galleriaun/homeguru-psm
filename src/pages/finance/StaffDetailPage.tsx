@@ -6,6 +6,8 @@ import {
   getStaff,
   listAdvancesForStaff,
   totalAdvancesInMonth,
+  currentSalaryCycle,
+  totalAdvancesInCycle,
   type StaffAdvance,
   type StaffProfileWithProperty,
 } from '@/lib/queries/staff';
@@ -53,6 +55,18 @@ function monthLabel(yearMonth: string): string {
     month: 'long',
     year: 'numeric',
   }).format(d);
+}
+
+// 'YYYY-MM-DD' → '12 Haz'. Anchored at UTC noon and formatted in UTC so a pure
+// calendar date (the payday) can't drift a day across a timezone boundary.
+function cycleDayLabel(ymd: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd;
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Intl.DateTimeFormat('tr-TR', {
+    timeZone: 'UTC',
+    day: 'numeric',
+    month: 'short',
+  }).format(new Date(Date.UTC(y, m - 1, d, 12)));
 }
 
 export function StaffDetailPage() {
@@ -130,7 +144,15 @@ export function StaffDetailPage() {
   }
 
   const salary = staff.salary != null ? Number(staff.salary) : null;
-  const monthAdvances = totalAdvancesInMonth(advances, currentMonth);
+  // Avanslar maaş gününe göre dönemlenir: maaş günü 12 ise pencere 12→12.
+  // The cycle that contains today funds the next payday's salary; its advances
+  // are what reduce that salary. No salary_day → fall back to calendar month.
+  const cycle = staff.salary_day != null ? currentSalaryCycle(staff.salary_day) : null;
+  // Card header reflects the salary this cycle funds (the upcoming payday's month).
+  const periodMonth = cycle ? cycle.end.slice(0, 7) : currentMonth;
+  const monthAdvances = cycle
+    ? totalAdvancesInCycle(advances, cycle)
+    : totalAdvancesInMonth(advances, currentMonth);
   const remaining = salary != null ? salary - monthAdvances : null;
 
   // Color the remaining figure: negative = over-advanced (red)
@@ -206,7 +228,7 @@ export function StaffDetailPage() {
 
       <Card>
         <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
-          {monthLabel(currentMonth)}
+          {monthLabel(periodMonth)}
         </p>
         <div className="mt-2 grid gap-4 sm:grid-cols-3">
           <div>
@@ -232,10 +254,15 @@ export function StaffDetailPage() {
             </p>
           </div>
           <div>
-            <p className="text-xs text-stone-600 dark:text-stone-300">Bu ay verilen avans</p>
+            <p className="text-xs text-stone-600 dark:text-stone-300">Bu dönem verilen avans</p>
             <p className="mt-0.5 text-lg font-semibold text-amber-600 dark:text-amber-400">
               {formatTRY(monthAdvances)}
             </p>
+            {cycle && (
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                {cycleDayLabel(cycle.start)} – {cycleDayLabel(cycle.end)} dönemi
+              </p>
+            )}
           </div>
           <div>
             <p className="text-xs text-stone-600 dark:text-stone-300">Kalan</p>

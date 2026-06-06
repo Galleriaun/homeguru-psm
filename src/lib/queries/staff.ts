@@ -178,3 +178,79 @@ export function totalAdvancesInMonth(rows: AdvanceRow[], monthStr: string): numb
     return acc;
   }, 0);
 }
+
+// ---------------------------------------------------------------------------
+// Salary-cycle (maaş günü) advance windowing.
+// Advances are tracked against the salary cycle, not the calendar month: if
+// maaş günü is the 12th, the cycle runs 12th → 12th. The advances that reduce
+// the NEXT salary are those given since the last payday — i.e. the cycle that
+// contains today, [most recent payday, next payday).
+// ---------------------------------------------------------------------------
+
+const istanbulYMDFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Istanbul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+function istanbulYMD(d: Date): { y: number; m: number; day: number } {
+  const parts = istanbulYMDFmt.formatToParts(d);
+  return {
+    y: Number(parts.find((p) => p.type === 'year')?.value ?? '0'),
+    m: Number(parts.find((p) => p.type === 'month')?.value ?? '0'),
+    day: Number(parts.find((p) => p.type === 'day')?.value ?? '0'),
+  };
+}
+
+/** A given_at ISO → its Europe/Istanbul calendar date as 'YYYY-MM-DD'. */
+function istanbulDateStr(iso: string): string {
+  const { y, m, day } = istanbulYMD(new Date(iso));
+  return `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Last calendar day (28–31) of a 1-based month. */
+function lastDayOfMonth(year: number, month1: number): number {
+  return new Date(Date.UTC(year, month1, 0)).getUTCDate();
+}
+
+export interface SalaryCycle {
+  /** Inclusive start, 'YYYY-MM-DD' (the most recent payday). */
+  start: string;
+  /** Exclusive end, 'YYYY-MM-DD' (the next payday — the salary this cycle funds). */
+  end: string;
+}
+
+/**
+ * The salary cycle that CONTAINS today, anchored on `salaryDay` and measured in
+ * Europe/Istanbul. e.g. salaryDay=12 → 12th→12th windows. `salaryDay` is
+ * clamped per-month so 31 lands on the last day of short months (matching the
+ * auto-pay cron in migrations 049/057). Boundaries tile exactly: one cycle's
+ * end equals the next cycle's start, with start inclusive / end exclusive.
+ */
+export function currentSalaryCycle(salaryDay: number, now: Date = new Date()): SalaryCycle {
+  const { y, m, day } = istanbulYMD(now);
+  const payday = (yy: number, mm: number): string => {
+    const dd = Math.min(salaryDay, lastDayOfMonth(yy, mm));
+    return `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+  };
+  const thisPayDay = Math.min(salaryDay, lastDayOfMonth(y, m));
+  if (day >= thisPayDay) {
+    // On/after this month's payday → cycle runs to next month's payday.
+    const ny = m === 12 ? y + 1 : y;
+    const nm = m === 12 ? 1 : m + 1;
+    return { start: payday(y, m), end: payday(ny, nm) };
+  }
+  // Before this month's payday → cycle started at last month's payday.
+  const py = m === 1 ? y - 1 : y;
+  const pm = m === 1 ? 12 : m - 1;
+  return { start: payday(py, pm), end: payday(y, m) };
+}
+
+/** Sum of advances whose given_at (Istanbul date) falls in [cycle.start, cycle.end). */
+export function totalAdvancesInCycle(rows: AdvanceRow[], cycle: SalaryCycle): number {
+  return rows.reduce((acc, r) => {
+    const d = istanbulDateStr(r.given_at);
+    return d >= cycle.start && d < cycle.end ? acc + Number(r.amount) : acc;
+  }, 0);
+}
