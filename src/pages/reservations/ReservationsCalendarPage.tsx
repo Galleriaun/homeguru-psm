@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type MouseEvent,
+  type UIEvent,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -54,12 +55,12 @@ import { DayUseMonthCalendar } from './DayUseMonthCalendar';
 import { cn, formatDate, formatRoomType, istanbulToday } from '@/lib/utils';
 import type { ReservationStatus } from '@/types/database';
 
-// Days of past that sit to the LEFT of the default open position so the user
-// can scroll back ~a week into the previous month. The view auto-scrolls past
-// them on load, so the opening view is unchanged (yesterday at the left edge).
-const PAST_BUFFER_DAYS = 7;
-// Total rendered span: the 7-day past buffer + 28 forward days.
-const WINDOW_DAYS = PAST_BUFFER_DAYS + 28;
+// The timeline is ONE freely-scrollable range — no Önceki/Sonraki paging. It
+// spans RANGE_START → end of BASE_END_YEAR; the "Sene Ekle" button grows the end
+// by a year at a time. The business has no data before May 2026, so that's the
+// fixed left edge. The view auto-scrolls to today on open.
+const RANGE_START = '2026-05-01';
+const BASE_END_YEAR = 2026;
 // Roomier layout (Sprint 2): wider cells + taller rows for tactile feel and to
 // make room for per-date note/price indicators that land in Tasks 6–7. These
 // were 44 / 36 in v1 — bumping them ~30% gives the Airbnb-ish density the
@@ -126,25 +127,36 @@ export function ReservationsCalendarPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
 
-  // The rendered window starts PAST_BUFFER_DAYS before the open position
-  // (yesterday), so the prior week is scrollable to the left. The view
-  // auto-scrolls to the open position on load (see setScrollNode below).
-  const [windowStart, setWindowStart] = useState(() =>
-    addDaysStr(istanbulToday(), -1 - PAST_BUFFER_DAYS),
+  // Last calendar year included in the range; "Sene Ekle" bumps it. The range is
+  // always RANGE_START → 31 Dec endYear, rendered as [RANGE_START, endYear+1-01-01).
+  const [endYear, setEndYear] = useState(BASE_END_YEAR);
+  const rangeEndExclusive = `${endYear + 1}-01-01`;
+  const windowDays = useMemo(
+    () => dayIndex(RANGE_START, rangeEndExclusive),
+    [rangeEndExclusive],
   );
+  const lastDay = addDaysStr(RANGE_START, windowDays - 1);
+  /** Shown when the user has scrolled to the right end — offers to add a year. */
+  const [showAddYear, setShowAddYear] = useState(false);
 
-  // Horizontal-scroll container. On first mount we scroll past the past-buffer
-  // so the timeline opens at the default position (yesterday at the left edge),
-  // while the prior week stays reachable by scrolling left.
+  // Horizontal-scroll container. On first mount we scroll to today (yesterday at
+  // the left edge), so the long past range and future range are both reachable.
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const didInitScroll = useRef(false);
   const setScrollNode = useCallback((node: HTMLDivElement | null) => {
     scrollRef.current = node;
     if (node && !didInitScroll.current) {
-      node.scrollLeft = PAST_BUFFER_DAYS * DAY_W;
+      const todayIdx = dayIndex(RANGE_START, istanbulToday());
+      node.scrollLeft = Math.max(0, (todayIdx - 1) * DAY_W);
       didInitScroll.current = true;
     }
   }, []);
+
+  // Reveal the "Sene Ekle" button only once scrolled to the right edge.
+  const handleTimelineScroll = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    setShowAddYear(el.scrollLeft + el.clientWidth >= el.scrollWidth - 8);
+  };
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [reservations, setReservations] = useState<ReservationWithRefs[]>([]);
@@ -263,8 +275,8 @@ export function ReservationsCalendarPage() {
   // gives a single visual flash. priceVersion bumps re-fetch after a bulk
   // price write (the RPC returns a count, not the new rows).
   useEffect(() => {
-    const startDate = windowStart;
-    const endDate = addDaysStr(windowStart, WINDOW_DAYS);
+    const startDate = RANGE_START;
+    const endDate = rangeEndExclusive;
     const startISO = new Date(startDate + 'T00:00:00Z').toISOString();
     const endISO = new Date(endDate + 'T00:00:00Z').toISOString();
     setLoading(true);
@@ -282,12 +294,12 @@ export function ReservationsCalendarPage() {
       })
       .catch((e) => setError(e?.message ?? 'Takvim yüklenemedi'))
       .finally(() => setLoading(false));
-  }, [windowStart, priceVersion, reservationVersion]);
+  }, [rangeEndExclusive, priceVersion, reservationVersion]);
 
   const days = useMemo(
     () =>
-      Array.from({ length: WINDOW_DAYS }, (_, i) => {
-        const dateStr = addDaysStr(windowStart, i);
+      Array.from({ length: windowDays }, (_, i) => {
+        const dateStr = addDaysStr(RANGE_START, i);
         const d = new Date(dateStr + 'T00:00:00Z');
         const dow = d.getUTCDay();
         return {
@@ -300,7 +312,7 @@ export function ReservationsCalendarPage() {
           showMonth: d.getUTCDate() === 1 || i === 0,
         };
       }),
-    [windowStart, today],
+    [windowDays, today],
   );
 
   const unitsByProperty = useMemo(() => {
@@ -352,8 +364,7 @@ export function ReservationsCalendarPage() {
     return map;
   }, [prices]);
 
-  const trackWidth = WINDOW_DAYS * DAY_W;
-  const windowEndLabel = addDaysStr(windowStart, WINDOW_DAYS - 1);
+  const trackWidth = windowDays * DAY_W;
 
   const handleCellClick = (
     propertyId: string,
@@ -529,7 +540,7 @@ export function ReservationsCalendarPage() {
             Rezervasyon Takvimi
           </h1>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-            {formatDate(windowStart)} – {formatDate(windowEndLabel)}
+            {formatDate(RANGE_START)} – {formatDate(lastDay)}
           </p>
         </div>
         <ReservationsViewTabs />
@@ -537,26 +548,18 @@ export function ReservationsCalendarPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setWindowStart((w) => addDaysStr(w, -7))}
-          >
-            ‹ Önceki
-          </Button>
+          {/* Free scroll replaces Önceki/Sonraki paging — "Bugün" just jumps the
+              scroll position back to today (yesterday at the left edge). */}
           <Button
             variant="secondary"
             onClick={() => {
-              setWindowStart(addDaysStr(today, -1 - PAST_BUFFER_DAYS));
-              if (scrollRef.current) scrollRef.current.scrollLeft = PAST_BUFFER_DAYS * DAY_W;
+              if (scrollRef.current) {
+                const todayIdx = dayIndex(RANGE_START, today);
+                scrollRef.current.scrollLeft = Math.max(0, (todayIdx - 1) * DAY_W);
+              }
             }}
           >
             Bugün
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setWindowStart((w) => addDaysStr(w, 7))}
-          >
-            Sonraki ›
           </Button>
           {canCreate && (
             <Button
@@ -655,19 +658,33 @@ export function ReservationsCalendarPage() {
       {/* Gantt timeline — scrolls horizontally inside its own container on
           small screens (a contained scroll region, not page-level scroll). */}
       {!error && properties.length > 0 && (
-        <Card className="p-0">
-          {/* Month label for the visible window — sits outside the scroll
-              region so it stays put while the grid scrolls horizontally. */}
+        <Card className="relative p-0">
+          {/* Full range label — sits outside the scroll region so it stays put
+              while the grid scrolls horizontally. */}
           <div className="border-b border-stone-300 bg-stone-50 px-3 py-2 text-center text-sm font-semibold text-stone-700 dark:border-stone-600 dark:bg-stone-800/40 dark:text-stone-200">
-            {monthSpanLabel(windowStart, windowEndLabel)}
+            {monthSpanLabel(RANGE_START, lastDay)}
           </div>
-          <div ref={setScrollNode} className="overflow-x-auto">
+          {/* "Sene Ekle" — appears once scrolled to the right end of the range,
+              extends it by a year so scrolling can continue. */}
+          {showAddYear && (
+            <button
+              type="button"
+              onClick={() => {
+                setEndYear((y) => y + 1);
+                setShowAddYear(false);
+              }}
+              className="absolute right-3 top-14 z-40 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-emerald-700"
+            >
+              + Sene Ekle
+            </button>
+          )}
+          <div ref={setScrollNode} onScroll={handleTimelineScroll} className="overflow-x-auto">
             <div style={{ width: labelW + trackWidth }}>
               {/* Header row */}
               <div className="flex border-b border-stone-300 dark:border-stone-600">
                 <div
                   className="sticky left-0 z-30 shrink-0 bg-white px-3 py-2 text-xs font-medium uppercase text-stone-600 dark:bg-stone-900 dark:text-stone-300"
-                  style={{ width: labelW }}
+                  style={{ width: labelW, transform: 'translateZ(0)' }}
                 >
                   Birim
                 </div>
@@ -705,8 +722,8 @@ export function ReservationsCalendarPage() {
                   <Fragment key={p.id}>
                     <div className="flex border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40">
                       <div
-                        className="sticky left-0 z-20 shrink-0 truncate bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-800 dark:bg-stone-800/40 dark:text-stone-200"
-                        style={{ width: labelW }}
+                        className="sticky left-0 z-20 shrink-0 truncate bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-800 dark:bg-stone-800 dark:text-stone-200"
+                        style={{ width: labelW, transform: 'translateZ(0)' }}
                       >
                         {p.name}
                       </div>
@@ -724,7 +741,7 @@ export function ReservationsCalendarPage() {
                       <div className="flex border-b border-stone-200 dark:border-stone-700">
                         <div
                           className="sticky left-0 z-30 shrink-0 bg-white px-3 py-2 text-xs italic text-stone-400 dark:bg-stone-900"
-                          style={{ width: labelW }}
+                          style={{ width: labelW, transform: 'translateZ(0)' }}
                         >
                           birim yok
                         </div>
@@ -742,7 +759,7 @@ export function ReservationsCalendarPage() {
                         >
                           <div
                             className="sticky left-0 z-30 flex shrink-0 items-center gap-1.5 bg-white px-3 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200"
-                            style={{ width: labelW, height: ROW_H }}
+                            style={{ width: labelW, height: ROW_H, transform: 'translateZ(0)' }}
                           >
                             <span className="truncate">{u.name}</span>
                             <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
@@ -790,13 +807,13 @@ export function ReservationsCalendarPage() {
                                 (z-5) so a paying stay overlays cleanly if a
                                 block somehow exists (shouldn't, per triggers). */}
                             {unitBlocks.map((b) => {
-                              const sIdx = dayIndex(windowStart, b.block_start.slice(0, 10));
-                              const eIdx = dayIndex(windowStart, b.block_end.slice(0, 10));
+                              const sIdx = dayIndex(RANGE_START, b.block_start.slice(0, 10));
+                              const eIdx = dayIndex(RANGE_START, b.block_end.slice(0, 10));
                               const left = Math.max(sIdx, 0);
-                              const right = Math.min(eIdx, WINDOW_DAYS);
+                              const right = Math.min(eIdx, windowDays);
                               if (right <= left) return null;
                               const clippedLeft = sIdx < 0;
-                              const clippedRight = eIdx > WINDOW_DAYS;
+                              const clippedRight = eIdx > windowDays;
                               const padLeft = clippedLeft ? 0 : 2;
                               const padRight = clippedRight ? 0 : 2;
                               return (
@@ -876,13 +893,13 @@ export function ReservationsCalendarPage() {
 
                             {/* Reservation bars */}
                             {unitRes.map((r) => {
-                              const sIdx = dayIndex(windowStart, r.stay_start.slice(0, 10));
-                              const eIdx = dayIndex(windowStart, r.stay_end.slice(0, 10));
+                              const sIdx = dayIndex(RANGE_START, r.stay_start.slice(0, 10));
+                              const eIdx = dayIndex(RANGE_START, r.stay_end.slice(0, 10));
                               const left = Math.max(sIdx, 0);
-                              const right = Math.min(eIdx, WINDOW_DAYS);
+                              const right = Math.min(eIdx, windowDays);
                               if (right <= left) return null;
                               const clippedLeft = sIdx < 0;
-                              const clippedRight = eIdx > WINDOW_DAYS;
+                              const clippedRight = eIdx > windowDays;
                               const padLeft = clippedLeft ? 0 : 2;
                               const padRight = clippedRight ? 0 : 2;
                               // Long stays (≥10 days) get the name repeated at the
