@@ -71,6 +71,10 @@ const DAY_W = 56; // px per day column
 const LABEL_W_MOBILE = 112;
 const LABEL_W_DESKTOP = 200;
 const ROW_H = 48; // px per unit row
+// Fixed heights so the frozen left name-column and the scrollable timeline align
+// row-for-row (box-sizing: border-box → the border-b doesn't add to these).
+const HEADER_H = 44; // px — day-header row
+const PROP_H = 36; // px — property band row
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Vertical inset for reservation bars so two-line cell content can fit below. */
 const BAR_INSET = 6;
@@ -679,27 +683,73 @@ export function ReservationsCalendarPage() {
               + Sene Ekle
             </button>
           )}
-          <div
-            ref={setScrollNode}
-            onScroll={handleTimelineScroll}
-            className="max-h-[70vh] overflow-auto"
-          >
-            <div style={{ width: labelW + trackWidth }}>
-              {/* Header row — sticky to the top of the scroll box so the dates
-                  stay visible while scrolling down, and so the Birim column
-                  composites cleanly (no column-bleed flicker). */}
-              <div className="sticky top-0 z-40 flex border-b border-stone-300 bg-white dark:border-stone-600 dark:bg-stone-900">
-                <div
-                  className="sticky left-0 z-30 shrink-0 bg-white px-3 py-2 text-xs font-medium uppercase text-stone-600 dark:bg-stone-900 dark:text-stone-300"
-                  style={{ width: labelW, transform: 'translateZ(0)' }}
-                >
-                  Birim
-                </div>
+          <div className="flex">
+            {/* Frozen left names column — sits in normal flow so it scrolls
+                VERTICALLY with the page alongside the timeline. No position:sticky
+                (so no repaint flicker) and it's outside the horizontal scroller
+                (so left/right scrolling can't drift it up/down). */}
+            <div
+              className="shrink-0 border-r border-stone-300 dark:border-stone-600"
+              style={{ width: labelW }}
+            >
+              <div
+                className="flex items-center border-b border-stone-300 bg-white px-3 text-xs font-medium uppercase text-stone-600 dark:border-stone-600 dark:bg-stone-900 dark:text-stone-300"
+                style={{ height: HEADER_H }}
+              >
+                Birim
+              </div>
+              {properties.map((p) => {
+                const propUnits = unitsByProperty.get(p.id) ?? [];
+                return (
+                  <Fragment key={`lbl-${p.id}`}>
+                    <div
+                      className="flex items-center truncate border-b border-stone-200 bg-stone-50 px-3 text-sm font-semibold text-stone-800 dark:border-stone-700 dark:bg-stone-800/40 dark:text-stone-200"
+                      style={{ height: PROP_H }}
+                    >
+                      {p.name}
+                    </div>
+                    {propUnits.length === 0 && (
+                      <div
+                        className="flex items-center border-b border-stone-200 px-3 text-xs italic text-stone-400 dark:border-stone-700 dark:text-stone-500"
+                        style={{ height: ROW_H }}
+                      >
+                        birim yok
+                      </div>
+                    )}
+                    {propUnits.map((u) => (
+                      <div
+                        key={u.id}
+                        className="flex items-center gap-1.5 border-b border-stone-200 px-3 text-sm text-stone-800 dark:border-stone-700 dark:text-stone-200"
+                        style={{ height: ROW_H }}
+                      >
+                        <span className="truncate">{u.name}</span>
+                        <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
+                          {formatRoomType(u.room_type)}
+                        </span>
+                      </div>
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </div>
+
+            {/* Timeline pane — horizontal scroll ONLY. */}
+            <div
+              ref={setScrollNode}
+              onScroll={handleTimelineScroll}
+              className="min-w-0 flex-1 overflow-x-auto"
+            >
+              <div style={{ width: trackWidth }}>
+              {/* Day header */}
+              <div
+                className="flex border-b border-stone-300 dark:border-stone-600"
+                style={{ height: HEADER_H }}
+              >
                 {days.map((d) => (
                   <div
                     key={d.dateStr}
                     className={cn(
-                      'shrink-0 border-l border-stone-200 py-1 text-center dark:border-stone-700',
+                      'flex shrink-0 flex-col items-center justify-center border-l border-stone-200 dark:border-stone-700',
                       d.isWeekend && 'bg-stone-100/70 dark:bg-stone-800/50',
                       d.isToday && 'bg-emerald-50 dark:bg-emerald-950/40',
                     )}
@@ -727,33 +777,20 @@ export function ReservationsCalendarPage() {
                 const propUnits = unitsByProperty.get(p.id) ?? [];
                 return (
                   <Fragment key={p.id}>
-                    <div className="flex border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40">
-                      <div
-                        className="sticky left-0 z-20 shrink-0 truncate bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-800 dark:bg-stone-800 dark:text-stone-200"
-                        style={{ width: labelW, transform: 'translateZ(0)' }}
-                      >
-                        {p.name}
-                      </div>
-                      <div
-                        className="flex items-center py-1.5"
-                        style={{ width: trackWidth }}
-                      >
-                        <span className="ml-3 rounded bg-stone-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
-                          {p.type === 'HOTEL' ? 'Bina' : 'Daire'}
-                        </span>
-                      </div>
+                    <div
+                      className="flex items-center border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40"
+                      style={{ height: PROP_H }}
+                    >
+                      <span className="ml-3 rounded bg-stone-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
+                        {p.type === 'HOTEL' ? 'Bina' : 'Daire'}
+                      </span>
                     </div>
 
                     {propUnits.length === 0 && (
-                      <div className="flex border-b border-stone-200 dark:border-stone-700">
-                        <div
-                          className="sticky left-0 z-30 shrink-0 bg-white px-3 py-2 text-xs italic text-stone-400 dark:bg-stone-900"
-                          style={{ width: labelW, transform: 'translateZ(0)' }}
-                        >
-                          birim yok
-                        </div>
-                        <div style={{ width: trackWidth }} />
-                      </div>
+                      <div
+                        className="border-b border-stone-200 dark:border-stone-700"
+                        style={{ height: ROW_H }}
+                      />
                     )}
 
                     {propUnits.map((u) => {
@@ -762,21 +799,9 @@ export function ReservationsCalendarPage() {
                       return (
                         <div
                           key={u.id}
-                          className="flex border-b border-stone-200 dark:border-stone-700"
+                          className="relative border-b border-stone-200 dark:border-stone-700"
+                          style={{ height: ROW_H }}
                         >
-                          <div
-                            className="sticky left-0 z-30 flex shrink-0 items-center gap-1.5 bg-white px-3 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200"
-                            style={{ width: labelW, height: ROW_H, transform: 'translateZ(0)' }}
-                          >
-                            <span className="truncate">{u.name}</span>
-                            <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
-                              {formatRoomType(u.room_type)}
-                            </span>
-                          </div>
-                          <div
-                            className="relative"
-                            style={{ width: trackWidth, height: ROW_H }}
-                          >
                             {/* Clickable day-cell background. Shift-click (or
                                 "Aralık modu" on) routes through the same
                                 handler — see handleCellClick. */}
@@ -947,13 +972,13 @@ export function ReservationsCalendarPage() {
                                 </button>
                               );
                             })}
-                          </div>
                         </div>
                       );
                     })}
                   </Fragment>
                 );
               })}
+              </div>
             </div>
           </div>
         </Card>
