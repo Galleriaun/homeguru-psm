@@ -340,6 +340,39 @@ export function ReservationsCalendarPage() {
     return map;
   }, [reservations]);
 
+  // Stack overlapping stays into vertical lanes so two reservations on the same
+  // unit never render on top of each other. Completed stays no longer block new
+  // ones (migration 066), so a finished stay can overlap a fresh booking — those
+  // go on separate lanes. Greedy interval partitioning (sorted by start, each
+  // stay takes the first lane whose previous stay has already ended) → minimum
+  // lanes = max overlap depth. `count` drives the unit row height in BOTH panes.
+  const lanesByUnit = useMemo(() => {
+    const map = new Map<string, { lane: Map<string, number>; count: number }>();
+    for (const [unitId, list] of reservationsByUnit) {
+      const sorted = [...list].sort(
+        (a, b) =>
+          dayIndex(RANGE_START, a.stay_start.slice(0, 10)) -
+          dayIndex(RANGE_START, b.stay_start.slice(0, 10)),
+      );
+      const laneEnd: number[] = []; // exclusive end-index of each lane's last stay
+      const lane = new Map<string, number>();
+      for (const r of sorted) {
+        const s = dayIndex(RANGE_START, r.stay_start.slice(0, 10));
+        const e = dayIndex(RANGE_START, r.stay_end.slice(0, 10));
+        let idx = laneEnd.findIndex((end) => s >= end);
+        if (idx === -1) {
+          idx = laneEnd.length;
+          laneEnd.push(e);
+        } else {
+          laneEnd[idx] = e;
+        }
+        lane.set(r.id, idx);
+      }
+      map.set(unitId, { lane, count: Math.max(1, laneEnd.length) });
+    }
+    return map;
+  }, [reservationsByUnit]);
+
   const blocksByUnit = useMemo(() => {
     const map = new Map<string, PropertyBlock[]>();
     for (const b of blocks) {
@@ -703,10 +736,15 @@ export function ReservationsCalendarPage() {
                 return (
                   <Fragment key={`lbl-${p.id}`}>
                     <div
-                      className="flex items-center truncate border-b border-stone-200 bg-stone-50 px-3 text-sm font-semibold text-stone-800 dark:border-stone-700 dark:bg-stone-800/40 dark:text-stone-200"
+                      className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-3 dark:border-stone-700 dark:bg-stone-800/40"
                       style={{ height: PROP_H }}
                     >
-                      {p.name}
+                      <span className="truncate text-sm font-semibold text-stone-800 dark:text-stone-200">
+                        {p.name}
+                      </span>
+                      <span className="shrink-0 rounded bg-stone-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
+                        {p.type === 'HOTEL' ? 'Bina' : 'Daire'}
+                      </span>
                     </div>
                     {propUnits.length === 0 && (
                       <div
@@ -720,7 +758,7 @@ export function ReservationsCalendarPage() {
                       <div
                         key={u.id}
                         className="flex items-center gap-1.5 border-b border-stone-200 px-3 text-sm text-stone-800 dark:border-stone-700 dark:text-stone-200"
-                        style={{ height: ROW_H }}
+                        style={{ height: (lanesByUnit.get(u.id)?.count ?? 1) * ROW_H }}
                       >
                         <span className="truncate">{u.name}</span>
                         <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
@@ -778,13 +816,9 @@ export function ReservationsCalendarPage() {
                 return (
                   <Fragment key={p.id}>
                     <div
-                      className="flex items-center border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40"
+                      className="border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40"
                       style={{ height: PROP_H }}
-                    >
-                      <span className="ml-3 rounded bg-stone-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
-                        {p.type === 'HOTEL' ? 'Bina' : 'Daire'}
-                      </span>
-                    </div>
+                    />
 
                     {propUnits.length === 0 && (
                       <div
@@ -796,11 +830,12 @@ export function ReservationsCalendarPage() {
                     {propUnits.map((u) => {
                       const unitRes = reservationsByUnit.get(u.id) ?? [];
                       const unitBlocks = blocksByUnit.get(u.id) ?? [];
+                      const unitLanes = lanesByUnit.get(u.id);
                       return (
                         <div
                           key={u.id}
                           className="relative border-b border-stone-200 dark:border-stone-700"
-                          style={{ height: ROW_H }}
+                          style={{ height: (unitLanes?.count ?? 1) * ROW_H }}
                         >
                             {/* Clickable day-cell background. Shift-click (or
                                 "Aralık modu" on) routes through the same
@@ -957,7 +992,7 @@ export function ReservationsCalendarPage() {
                                   style={{
                                     left: left * DAY_W + padLeft,
                                     width: (right - left) * DAY_W - padLeft - padRight,
-                                    top: BAR_INSET,
+                                    top: (unitLanes?.lane.get(r.id) ?? 0) * ROW_H + BAR_INSET,
                                     height: ROW_H - BAR_INSET * 2,
                                   }}
                                 >
