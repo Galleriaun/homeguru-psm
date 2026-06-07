@@ -74,6 +74,7 @@ const ROW_H = 48; // px per unit row
 // Fixed heights so the frozen left name-column and the scrollable timeline align
 // row-for-row (box-sizing: border-box → the border-b doesn't add to these).
 const HEADER_H = 44; // px — day-header row
+const GROUP_H = 32; // px — "Daireler" / "Binalar" section header row
 const PROP_H = 36; // px — property band row
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Vertical inset for reservation bars so two-line cell content can fit below. */
@@ -372,6 +373,26 @@ export function ReservationsCalendarPage() {
     }
     return map;
   }, [reservationsByUnit]);
+
+  // Group properties into "Daireler" (APARTMENT) and "Binalar" (HOTEL) sections,
+  // each sorted by name. Empty groups are dropped so a section header only shows
+  // when it has properties. Both panes iterate this identically to stay aligned.
+  const groups = useMemo(() => {
+    const byName = (a: Property, b: Property) =>
+      a.name.localeCompare(b.name, 'tr', { numeric: true });
+    return [
+      {
+        key: 'APARTMENT',
+        label: 'Daireler',
+        items: properties.filter((p) => p.type === 'APARTMENT').sort(byName),
+      },
+      {
+        key: 'HOTEL',
+        label: 'Binalar',
+        items: properties.filter((p) => p.type === 'HOTEL').sort(byName),
+      },
+    ].filter((g) => g.items.length > 0);
+  }, [properties]);
 
   const blocksByUnit = useMemo(() => {
     const map = new Map<string, PropertyBlock[]>();
@@ -731,21 +752,24 @@ export function ReservationsCalendarPage() {
               >
                 Birim
               </div>
-              {properties.map((p) => {
-                const propUnits = unitsByProperty.get(p.id) ?? [];
-                return (
-                  <Fragment key={`lbl-${p.id}`}>
-                    <div
-                      className="flex items-center gap-2 border-b border-stone-200 bg-stone-50 px-3 dark:border-stone-700 dark:bg-stone-800/40"
-                      style={{ height: PROP_H }}
-                    >
-                      <span className="truncate text-sm font-semibold text-stone-800 dark:text-stone-200">
-                        {p.name}
-                      </span>
-                      <span className="shrink-0 rounded bg-stone-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-700 dark:bg-stone-700 dark:text-stone-200">
-                        {p.type === 'HOTEL' ? 'Bina' : 'Daire'}
-                      </span>
-                    </div>
+              {groups.map((g) => (
+                <Fragment key={`lblg-${g.key}`}>
+                  <div
+                    className="flex items-center border-b border-stone-300 bg-stone-100 px-3 text-xs font-bold uppercase tracking-wide text-stone-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200"
+                    style={{ height: GROUP_H }}
+                  >
+                    {g.label}
+                  </div>
+                  {g.items.map((p) => {
+                    const propUnits = unitsByProperty.get(p.id) ?? [];
+                    return (
+                      <Fragment key={`lbl-${p.id}`}>
+                        <div
+                          className="flex items-center border-b border-stone-200 bg-stone-50 px-3 text-sm font-semibold text-stone-800 dark:border-stone-700 dark:bg-stone-800/40 dark:text-stone-200"
+                          style={{ height: PROP_H }}
+                        >
+                          <span className="truncate">{p.name}</span>
+                        </div>
                     {propUnits.length === 0 && (
                       <div
                         className="flex items-center border-b border-stone-200 px-3 text-xs italic text-stone-400 dark:border-stone-700 dark:text-stone-500"
@@ -769,6 +793,8 @@ export function ReservationsCalendarPage() {
                   </Fragment>
                 );
               })}
+                </Fragment>
+              ))}
             </div>
 
             {/* Timeline pane — horizontal scroll ONLY. */}
@@ -810,15 +836,21 @@ export function ReservationsCalendarPage() {
                 ))}
               </div>
 
-              {/* Body: properties → units */}
-              {properties.map((p) => {
-                const propUnits = unitsByProperty.get(p.id) ?? [];
-                return (
-                  <Fragment key={p.id}>
-                    <div
-                      className="border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40"
-                      style={{ height: PROP_H }}
-                    />
+              {/* Body: properties → units, grouped into Daireler / Binalar */}
+              {groups.map((g) => (
+                <Fragment key={`g-${g.key}`}>
+                  <div
+                    className="border-b border-stone-300 bg-stone-100 dark:border-stone-600 dark:bg-stone-800"
+                    style={{ height: GROUP_H }}
+                  />
+                  {g.items.map((p) => {
+                    const propUnits = unitsByProperty.get(p.id) ?? [];
+                    return (
+                      <Fragment key={p.id}>
+                        <div
+                          className="border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40"
+                          style={{ height: PROP_H }}
+                        />
 
                     {propUnits.length === 0 && (
                       <div
@@ -1013,6 +1045,8 @@ export function ReservationsCalendarPage() {
                   </Fragment>
                 );
               })}
+                </Fragment>
+              ))}
               </div>
             </div>
           </div>
