@@ -8,6 +8,13 @@ export default {
   future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
+      // Slightly slower, smoother default for every `transition-*` utility that
+      // doesn't set an explicit `duration-…` (was 150ms). Affects hover/state/
+      // color/opacity fades app-wide. `animate-spin` uses `animation`, not
+      // `transition`, so the loading spinner keeps its normal speed.
+      transitionDuration: {
+        DEFAULT: '250ms',
+      },
       colors: {
         brand: {
           50: '#eff6ff',
