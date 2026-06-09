@@ -61,6 +61,17 @@ function toIstanbulDateAndTime(iso: string): { date: string; time: string } {
 }
 
 /**
+ * Default Istanbul-local check-in time for a giriş date. A FUTURE day defaults
+ * to 12:00; a same-day (today) booking keeps the current time, since a same-day
+ * arrival is usually happening around "now". Past dates fall through to "now"
+ * too — only reachable while editing, which never auto-defaults.
+ */
+function defaultCheckinTime(checkinDate: string): string {
+  if (checkinDate && checkinDate > istanbulToday()) return '12:00';
+  return toIstanbulDateAndTime(new Date().toISOString()).time;
+}
+
+/**
  * Mask raw input into HH:MM as the user types. Strips non-digits, caps at
  * 4 digits, and auto-inserts the colon after two. Always 24-hour — we use a
  * masked text input instead of <input type="time"> because the latter falls
@@ -116,12 +127,15 @@ export function ReservationFormPage() {
   const [guestId, setGuestId] = useState('');
   const [checkin, setCheckin] = useState(istanbulToday());
   const [nights, setNights] = useState(1);
-  // Istanbul-local check-in time (HH:MM) for overnight stays. Defaults to the
-  // current time so a new booking records the real giriş hour automatically;
-  // the operator can edit it. On edit it's loaded from the stored stay_start.
+  // Istanbul-local check-in time (HH:MM) for overnight stays. Default depends on
+  // the giriş date (today → now, future → 12:00, see defaultCheckinTime + the
+  // effect below); operator-editable. On edit it's loaded from stay_start.
   const [checkinTime, setCheckinTime] = useState(
-    () => toIstanbulDateAndTime(new Date().toISOString()).time,
+    () => defaultCheckinTime(istanbulToday()),
   );
+  // True once the operator types their own check-in time, so the date-driven
+  // default below stops overwriting it.
+  const [checkinTimeEdited, setCheckinTimeEdited] = useState(false);
   /** OVERNIGHT (default) | DAYUSE — drives whether we collect nights or HH:MM. */
   const [stayType, setStayType] = useState<StayType>('OVERNIGHT');
   /** Istanbul-local start/end times — only used when stayType === 'DAYUSE'. */
@@ -239,6 +253,15 @@ export function ReservationFormPage() {
     // searchParams read once on mount — intentionally not a dep
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdit]);
+
+  // Keep the check-in time on its date-driven default (today → now, future →
+  // 12:00) until the operator either edits it or we're editing an existing
+  // reservation (whose stored giriş hour must be preserved). Covers every way
+  // the giriş date is set: manual picker, or a prefilled calendar-cell click.
+  useEffect(() => {
+    if (isEdit || checkinTimeEdited) return;
+    setCheckinTime(defaultCheckinTime(checkin));
+  }, [checkin, isEdit, checkinTimeEdited]);
 
   // Load units when property changes
   useEffect(() => {
@@ -622,7 +645,10 @@ export function ReservationFormPage() {
                   placeholder="14:00"
                   required
                   value={checkinTime}
-                  onChange={(e) => setCheckinTime(maskTime(e.target.value))}
+                  onChange={(e) => {
+                    setCheckinTime(maskTime(e.target.value));
+                    setCheckinTimeEdited(true);
+                  }}
                   className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder-stone-500"
                 />
                 <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
