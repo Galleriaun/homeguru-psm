@@ -109,6 +109,17 @@ function dayIndex(fromStr: string, toStr: string): number {
   const b = new Date(toStr + 'T00:00:00Z').getTime();
   return Math.round((b - a) / DAY_MS);
 }
+// A stored UTC timestamp → its Europe/Istanbul calendar date ("YYYY-MM-DD").
+// Reservations carry an Istanbul-local check-in TIME (defaults to creation
+// time), so a stay booked between 00:00–02:59 lands on the PREVIOUS UTC day.
+// Slicing the raw UTC ISO therefore placed the bar one column too early — a
+// 1-night stay looked like 2. Shifting +3h first yields the true Istanbul day.
+// Istanbul is fixed UTC+3, no DST (see CLAUDE.md).
+function istanbulDateOf(iso: string): string {
+  return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+}
 
 const weekdayFmt = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
 const monthFmt = new Intl.DateTimeFormat('tr-TR', { month: 'short', timeZone: 'UTC' });
@@ -352,14 +363,14 @@ export function ReservationsCalendarPage() {
     for (const [unitId, list] of reservationsByUnit) {
       const sorted = [...list].sort(
         (a, b) =>
-          dayIndex(RANGE_START, a.stay_start.slice(0, 10)) -
-          dayIndex(RANGE_START, b.stay_start.slice(0, 10)),
+          dayIndex(RANGE_START, istanbulDateOf(a.stay_start)) -
+          dayIndex(RANGE_START, istanbulDateOf(b.stay_start)),
       );
       const laneEnd: number[] = []; // exclusive end-index of each lane's last stay
       const lane = new Map<string, number>();
       for (const r of sorted) {
-        const s = dayIndex(RANGE_START, r.stay_start.slice(0, 10));
-        const e = dayIndex(RANGE_START, r.stay_end.slice(0, 10));
+        const s = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
+        const e = dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
         let idx = laneEnd.findIndex((end) => s >= end);
         if (idx === -1) {
           idx = laneEnd.length;
@@ -906,8 +917,8 @@ export function ReservationsCalendarPage() {
                                 (z-5) so a paying stay overlays cleanly if a
                                 block somehow exists (shouldn't, per triggers). */}
                             {unitBlocks.map((b) => {
-                              const sIdx = dayIndex(RANGE_START, b.block_start.slice(0, 10));
-                              const eIdx = dayIndex(RANGE_START, b.block_end.slice(0, 10));
+                              const sIdx = dayIndex(RANGE_START, istanbulDateOf(b.block_start));
+                              const eIdx = dayIndex(RANGE_START, istanbulDateOf(b.block_end));
                               const left = Math.max(sIdx, 0);
                               const right = Math.min(eIdx, windowDays);
                               if (right <= left) return null;
@@ -992,8 +1003,8 @@ export function ReservationsCalendarPage() {
 
                             {/* Reservation bars */}
                             {unitRes.map((r) => {
-                              const sIdx = dayIndex(RANGE_START, r.stay_start.slice(0, 10));
-                              const eIdx = dayIndex(RANGE_START, r.stay_end.slice(0, 10));
+                              const sIdx = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
+                              const eIdx = dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
                               const left = Math.max(sIdx, 0);
                               const right = Math.min(eIdx, windowDays);
                               if (right <= left) return null;
@@ -1010,10 +1021,9 @@ export function ReservationsCalendarPage() {
                                   key={r.id}
                                   type="button"
                                   onClick={() => handleReservationBarClick(r)}
-                                  title={`${r.guest?.full_name ?? '—'} · ${r.stay_start.slice(
-                                    0,
-                                    10,
-                                  )} → ${r.stay_end.slice(0, 10)} · ${STATUS_LABELS[r.status]}`}
+                                  title={`${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
+                                    r.stay_start,
+                                  )} → ${istanbulDateOf(r.stay_end)} · ${STATUS_LABELS[r.status]}`}
                                   className={cn(
                                     'absolute z-10 flex items-center overflow-hidden px-1.5 text-xs font-medium text-white shadow-sm transition-colors',
                                     isLong && 'justify-between gap-2',
@@ -1187,8 +1197,8 @@ export function ReservationsCalendarPage() {
             <>
               <p>
                 <strong>{resvToCancel.guest?.full_name ?? '—'}</strong> —{' '}
-                {resvToCancel.stay_start.slice(0, 10)} →{' '}
-                {resvToCancel.stay_end.slice(0, 10)}
+                {istanbulDateOf(resvToCancel.stay_start)} →{' '}
+                {istanbulDateOf(resvToCancel.stay_end)}
               </p>
               <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
                 İptal edilen rezervasyonlar tekrar aktif edilemez.
@@ -1305,7 +1315,7 @@ export function ReservationsCalendarPage() {
             <>
               <p>
                 <strong>
-                  {blockToDelete.block_start.slice(0, 10)} → {blockToDelete.block_end.slice(0, 10)}
+                  {istanbulDateOf(blockToDelete.block_start)} → {istanbulDateOf(blockToDelete.block_end)}
                 </strong>
                 {blockToDelete.reason ? ` — ${blockToDelete.reason}` : ''}
               </p>
