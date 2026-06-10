@@ -854,6 +854,7 @@ export type Database = {
           note: string | null;
           given_at: string;
           created_by: string;
+          settled_at: string | null;
         };
         Insert: {
           id?: string;
@@ -862,6 +863,7 @@ export type Database = {
           note?: string | null;
           given_at?: string;
           created_by: string;
+          settled_at?: string | null;
         };
         Update: {
           // Append-only by convention; UI doesn't expose update/delete.
@@ -871,6 +873,7 @@ export type Database = {
           note?: string | null;
           given_at?: string;
           created_by?: string;
+          settled_at?: string | null;
         };
         Relationships: [];
       };

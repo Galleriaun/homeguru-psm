@@ -5,9 +5,6 @@ import {
   deleteStaff,
   getStaff,
   listAdvancesForStaff,
-  totalAdvancesInMonth,
-  currentSalaryCycle,
-  totalAdvancesInCycle,
   type StaffAdvance,
   type StaffProfileWithProperty,
 } from '@/lib/queries/staff';
@@ -55,18 +52,6 @@ function monthLabel(yearMonth: string): string {
     month: 'long',
     year: 'numeric',
   }).format(d);
-}
-
-// 'YYYY-MM-DD' → '12 Haz'. Anchored at UTC noon and formatted in UTC so a pure
-// calendar date (the payday) can't drift a day across a timezone boundary.
-function cycleDayLabel(ymd: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd;
-  const [y, m, d] = ymd.split('-').map(Number);
-  return new Intl.DateTimeFormat('tr-TR', {
-    timeZone: 'UTC',
-    day: 'numeric',
-    month: 'short',
-  }).format(new Date(Date.UTC(y, m - 1, d, 12)));
 }
 
 export function StaffDetailPage() {
@@ -144,16 +129,14 @@ export function StaffDetailPage() {
   }
 
   const salary = staff.salary != null ? Number(staff.salary) : null;
-  // Avanslar maaş gününe göre dönemlenir: maaş günü 12 ise pencere 12→12.
-  // The cycle that contains today funds the next payday's salary; its advances
-  // are what reduce that salary. No salary_day → fall back to calendar month.
-  const cycle = staff.salary_day != null ? currentSalaryCycle(staff.salary_day) : null;
-  // Card header reflects the salary this cycle funds (the upcoming payday's month).
-  const periodMonth = cycle ? cycle.end.slice(0, 7) : currentMonth;
-  const monthAdvances = cycle
-    ? totalAdvancesInCycle(advances, cycle)
-    : totalAdvancesInMonth(advances, currentMonth);
-  const remaining = salary != null ? salary - monthAdvances : null;
+  // Outstanding advances = those not yet recovered from a paid salary
+  // (settled_at IS NULL, migration 082). The next salary pays maaş − outstanding
+  // and settles them, so "Kalan" here equals what the salary will actually pay.
+  const outstandingAdvances = advances.reduce(
+    (sum, a) => (a.settled_at == null ? sum + Number(a.amount) : sum),
+    0,
+  );
+  const remaining = salary != null ? salary - outstandingAdvances : null;
 
   // Color the remaining figure: negative = over-advanced (red)
   const remainingClass =
@@ -228,7 +211,7 @@ export function StaffDetailPage() {
 
       <Card>
         <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
-          {monthLabel(periodMonth)}
+          {monthLabel(currentMonth)}
         </p>
         <div className="mt-2 grid gap-4 sm:grid-cols-3">
           <div>
@@ -254,18 +237,16 @@ export function StaffDetailPage() {
             </p>
           </div>
           <div>
-            <p className="text-xs text-stone-600 dark:text-stone-300">Bu dönem verilen avans</p>
+            <p className="text-xs text-stone-600 dark:text-stone-300">Ödenmemiş avans</p>
             <p className="mt-0.5 text-lg font-semibold text-amber-600 dark:text-amber-400">
-              {formatTRY(monthAdvances)}
+              {formatTRY(outstandingAdvances)}
             </p>
-            {cycle && (
-              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-                {cycleDayLabel(cycle.start)} – {cycleDayLabel(cycle.end)} dönemi
-              </p>
-            )}
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              Maaştan düşülecek
+            </p>
           </div>
           <div>
-            <p className="text-xs text-stone-600 dark:text-stone-300">Kalan</p>
+            <p className="text-xs text-stone-600 dark:text-stone-300">Kalan (ödenecek)</p>
             <p className={`mt-0.5 text-lg font-semibold ${remainingClass}`}>
               {remaining != null ? formatTRY(remaining) : '—'}
             </p>
@@ -368,6 +349,11 @@ export function StaffDetailPage() {
                       <p className="mt-0.5 break-words text-sm text-stone-700 dark:text-stone-300">
                         {a.note || '—'}
                       </p>
+                      {a.settled_at && (
+                        <span className="mt-1 inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                          Kapandı
+                        </span>
+                      )}
                     </div>
                     <p className="shrink-0 font-semibold text-amber-600 dark:text-amber-400">
                       {formatTRY(Number(a.amount))}
@@ -399,6 +385,11 @@ export function StaffDetailPage() {
                         </td>
                         <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                           {a.note || '—'}
+                          {a.settled_at && (
+                            <span className="ml-2 inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                              Kapandı
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
                           {formatTRY(Number(a.amount))}
@@ -445,10 +436,15 @@ export function StaffDetailPage() {
         <PaySalaryModal
           staffUserId={staff.user_id}
           staffName={staff.full_name}
-          defaultSalary={salary}
+          /* Default to the net (maaş − ödenmemiş avans); advances posted to the
+             kasa when given, so paying the net keeps the total at the full maaş. */
+          defaultSalary={remaining}
           onClose={() => setShowPaySalary(false)}
           onPaid={(payment) => {
             setSalaryPayments((prev) => [payment, ...prev]);
+            // The payment settled outstanding advances server-side (migration
+            // 082) — refresh so "Ödenmemiş avans" / Kalan update immediately.
+            listAdvancesForStaff(staff.user_id).then(setAdvances).catch(() => {});
             setShowPaySalary(false);
           }}
         />
