@@ -237,7 +237,7 @@ export function StaffDetailPage() {
             </p>
           </div>
           <div>
-            <p className="text-xs text-stone-600 dark:text-stone-300">Ödenmemiş avans</p>
+            <p className="text-xs text-stone-600 dark:text-stone-300">Verilen avans</p>
             <p className="mt-0.5 text-lg font-semibold text-amber-600 dark:text-amber-400">
               {formatTRY(outstandingAdvances)}
             </p>
@@ -349,11 +349,6 @@ export function StaffDetailPage() {
                       <p className="mt-0.5 break-words text-sm text-stone-700 dark:text-stone-300">
                         {a.note || '—'}
                       </p>
-                      {a.settled_at && (
-                        <span className="mt-1 inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:bg-stone-800 dark:text-stone-400">
-                          Kapandı
-                        </span>
-                      )}
                     </div>
                     <p className="shrink-0 font-semibold text-amber-600 dark:text-amber-400">
                       {formatTRY(Number(a.amount))}
@@ -385,11 +380,6 @@ export function StaffDetailPage() {
                         </td>
                         <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                           {a.note || '—'}
-                          {a.settled_at && (
-                            <span className="ml-2 inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone-500 dark:bg-stone-800 dark:text-stone-400">
-                              Kapandı
-                            </span>
-                          )}
                         </td>
                         <td className="px-6 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
                           {formatTRY(Number(a.amount))}
@@ -443,7 +433,7 @@ export function StaffDetailPage() {
           onPaid={(payment) => {
             setSalaryPayments((prev) => [payment, ...prev]);
             // The payment settled outstanding advances server-side (migration
-            // 082) — refresh so "Ödenmemiş avans" / Kalan update immediately.
+            // 082) — refresh so "Verilen avans" / Kalan update immediately.
             listAdvancesForStaff(staff.user_id).then(setAdvances).catch(() => {});
             setShowPaySalary(false);
           }}
