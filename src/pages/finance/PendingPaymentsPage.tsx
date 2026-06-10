@@ -42,6 +42,51 @@ type PendingAction =
   | { type: 'reject-cash'; item: PendingCashTx };
 
 /**
+ * Money subtotal + per-category breakdown for the active sub-tab. Every row is
+ * positive and the rows always sum to `total`, so "Ara Toplam" = sum of the
+ * lines below it. Breakdown adapts per tab: Tahsilat → ödeme yöntemi
+ * (Nakit/Havale/Kart), Gider → kasadan / kasa dışı, Kasa Hareketi → Gelir/Gider.
+ */
+function tabSubtotal(
+  tab: Tab,
+  payments: PendingPaymentWithRefs[] | null,
+  expenses: PendingExpense[] | null,
+  cashTxs: PendingCashTx[] | null,
+): { total: number; rows: { label: string; amount: number }[] } {
+  const rows: { label: string; amount: number }[] = [];
+  let total = 0;
+  if (tab === 'payments') {
+    const by: Record<PaymentMethod, number> = { CASH: 0, TRANSFER: 0, CARD: 0 };
+    for (const p of payments ?? []) by[p.method] += Number(p.amount);
+    for (const m of ['CASH', 'TRANSFER', 'CARD'] as PaymentMethod[]) {
+      if (by[m] > 0) rows.push({ label: METHOD_LABELS[m], amount: by[m] });
+      total += by[m];
+    }
+  } else if (tab === 'expenses') {
+    let kasa = 0;
+    let other = 0;
+    for (const e of expenses ?? []) {
+      if (e.paid_from_kasa) kasa += Number(e.amount);
+      else other += Number(e.amount);
+    }
+    if (kasa > 0) rows.push({ label: 'Kasadan', amount: kasa });
+    if (other > 0) rows.push({ label: 'Kasa dışı', amount: other });
+    total = kasa + other;
+  } else {
+    let inSum = 0;
+    let outSum = 0;
+    for (const t of cashTxs ?? []) {
+      if (t.direction === 'IN') inSum += Number(t.amount);
+      else outSum += Number(t.amount);
+    }
+    if (inSum > 0) rows.push({ label: 'Gelir', amount: inSum });
+    if (outSum > 0) rows.push({ label: 'Gider', amount: outSum });
+    total = inSum + outSum;
+  }
+  return { total, rows };
+}
+
+/**
  * Three-in-one approval queue. PROPERTY_MANAGER submissions land in the
  * relevant sub-list as 'pending'; SUPER_ADMIN approves or rejects. The
  * payment confirmations tab continues to drive the existing UNCONFIRMED →
@@ -126,6 +171,7 @@ export function PendingPaymentsPage() {
     expenses: expenses?.length ?? 0,
     cash_tx: cashTxs?.length ?? 0,
   };
+  const subtotal = tabSubtotal(tab, payments, expenses, cashTxs);
 
   return (
     <div className="space-y-6">
@@ -192,11 +238,27 @@ export function PendingPaymentsPage() {
         />
       )}
 
-      {/* Bottom summary — total pending count for the active sub-tab. */}
+      {/* Bottom summary — count (right) + money subtotal with a per-category
+          breakdown that sums to "Ara Toplam", for the active sub-tab. */}
       {counts[tab] > 0 && (
-        <p className="text-center text-sm font-medium text-stone-600 dark:text-stone-300">
-          Toplam {counts[tab]} onay bekliyor
-        </p>
+        <div className="flex flex-wrap items-start justify-end gap-x-8 gap-y-3">
+          <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
+            Toplam {counts[tab]} onay
+          </p>
+          <div className="text-right">
+            <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+              Ara Toplam: {formatTRY(subtotal.total)}
+            </p>
+            {subtotal.rows.map((r) => (
+              <p
+                key={r.label}
+                className="mt-0.5 text-xs text-stone-600 dark:text-stone-300"
+              >
+                {r.label}: {formatTRY(r.amount)}
+              </p>
+            ))}
+          </div>
+        </div>
       )}
 
       <ConfirmDialog
