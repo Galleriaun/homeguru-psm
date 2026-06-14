@@ -172,6 +172,20 @@ export async function deleteExpense(id: string): Promise<void> {
   await softDeleteEntity('expenses', id);
 }
 
+/**
+ * Stop a recurring expense (Düzenli gideri durdur) via the stop_recurring_expense
+ * RPC (migration 085). De-recurs the template so its own past row stays (now
+ * un-labelled) while future "Beklenen" projections + the cron stop, and
+ * soft-deletes the current/future generated instances. Past months are kept.
+ * `templateId` is the real template id — for a projected row use its __templateId.
+ */
+export async function stopRecurringExpense(templateId: string): Promise<void> {
+  const { error } = await supabase.rpc('stop_recurring_expense', {
+    _template_id: templateId,
+  });
+  if (error) throw wrapErr(error);
+}
+
 /** Sum of amounts in the supplied list. Pure client-side reduction. */
 export function totalAmount(rows: ExpenseRow[]): number {
   return rows.reduce((acc, r) => acc + Number(r.amount), 0);

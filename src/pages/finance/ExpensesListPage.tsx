@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   listExpenses,
   listRecurringTemplates,
+  stopRecurringExpense,
   totalAmount,
   EXPENSE_CATEGORIES,
   type ExpenseWithProperty,
@@ -12,6 +13,7 @@ import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/pr
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { FinanceTabs } from './FinanceTabs';
 import { formatTRY, formatDate } from '@/lib/utils';
 import { exportRowsToCsv } from '@/lib/csvExport';
@@ -39,7 +41,11 @@ let cachedFilters: {
 } | null = null;
 
 /** A real expense row, or a projected ("Beklenen") recurring one for a future month. */
-type DisplayExpense = ExpenseWithProperty & { __projected?: boolean };
+type DisplayExpense = ExpenseWithProperty & {
+  __projected?: boolean;
+  /** On a projected row, the real template id to act on (id is overwritten). */
+  __templateId?: string;
+};
 
 /** True when this expense belonged to a now-deleted mülk ("bağı kopar"):
  *  property_id was nulled but the snapshotted name remains. */
@@ -72,6 +78,10 @@ export function ExpensesListPage() {
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
   /** Recurring templates — projected into future months as "Beklenen" rows. */
   const [templates, setTemplates] = useState<ExpenseWithProperty[] | null>(null);
+  /** "Düzenli'yi durdur" confirmation target (the projected/recurring row). */
+  const [stopTarget, setStopTarget] = useState<DisplayExpense | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
 
   // YETKILI may *submit* a gider (queues pending), but doesn't have
   // finance:write for edits. Surface the "+ Yeni Gider" button for them too.
@@ -79,6 +89,10 @@ export function ExpensesListPage() {
     profile?.role === 'SUPER_ADMIN' ||
     profile?.role === 'PROPERTY_MANAGER' ||
     profile?.role === 'YETKILI';
+  // Stopping a recurring series is a finance:write action (matches the
+  // expenses_update / expenses_delete RLS in migration 064) — not YETKILI.
+  const canStopRecurring =
+    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
 
   // Load properties + staff directory once
   useEffect(() => {
@@ -200,6 +214,7 @@ export function ExpensesListPage() {
           id: `proj:${t.id}:${month}`,
           expense_date: `${y}-${mm}-${String(day).padStart(2, '0')}`,
           __projected: true,
+          __templateId: t.id,
         };
       });
   }, [templates, expenses, month, expenseType, propertyId, category]);
@@ -362,6 +377,11 @@ export function ExpensesListPage() {
               items={genelExpenses}
               subtotal={totalAmount(genelExpenses)}
               staffMap={staffMap}
+              canStop={canStopRecurring}
+              onStop={(e) => {
+                setStopError(null);
+                setStopTarget(e);
+              }}
             />
           )}
 
@@ -372,10 +392,73 @@ export function ExpensesListPage() {
               items={mulkExpenses}
               subtotal={totalAmount(mulkExpenses)}
               staffMap={staffMap}
+              canStop={canStopRecurring}
+              onStop={(e) => {
+                setStopError(null);
+                setStopTarget(e);
+              }}
             />
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={stopTarget !== null}
+        title="Düzenli gider durdurulsun mu?"
+        description={
+          stopTarget ? (
+            <>
+              <p>
+                <strong>
+                  {expensePropertyLabel(stopTarget)} · {stopTarget.category} ·{' '}
+                  {formatTRY(Number(stopTarget.amount))}
+                </strong>{' '}
+                düzenli gideri durdurulur.
+              </p>
+              <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">
+                Bu ay ve sonraki aylar için artık oluşturulmaz. Geçmiş aylar olduğu
+                gibi görünür — yalnızca "Düzenli" etiketi kalkar.
+              </p>
+            </>
+          ) : null
+        }
+        confirmLabel="Durdur"
+        cancelLabel="Vazgeç"
+        destructive
+        loading={stopping}
+        error={stopError}
+        onConfirm={async () => {
+          const templateId = stopTarget?.__templateId ?? stopTarget?.id;
+          if (!templateId) return;
+          setStopping(true);
+          setStopError(null);
+          try {
+            await stopRecurringExpense(templateId);
+            // Refresh both the templates (drops the projection) and the month's
+            // real rows (the template loses its "Düzenli" label).
+            const [tpl] = await Promise.all([
+              listRecurringTemplates(),
+              listExpenses({
+                propertyId: expenseType === 'MULK' && propertyId ? propertyId : undefined,
+                genelOnly: expenseType === 'GENEL',
+                mulkOnly: expenseType === 'MULK' && !propertyId,
+                month: month || undefined,
+                category: category || undefined,
+              }).then(setExpenses),
+            ]);
+            setTemplates(tpl);
+            setStopTarget(null);
+          } catch (err) {
+            setStopError(err instanceof Error ? err.message : 'Durdurulamadı');
+          } finally {
+            setStopping(false);
+          }
+        }}
+        onCancel={() => {
+          setStopTarget(null);
+          setStopError(null);
+        }}
+      />
     </div>
   );
 }
@@ -390,11 +473,15 @@ function ExpenseSection({
   items,
   subtotal,
   staffMap,
+  canStop,
+  onStop,
 }: {
   title: string;
   items: DisplayExpense[];
   subtotal: number;
   staffMap: Map<string, string>;
+  canStop: boolean;
+  onStop: (e: DisplayExpense) => void;
 }) {
   return (
     <section className="space-y-2">
@@ -460,6 +547,17 @@ function ExpenseSection({
           return e.__projected ? (
             <div key={e.id} className={base}>
               {body}
+              {canStop && (
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onStop(e)}
+                    className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+                  >
+                    Sil
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <Link
@@ -484,6 +582,7 @@ function ExpenseSection({
                 <th className="px-6 py-3 font-medium">Kategori</th>
                 <th className="px-6 py-3 font-medium">Açıklama</th>
                 <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                {canStop && <th className="px-6 py-3" aria-label="İşlem" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
@@ -542,6 +641,19 @@ function ExpenseSection({
                   <td className="px-6 py-3 text-right font-semibold text-stone-900 dark:text-stone-100">
                     {formatTRY(Number(e.amount))}
                   </td>
+                  {canStop && (
+                    <td className="px-6 py-3 text-right">
+                      {e.__projected && (
+                        <button
+                          type="button"
+                          onClick={() => onStop(e)}
+                          className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+                        >
+                          Sil
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

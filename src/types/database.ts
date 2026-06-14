@@ -1191,6 +1191,10 @@ export type Database = {
         };
         Returns: Database['public']['Tables']['expenses']['Row'];
       };
+      stop_recurring_expense: {
+        Args: { _template_id: string };
+        Returns: void;
+      };
       submit_cash_tx: {
         Args: {
           _cash_account_id: string;
