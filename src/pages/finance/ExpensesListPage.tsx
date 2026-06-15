@@ -5,6 +5,7 @@ import {
   listExpenses,
   listRecurringTemplates,
   stopRecurringExpense,
+  postRecurringInstanceNow,
   totalAmount,
   EXPENSE_CATEGORIES,
   type ExpenseWithProperty,
@@ -82,6 +83,10 @@ export function ExpensesListPage() {
   const [stopTarget, setStopTarget] = useState<DisplayExpense | null>(null);
   const [stopping, setStopping] = useState(false);
   const [stopError, setStopError] = useState<string | null>(null);
+  /** "Kasaya işle" (post this month's instance now) confirmation target. */
+  const [postTarget, setPostTarget] = useState<DisplayExpense | null>(null);
+  const [posting, setPosting] = useState(false);
+  const [postErr, setPostErr] = useState<string | null>(null);
 
   // YETKILI may *submit* a gider (queues pending), but doesn't have
   // finance:write for edits. Surface the "+ Yeni Gider" button for them too.
@@ -382,6 +387,10 @@ export function ExpensesListPage() {
                 setStopError(null);
                 setStopTarget(e);
               }}
+              onPost={(e) => {
+                setPostErr(null);
+                setPostTarget(e);
+              }}
             />
           )}
 
@@ -396,6 +405,10 @@ export function ExpensesListPage() {
               onStop={(e) => {
                 setStopError(null);
                 setStopTarget(e);
+              }}
+              onPost={(e) => {
+                setPostErr(null);
+                setPostTarget(e);
               }}
             />
           )}
@@ -459,6 +472,63 @@ export function ExpensesListPage() {
           setStopError(null);
         }}
       />
+
+      <ConfirmDialog
+        open={postTarget !== null}
+        title="Gider şimdi işlensin mi?"
+        description={
+          postTarget ? (
+            <>
+              <p>
+                <strong>
+                  {expensePropertyLabel(postTarget)} · {postTarget.category} ·{' '}
+                  {formatTRY(Number(postTarget.amount))}
+                </strong>{' '}
+                bu ay için gider olarak kaydedilir.
+              </p>
+              <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">
+                Kasadan ödenen bir gider ise tutar kasadan düşülür. Otomatik
+                kayıt çalışmadığında elle işlemek için kullanılır.
+              </p>
+            </>
+          ) : null
+        }
+        confirmLabel="İşle"
+        cancelLabel="Vazgeç"
+        loading={posting}
+        error={postErr}
+        onConfirm={async () => {
+          const templateId = postTarget?.__templateId ?? postTarget?.id;
+          if (!templateId) return;
+          setPosting(true);
+          setPostErr(null);
+          try {
+            await postRecurringInstanceNow(templateId);
+            // Refresh: the real instance now exists (projection drops; kasa OUT
+            // shows). Reload both templates and the month's rows.
+            const [tpl] = await Promise.all([
+              listRecurringTemplates(),
+              listExpenses({
+                propertyId: expenseType === 'MULK' && propertyId ? propertyId : undefined,
+                genelOnly: expenseType === 'GENEL',
+                mulkOnly: expenseType === 'MULK' && !propertyId,
+                month: month || undefined,
+                category: category || undefined,
+              }).then(setExpenses),
+            ]);
+            setTemplates(tpl);
+            setPostTarget(null);
+          } catch (err) {
+            setPostErr(err instanceof Error ? err.message : 'İşlenemedi');
+          } finally {
+            setPosting(false);
+          }
+        }}
+        onCancel={() => {
+          setPostTarget(null);
+          setPostErr(null);
+        }}
+      />
     </div>
   );
 }
@@ -475,6 +545,7 @@ function ExpenseSection({
   staffMap,
   canStop,
   onStop,
+  onPost,
 }: {
   title: string;
   items: DisplayExpense[];
@@ -482,6 +553,7 @@ function ExpenseSection({
   staffMap: Map<string, string>;
   canStop: boolean;
   onStop: (e: DisplayExpense) => void;
+  onPost: (e: DisplayExpense) => void;
 }) {
   return (
     <section className="space-y-2">
@@ -548,7 +620,14 @@ function ExpenseSection({
             <div key={e.id} className={base}>
               {body}
               {canStop && (
-                <div className="mt-2 flex justify-end">
+                <div className="mt-2 flex justify-end gap-4">
+                  <button
+                    type="button"
+                    onClick={() => onPost(e)}
+                    className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                  >
+                    Kasaya işle
+                  </button>
                   <button
                     type="button"
                     onClick={() => onStop(e)}
@@ -644,13 +723,22 @@ function ExpenseSection({
                   {canStop && (
                     <td className="px-6 py-3 text-right">
                       {e.__projected && (
-                        <button
-                          type="button"
-                          onClick={() => onStop(e)}
-                          className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
-                        >
-                          Sil
-                        </button>
+                        <div className="flex justify-end gap-4">
+                          <button
+                            type="button"
+                            onClick={() => onPost(e)}
+                            className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                          >
+                            Kasaya işle
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onStop(e)}
+                            className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+                          >
+                            Sil
+                          </button>
+                        </div>
                       )}
                     </td>
                   )}

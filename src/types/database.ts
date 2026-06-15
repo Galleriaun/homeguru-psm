@@ -1195,6 +1195,10 @@ export type Database = {
         Args: { _template_id: string };
         Returns: void;
       };
+      post_recurring_instance_now: {
+        Args: { _template_id: string };
+        Returns: Database['public']['Tables']['expenses']['Row'];
+      };
       submit_cash_tx: {
         Args: {
           _cash_account_id: string;

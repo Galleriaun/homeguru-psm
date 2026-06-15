@@ -186,6 +186,21 @@ export async function stopRecurringExpense(templateId: string): Promise<void> {
   if (error) throw wrapErr(error);
 }
 
+/**
+ * Post a recurring expense's current-month instance immediately ("Kasaya işle")
+ * via the post_recurring_instance_now RPC (migration 086) — used when the daily
+ * cron missed it (e.g. the recurring day was fixed after the morning run). Posts
+ * the instance + an approved kasa OUT (when kasa-paid). Idempotent server-side.
+ * `templateId` is the real template id — for a projected row use its __templateId.
+ */
+export async function postRecurringInstanceNow(templateId: string): Promise<ExpenseRow> {
+  const { data, error } = await supabase.rpc('post_recurring_instance_now', {
+    _template_id: templateId,
+  });
+  if (error) throw wrapErr(error);
+  return data as ExpenseRow;
+}
+
 /** Sum of amounts in the supplied list. Pure client-side reduction. */
 export function totalAmount(rows: ExpenseRow[]): number {
   return rows.reduce((acc, r) => acc + Number(r.amount), 0);
