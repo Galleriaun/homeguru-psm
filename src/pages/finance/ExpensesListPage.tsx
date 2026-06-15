@@ -618,9 +618,13 @@ function ExpenseSection({
             'block rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900';
           return e.__projected ? (
             <div key={e.id} className={base}>
-              {body}
+              {/* Projected rows edit the underlying template (recurring day,
+                  amount, name…) — same edit page as a real gider. */}
+              <Link to={`/finance/expenses/${e.__templateId ?? e.id}/edit`} className="block">
+                {body}
+              </Link>
               {canStop && (
-                <div className="mt-2 flex justify-end gap-4">
+                <div className="mt-2 flex justify-end gap-4 border-t border-stone-100 pt-2 dark:border-stone-800">
                   <button
                     type="button"
                     onClick={() => onPost(e)}
@@ -668,20 +672,17 @@ function ExpenseSection({
               {items.map((e) => (
                 <tr
                   key={e.id}
-                  className={
-                    e.__projected
-                      ? ''
-                      : 'cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50'
-                  }
+                  className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-800/50"
                 >
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                    {e.__projected ? (
-                      formatDate(e.expense_date)
-                    ) : (
-                      <Link to={`/finance/expenses/${e.id}/edit`} className="block">
-                        {formatDate(e.expense_date)}
-                      </Link>
-                    )}
+                    {/* Projected rows edit the underlying template; real rows
+                        edit themselves. */}
+                    <Link
+                      to={`/finance/expenses/${e.__templateId ?? e.id}/edit`}
+                      className="block"
+                    >
+                      {formatDate(e.expense_date)}
+                    </Link>
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
                     {expensePropertyLabel(e)}
