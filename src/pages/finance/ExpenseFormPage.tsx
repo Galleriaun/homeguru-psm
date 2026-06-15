@@ -5,6 +5,7 @@ import {
   createExpense,
   deleteExpense,
   getExpense,
+  postRecurringInstanceNow,
   updateExpense,
   EXPENSE_CATEGORIES,
 } from '@/lib/queries/expenses';
@@ -53,6 +54,9 @@ export function ExpenseFormPage() {
   // Whether the expense being edited posted a kasa movement — drives the
   // heads-up shown on the delete dialog.
   const [loadedPaidFromKasa, setLoadedPaidFromKasa] = useState(false);
+  // Whether the loaded expense is a recurring TEMPLATE (is_recurring + no
+  // source) — gates the "Kasaya işle" (post this month's instance) action.
+  const [isTemplate, setIsTemplate] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -61,6 +65,10 @@ export function ExpenseFormPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [confirmPost, setConfirmPost] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -93,6 +101,7 @@ export function ExpenseFormPage() {
                 : '',
           );
           setLoadedPaidFromKasa(e.paid_from_kasa);
+          setIsTemplate(e.is_recurring === true && e.recurring_source_id == null);
         }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Yüklenemedi');
@@ -183,6 +192,21 @@ export function ExpenseFormPage() {
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : 'Silme başarısız');
       setDeleting(false);
+    }
+  };
+
+  // Post this recurring template's current-month instance to the kasa now —
+  // used when the daily cron missed it (RPC is idempotent + branch-scoped).
+  const handlePost = async () => {
+    if (!id) return;
+    setPosting(true);
+    setPostError(null);
+    try {
+      await postRecurringInstanceNow(id);
+      navigate('/finance/expenses', { replace: true });
+    } catch (e) {
+      setPostError(e instanceof Error ? e.message : 'İşlenemedi');
+      setPosting(false);
     }
   };
 
@@ -354,6 +378,31 @@ export function ExpenseFormPage() {
         </form>
       </Card>
 
+      {isTemplate && (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                Bu ayın giderini kasaya işle
+              </p>
+              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                Otomatik kayıt çalışmadıysa bu düzenli giderin bu ayki kaydını
+                elle oluşturur ve (kasadan ödeniyorsa) kasadan düşer.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setPostError(null);
+                setConfirmPost(true);
+              }}
+            >
+              Kasaya işle
+            </Button>
+          </div>
+        </Card>
+      )}
+
       <ConfirmDialog
         open={confirmDelete}
         title="Gider silinsin mi?"
@@ -376,6 +425,27 @@ export function ExpenseFormPage() {
         onCancel={() => {
           setConfirmDelete(false);
           setDeleteError(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmPost}
+        title="Gider şimdi işlensin mi?"
+        description={
+          <>
+            <p>Bu düzenli giderin bu ayki kaydı oluşturulur.</p>
+            <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">
+              Kasadan ödenen bir gider ise tutar kasadan düşülür.
+            </p>
+          </>
+        }
+        confirmLabel="İşle"
+        loading={posting}
+        error={postError}
+        onConfirm={handlePost}
+        onCancel={() => {
+          setConfirmPost(false);
+          setPostError(null);
         }}
       />
     </div>
