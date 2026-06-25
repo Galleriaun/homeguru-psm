@@ -14,19 +14,37 @@ const wrapErr = (e: { message: string; details?: string; hint?: string; code?: s
   );
 
 // =============================================================================
-// General kasa — since migration 036 there is exactly one cash_accounts row
-// (a DB trigger enforces the singleton); it belongs to no property.
+// General kasa — there is one kasa per region (migration 094): the main/HQ
+// "Genel Kasa" (region NULL) plus a kasa per region (e.g. Bornova). RLS scopes
+// what each user sees — a region manager sees only their own kasa, while a
+// SUPER_ADMIN sees all of them. We order region NULLS FIRST so the default pick
+// is always the main Genel Kasa for an admin; a region manager only ever sees
+// their single kasa anyway.
 // =============================================================================
 
-/** The single general kasa, or null if migration 036 hasn't seeded it yet. */
+/** The default kasa for the current user — the main Genel Kasa for an admin,
+ *  or the region's own kasa for a region-scoped manager. Null if unseeded. */
 export async function getGeneralKasa(): Promise<CashAccountRow | null> {
   const { data, error } = await supabase
     .from('cash_accounts')
     .select('*')
+    .order('region', { ascending: true, nullsFirst: true })
     .limit(1)
     .maybeSingle();
   if (error) throw wrapErr(error);
   return data;
+}
+
+/** Every kasa the current user can see — Genel Kasa first, then region kasas
+ *  (Bornova). A SUPER_ADMIN sees all; a region manager sees only their own.
+ *  Drives the kasa switcher on the Kasa page. */
+export async function listCashAccounts(): Promise<CashAccountRow[]> {
+  const { data, error } = await supabase
+    .from('cash_accounts')
+    .select('*')
+    .order('region', { ascending: true, nullsFirst: true });
+  if (error) throw wrapErr(error);
+  return data ?? [];
 }
 
 // =============================================================================

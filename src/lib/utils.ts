@@ -52,9 +52,11 @@ export function istanbulToday(): string {
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'Yönetici',
   PROPERTY_MANAGER: 'Alt Yönetici',
+  YONETICI_BORNOVA: 'Yönetici Bornova',
   RECEPTION: 'Resepsiyon',
   HOUSEKEEPING: 'Temizlik',
   YETKILI: 'Personel',
+  PERSONEL_BORNOVA: 'Personel Bornova',
   PENDING: 'Onay Bekliyor',
 };
 

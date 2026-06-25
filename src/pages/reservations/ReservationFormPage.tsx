@@ -148,6 +148,9 @@ export function ReservationFormPage() {
   const [deposit, setDeposit] = useState(0);
   const [autoDebit, setAutoDebit] = useState(false);
   const [status, setStatus] = useState<ReservationStatus>('active');
+  /** Free-text reservation note + whether the "Not Ekle" textarea is revealed. */
+  const [note, setNote] = useState('');
+  const [showNote, setShowNote] = useState(false);
   // Once the operator picks a status by hand, stop auto-deriving it from dates.
   const [statusEdited, setStatusEdited] = useState(false);
 
@@ -231,6 +234,8 @@ export function ReservationFormPage() {
           setDeposit(Number(r.deposit));
           setAutoDebit(r.auto_debit);
           setStatus(r.status);
+          setNote(r.note ?? '');
+          setShowNote(Boolean(r.note));
         } else {
           // Prefill from query params (e.g. arriving from a calendar cell click)
           const qpProperty = searchParams.get('property');
@@ -416,6 +421,7 @@ export function ReservationFormPage() {
           deposit,
           auto_debit: effectiveAutoDebit,
           status,
+          note: note.trim() || null,
         });
         navigate(`/reservations/${id}`, { replace: true });
       } else {
@@ -446,6 +452,7 @@ export function ReservationFormPage() {
           deposit,
           auto_debit: effectiveAutoDebit,
           status,
+          note: note.trim() || null,
           created_by: user.id,
           google_event_id: googleEventId,
         });
@@ -782,6 +789,35 @@ export function ReservationFormPage() {
               />
               Otomatik borçlandır (her gün giriş saatinde bir gecelik ücret carisine işlenir)
             </label>
+          )}
+
+          {!showNote ? (
+            <button
+              type="button"
+              onClick={() => setShowNote(true)}
+              className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 dark:hover:bg-emerald-900/50"
+            >
+              + Not Ekle
+            </button>
+          ) : (
+            <div>
+              <label
+                htmlFor="reservation_note"
+                className="block text-sm font-medium text-stone-700 dark:text-stone-300"
+              >
+                Not
+              </label>
+              <textarea
+                id="reservation_note"
+                name="reservation_note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="Bu rezervasyon için not (örn. geç giriş, özel istek)…"
+                className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-stone-900 placeholder-stone-400 transition-colors focus:border-emerald-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+              />
+            </div>
           )}
 
           {error && (

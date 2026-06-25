@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import {
   listUnconfirmedPayments,
   confirmPayment,
@@ -9,12 +10,16 @@ import {
 import {
   approveCashTransaction,
   approveExpense,
+  approveReservationDeletion,
+  denyReservationDeletion,
   listPendingCashTransactions,
   listPendingExpenses,
+  listPendingReservationDeletions,
   rejectCashTransaction,
   rejectExpense,
   type PendingCashTx,
   type PendingExpense,
+  type PendingReservationDeletion,
 } from '@/lib/queries/pendingApprovals';
 import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { Button } from '@/components/ui/Button';
@@ -30,7 +35,7 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   CARD: 'Kart',
 };
 
-type Tab = 'payments' | 'expenses' | 'cash_tx';
+type Tab = 'payments' | 'expenses' | 'cash_tx' | 'reservations';
 
 /** Per-action state used to spin the right button + drive the confirm dialog. */
 type PendingAction =
@@ -39,7 +44,9 @@ type PendingAction =
   | { type: 'approve-expense'; item: PendingExpense }
   | { type: 'reject-expense'; item: PendingExpense }
   | { type: 'approve-cash'; item: PendingCashTx }
-  | { type: 'reject-cash'; item: PendingCashTx };
+  | { type: 'reject-cash'; item: PendingCashTx }
+  | { type: 'approve-reservation'; item: PendingReservationDeletion }
+  | { type: 'deny-reservation'; item: PendingReservationDeletion };
 
 /**
  * Money subtotal + per-category breakdown for the active sub-tab. Every row is
@@ -72,7 +79,7 @@ function tabSubtotal(
     if (kasa > 0) rows.push({ label: 'Kasadan', amount: kasa });
     if (other > 0) rows.push({ label: 'Kasa dışı', amount: other });
     total = kasa + other;
-  } else {
+  } else if (tab === 'cash_tx') {
     let inSum = 0;
     let outSum = 0;
     for (const t of cashTxs ?? []) {
@@ -83,6 +90,7 @@ function tabSubtotal(
     if (outSum > 0) rows.push({ label: 'Gider', amount: outSum });
     total = inSum + outSum;
   }
+  // 'reservations' (deletion requests) has no money subtotal → total stays 0.
   return { total, rows };
 }
 
@@ -93,11 +101,20 @@ function tabSubtotal(
  * confirmed flow; expenses + manual kasa entries are new in migration 055.
  */
 export function PendingPaymentsPage() {
+  const { profile } = useAuth();
+  // Reservation deletion requests are resolved by the SUPER_ADMIN (any region)
+  // or a region yönetici for their own region. RLS + the approve/deny RPCs scope
+  // a region manager to their own region's requests (migration 097).
+  const canResolveDeletions =
+    profile?.role === 'SUPER_ADMIN' || profile?.role === 'YONETICI_BORNOVA';
   const [tab, setTab] = useState<Tab>('payments');
 
   const [payments, setPayments] = useState<PendingPaymentWithRefs[] | null>(null);
   const [expenses, setExpenses] = useState<PendingExpense[] | null>(null);
   const [cashTxs, setCashTxs] = useState<PendingCashTx[] | null>(null);
+  const [reservationDeletions, setReservationDeletions] = useState<
+    PendingReservationDeletion[] | null
+  >(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -111,15 +128,20 @@ export function PendingPaymentsPage() {
       listUnconfirmedPayments(),
       listPendingExpenses(),
       listPendingCashTransactions(),
-    ]).then(([p, e, c]) => {
+      canResolveDeletions
+        ? listPendingReservationDeletions()
+        : Promise.resolve<PendingReservationDeletion[]>([]),
+    ]).then(([p, e, c, r]) => {
       if (p.status === 'fulfilled') setPayments(p.value);
       else setLoadError(p.reason?.message ?? 'Tahsilatlar yüklenemedi');
       if (e.status === 'fulfilled') setExpenses(e.value);
       else setLoadError(e.reason?.message ?? 'Giderler yüklenemedi');
       if (c.status === 'fulfilled') setCashTxs(c.value);
       else setLoadError(c.reason?.message ?? 'Kasa hareketleri yüklenemedi');
+      if (r.status === 'fulfilled') setReservationDeletions(r.value);
+      else setLoadError(r.reason?.message ?? 'Silme talepleri yüklenemedi');
     });
-  }, []);
+  }, [canResolveDeletions]);
 
   useEffect(() => {
     refreshAll();
@@ -157,6 +179,18 @@ export function PendingPaymentsPage() {
           await rejectCashTransaction(pending.item.id);
           setCashTxs((prev) => prev?.filter((t) => t.id !== pending.item.id) ?? prev);
           break;
+        case 'approve-reservation':
+          await approveReservationDeletion(pending.item.id);
+          setReservationDeletions(
+            (prev) => prev?.filter((r) => r.id !== pending.item.id) ?? prev,
+          );
+          break;
+        case 'deny-reservation':
+          await denyReservationDeletion(pending.item.id);
+          setReservationDeletions(
+            (prev) => prev?.filter((r) => r.id !== pending.item.id) ?? prev,
+          );
+          break;
       }
       setPending(null);
     } catch (err) {
@@ -166,10 +200,11 @@ export function PendingPaymentsPage() {
     }
   };
 
-  const counts = {
+  const counts: Record<Tab, number> = {
     payments: payments?.length ?? 0,
     expenses: expenses?.length ?? 0,
     cash_tx: cashTxs?.length ?? 0,
+    reservations: reservationDeletions?.length ?? 0,
   };
   const subtotal = tabSubtotal(tab, payments, expenses, cashTxs);
 
@@ -193,7 +228,12 @@ export function PendingPaymentsPage() {
         </Card>
       )}
 
-      <SubTabs tab={tab} setTab={setTab} counts={counts} />
+      <SubTabs
+        tab={tab}
+        setTab={setTab}
+        counts={counts}
+        showReservations={canResolveDeletions}
+      />
 
       {tab === 'payments' && (
         <PaymentsList
@@ -238,26 +278,42 @@ export function PendingPaymentsPage() {
         />
       )}
 
+      {tab === 'reservations' && (
+        <ReservationDeletionsList
+          items={reservationDeletions}
+          onApprove={(it) => {
+            setDialogError(null);
+            setPending({ type: 'approve-reservation', item: it });
+          }}
+          onDeny={(it) => {
+            setDialogError(null);
+            setPending({ type: 'deny-reservation', item: it });
+          }}
+        />
+      )}
+
       {/* Bottom summary — count (right) + money subtotal with a per-category
           breakdown that sums to "Ara Toplam", for the active sub-tab. */}
       {counts[tab] > 0 && (
-        <div className="flex flex-wrap items-start justify-end gap-x-8 gap-y-3">
-          <p className="text-sm font-medium text-stone-600 dark:text-stone-300">
+        <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
+          <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
             Toplam {counts[tab]} onay
           </p>
-          <div className="text-right">
-            <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-              Ara Toplam: {formatTRY(subtotal.total)}
-            </p>
-            {subtotal.rows.map((r) => (
-              <p
-                key={r.label}
-                className="mt-0.5 text-xs text-stone-600 dark:text-stone-300"
-              >
-                {r.label}: {formatTRY(r.amount)}
+          {subtotal.total > 0 && (
+            <div className="text-right">
+              <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                Ara Toplam: {formatTRY(subtotal.total)}
               </p>
-            ))}
-          </div>
+              {subtotal.rows.map((r) => (
+                <p
+                  key={r.label}
+                  className="mt-0.5 text-xs text-stone-600 dark:text-stone-300"
+                >
+                  {r.label}: {formatTRY(r.amount)}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -286,15 +342,20 @@ function SubTabs({
   tab,
   setTab,
   counts,
+  showReservations,
 }: {
   tab: Tab;
   setTab: (t: Tab) => void;
   counts: Record<Tab, number>;
+  showReservations: boolean;
 }) {
   const entries: { value: Tab; label: string }[] = [
     { value: 'payments', label: 'Tahsilat' },
     { value: 'expenses', label: 'Gider' },
     { value: 'cash_tx', label: 'Kasa Hareketi' },
+    ...(showReservations
+      ? [{ value: 'reservations' as Tab, label: 'Rezervasyonlar' }]
+      : []),
   ];
   return (
     <div className="flex flex-wrap gap-2">
@@ -540,6 +601,75 @@ function CashTxList({
 }
 
 // ----------------------------------------------------------------------------
+// Rezervasyon silme talepleri — non-admins request a deletion; SUPER_ADMIN
+// approves (deletes the reservation) or denies (keeps it). Migration 090.
+// ----------------------------------------------------------------------------
+function ReservationDeletionsList({
+  items,
+  onApprove,
+  onDeny,
+}: {
+  items: PendingReservationDeletion[] | null;
+  onApprove: (it: PendingReservationDeletion) => void;
+  onDeny: (it: PendingReservationDeletion) => void;
+}) {
+  if (items === null) {
+    return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
+  }
+  if (items.length === 0) {
+    return (
+      <Card>
+        <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+          Onay bekleyen silme talebi yok.
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {items.map((it) => (
+        <div
+          key={it.id}
+          className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
+        >
+          <div className="min-w-0">
+            <Link
+              to={`/reservations/${it.reservation_id}`}
+              className="font-semibold text-stone-900 hover:underline dark:text-stone-100"
+            >
+              {it.reservation?.guest?.full_name ?? 'Misafir'}
+            </Link>
+            <p className="mt-0.5 truncate text-xs text-stone-600 dark:text-stone-300">
+              {it.reservation?.property?.name ?? '—'}
+              {it.reservation?.unit?.name ? ` · ${it.reservation.unit.name}` : ''}
+            </p>
+            {it.reservation && (
+              <p className="mt-1 text-xs text-stone-700 dark:text-stone-300">
+                {formatDate(it.reservation.stay_start)} –{' '}
+                {formatDate(it.reservation.stay_end)}
+              </p>
+            )}
+            {it.reason && (
+              <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                Sebep: {it.reason}
+              </p>
+            )}
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <Button variant="danger" size="sm" onClick={() => onApprove(it)}>
+              Onayla (Sil)
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => onDeny(it)}>
+              Reddet
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
 // ConfirmDialog copy helpers — keeps the JSX above tidy.
 // ----------------------------------------------------------------------------
 function actionTitle(a: PendingAction): string {
@@ -556,15 +686,27 @@ function actionTitle(a: PendingAction): string {
       return 'Kasa hareketi onaylansın mı?';
     case 'reject-cash':
       return 'Kasa hareketi reddedilsin mi?';
+    case 'approve-reservation':
+      return 'Silme talebi onaylansın mı?';
+    case 'deny-reservation':
+      return 'Silme talebi reddedilsin mi?';
   }
 }
 
 function actionConfirmLabel(a: PendingAction): string {
+  if (a.type === 'approve-reservation') return 'Sil';
+  if (a.type === 'deny-reservation') return 'Reddet';
   return isDestructive(a) ? 'Reddet' : 'Onayla';
 }
 
 function isDestructive(a: PendingAction): boolean {
-  return a.type.startsWith('dispute-') || a.type.startsWith('reject-');
+  // approve-reservation deletes the reservation, so it's the destructive one;
+  // deny-reservation keeps it (safe).
+  return (
+    a.type.startsWith('dispute-') ||
+    a.type.startsWith('reject-') ||
+    a.type === 'approve-reservation'
+  );
 }
 
 function actionDescription(a: PendingAction): ReactNode {
@@ -617,6 +759,21 @@ function actionDescription(a: PendingAction): ReactNode {
           {a.item.direction === 'IN' ? 'Gelir' : 'Gider'}:{' '}
           <strong>{formatTRY(Number(a.item.amount))}</strong>. Reddedilen
           hareket kasa bakiyesini etkilemez.
+        </p>
+      );
+    case 'approve-reservation':
+      return (
+        <p className="text-sm">
+          <strong>{a.item.reservation?.guest?.full_name ?? 'Misafir'}</strong>{' '}
+          rezervasyonu silinir (Çöp Kutusu'na taşınır). Bu işlem silme talebini
+          onaylar.
+        </p>
+      );
+    case 'deny-reservation':
+      return (
+        <p className="text-sm">
+          <strong>{a.item.reservation?.guest?.full_name ?? 'Misafir'}</strong> için
+          silme talebi reddedilir; rezervasyon olduğu gibi kalır.
         </p>
       );
   }

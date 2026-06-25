@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
+import { can, baseRole } from '@/lib/rbac';
 import {
   getProperty,
   deleteProperty,
@@ -79,7 +79,10 @@ export function PropertyDetailPage() {
   const isAdmin = profile && can(profile.role, 'admin:*');
   const canManageProperty = isAdmin;
   const canManageUnits =
-    profile && (isAdmin || profile.role === 'PROPERTY_MANAGER' || profile.role === 'YETKILI');
+    profile &&
+    (isAdmin ||
+      baseRole(profile.role) === 'PROPERTY_MANAGER' ||
+      baseRole(profile.role) === 'YETKILI');
   const isApartmentFull = property.type === 'APARTMENT' && units.length >= 1;
 
   const handleDeleteProperty = async () => {
@@ -183,6 +186,11 @@ export function PropertyDetailPage() {
             >
               {property.type === 'HOTEL' ? 'Bina' : 'Daire'}
             </span>
+            {property.region && (
+              <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-medium capitalize text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                Bölge: {property.region}
+              </span>
+            )}
             {property.address && (
               <span className="text-sm text-stone-600 dark:text-stone-300">{property.address}</span>
             )}

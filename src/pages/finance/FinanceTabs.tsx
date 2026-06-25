@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { baseRole } from '@/lib/rbac';
 import { countPendingApprovals } from '@/lib/queries/pendingApprovals';
 import { cn } from '@/lib/utils';
 
@@ -100,17 +101,17 @@ export function FinanceTabs() {
   // Personel (YETKILI) only has access to Giderler (their own submissions
   // queued for onay). The other three routes are ProtectedRoute-blocked for
   // them anyway, but hiding the tabs avoids dead-end clicks.
-  const isFullFinance =
-    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
+  const r = baseRole(profile?.role);
+  const isFullFinance = r === 'SUPER_ADMIN' || r === 'PROPERTY_MANAGER';
 
   // Badge the "Onaylar" tab with how many items still await approval.
   const [pendingCount, setPendingCount] = useState(0);
   useEffect(() => {
     if (!isFullFinance) return;
-    countPendingApprovals()
+    countPendingApprovals(profile?.role === 'SUPER_ADMIN')
       .then(setPendingCount)
       .catch(() => {});
-  }, [isFullFinance]);
+  }, [isFullFinance, profile?.role]);
 
   return (
     <div className="flex flex-wrap gap-2">

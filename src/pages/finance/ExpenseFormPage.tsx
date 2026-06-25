@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
+import { listAllUnits, type Unit } from '@/lib/queries/units';
 import {
   createExpense,
   deleteExpense,
@@ -17,6 +18,7 @@ import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { cn, istanbulToday } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 /**
  * Dropdown options for the recurring-expense day picker. Empty value = the
@@ -35,12 +37,20 @@ export function ExpenseFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const { profile } = useAuth();
 
   const [properties, setProperties] = useState<Property[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
 
   const [propertyId, setPropertyId] = useState('');
+  // Optional birim within the mülk. '' = Tüm birimler (whole mülk).
+  const [unitId, setUnitId] = useState('');
   // 'general' = not tied to a mülk; 'property' = pick a specific mülk below.
   const [propertyMode, setPropertyMode] = useState<'general' | 'property'>('property');
+  // Region for a GENEL gider. '' = Ana Grup (Genel Kasa); 'bornova' = Bornova.
+  // Picked by users who see every region (Yönetici / Alt Yönetici); a region
+  // manager's genel gider auto-routes to their own region server-side.
+  const [region, setRegion] = useState('');
   const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState('');
@@ -73,8 +83,9 @@ export function ExpenseFormPage() {
   useEffect(() => {
     (async () => {
       try {
-        const props = await listProperties();
+        const [props, us] = await Promise.all([listProperties(), listAllUnits()]);
         setProperties(props);
+        setUnits(us);
         if (!isEdit && props.length > 0 && !propertyId) {
           setPropertyId(props[0].id);
         }
@@ -86,6 +97,8 @@ export function ExpenseFormPage() {
           }
           setPropertyId(e.property_id ?? '');
           setPropertyMode(e.property_id ? 'property' : 'general');
+          setRegion(e.region ?? '');
+          setUnitId(e.unit_id ?? '');
           setCategory(e.category);
           setAmount(Number(e.amount));
           setDescription(e.description ?? '');
@@ -160,6 +173,10 @@ export function ExpenseFormPage() {
           expense_date: expenseDate,
           is_recurring: isRecurring,
           recurring_day: parsedDay,
+          // Only meaningful for a genel gider; the trigger re-derives it from
+          // the mülk for a mülk gider.
+          region: effectivePropertyId === null ? region || null : null,
+          unit_id: effectivePropertyId !== null ? unitId || null : null,
         });
       } else {
         await createExpense({
@@ -173,6 +190,8 @@ export function ExpenseFormPage() {
           // general kasa so the cash balance always reflects reality.
           paidFromKasa: true,
           recurringDay: parsedDay,
+          region: effectivePropertyId === null ? region || null : null,
+          unitId: effectivePropertyId !== null ? unitId || null : null,
         });
       }
       navigate('/finance/expenses', { replace: true });
@@ -209,6 +228,9 @@ export function ExpenseFormPage() {
       setPosting(false);
     }
   };
+
+  // Birim options for the currently-selected mülk.
+  const unitsForProperty = units.filter((u) => u.property_id === propertyId);
 
   if (loading) {
     return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
@@ -287,15 +309,57 @@ export function ExpenseFormPage() {
             </div>
           </div>
 
+          {propertyMode === 'general' &&
+            (profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER') && (
+            <div>
+              <label className="block text-sm font-medium text-stone-700 dark:text-stone-300">
+                Bölge
+              </label>
+              <div className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setRegion(region === 'bornova' ? '' : 'bornova')}
+                  className={cn(
+                    'rounded-md border px-4 py-1.5 text-sm font-medium transition-colors',
+                    region === 'bornova'
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                  )}
+                >
+                  Bornova
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+                "Bornova"ya tıklarsanız gider Bornova kasasına işlenir; aksi halde Genel Kasa'ya.
+              </p>
+            </div>
+          )}
+
           {propertyMode === 'property' && (
             <Select
               label="Mülk"
               name="property"
               required
               value={propertyId}
-              onChange={setPropertyId}
+              onChange={(v) => {
+                setPropertyId(v);
+                setUnitId(''); // reset birim — it belongs to the old mülk
+              }}
               options={sortHotelsFirst(properties).map((p) => ({ value: p.id, label: p.name }))}
               placeholder="Mülk seçin"
+            />
+          )}
+
+          {propertyMode === 'property' && unitsForProperty.length > 0 && (
+            <Select
+              label="Birim"
+              name="unit"
+              value={unitId}
+              onChange={setUnitId}
+              options={[
+                { value: '', label: 'Tüm birimler' },
+                ...unitsForProperty.map((u) => ({ value: u.id, label: u.name })),
+              ]}
             />
           )}
 

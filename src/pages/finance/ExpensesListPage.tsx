@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { baseRole } from '@/lib/rbac';
 import {
   listExpenses,
   listRecurringTemplates,
@@ -56,7 +57,8 @@ function isOrphanedExpense(e: DisplayExpense): boolean {
 /** Property column label — falls back to "silinmiş olan <isim>" for an expense
  *  whose mülk was deleted, and to "Genel" for a truly property-less expense. */
 function expensePropertyLabel(e: DisplayExpense): string {
-  if (e.property?.name) return e.property.name;
+  if (e.property?.name)
+    return e.unit?.name ? `${e.property.name} · ${e.unit.name}` : e.property.name;
   if (e.deleted_property_name) return `silinmiş olan ${e.deleted_property_name}`;
   return 'Genel';
 }
@@ -85,14 +87,12 @@ export function ExpensesListPage() {
 
   // YETKILI may *submit* a gider (queues pending), but doesn't have
   // finance:write for edits. Surface the "+ Yeni Gider" button for them too.
+  const r = baseRole(profile?.role);
   const canCreateExpense =
-    profile?.role === 'SUPER_ADMIN' ||
-    profile?.role === 'PROPERTY_MANAGER' ||
-    profile?.role === 'YETKILI';
+    r === 'SUPER_ADMIN' || r === 'PROPERTY_MANAGER' || r === 'YETKILI';
   // Stopping a recurring series is a finance:write action (matches the
   // expenses_update / expenses_delete RLS in migration 064) — not YETKILI.
-  const canStopRecurring =
-    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
+  const canStopRecurring = r === 'SUPER_ADMIN' || r === 'PROPERTY_MANAGER';
 
   // Load properties + staff directory once
   useEffect(() => {

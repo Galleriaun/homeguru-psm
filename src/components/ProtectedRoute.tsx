@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { baseRole } from '@/lib/rbac';
 import type { ReactNode } from 'react';
 import type { Role } from '@/types/database';
 
@@ -34,7 +35,9 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
     );
   }
 
-  if (allowedRoles && !allowedRoles.includes(profile.role)) {
+  // Region-scoped roles (e.g. YONETICI_BORNOVA, PERSONEL_BORNOVA) gate routes as
+  // their base role; the region restriction is enforced server-side by RLS.
+  if (allowedRoles && !allowedRoles.includes(baseRole(profile.role) as Role)) {
     return <Navigate to="/dashboard" replace />;
   }
 

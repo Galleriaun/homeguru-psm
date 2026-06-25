@@ -72,7 +72,9 @@ export async function listPendingCashTransactions(): Promise<PendingCashTx[]> {
  * every finance page load to badge the "Onaylar" tab. RLS scopes the counts to
  * the caller's branch automatically.
  */
-export async function countPendingApprovals(): Promise<number> {
+export async function countPendingApprovals(
+  includeReservations = false,
+): Promise<number> {
   const [exp, cash, pay] = await Promise.all([
     supabase
       .from('expenses')
@@ -90,7 +92,20 @@ export async function countPendingApprovals(): Promise<number> {
   if (exp.error) throw wrapErr(exp.error);
   if (cash.error) throw wrapErr(cash.error);
   if (pay.error) throw wrapErr(pay.error);
-  return (exp.count ?? 0) + (cash.count ?? 0) + (pay.count ?? 0);
+  let total = (exp.count ?? 0) + (cash.count ?? 0) + (pay.count ?? 0);
+
+  // Reservation deletion requests are resolved by SUPER_ADMIN only (the Onaylar
+  // "Rezervasyonlar" tab is theirs), so only fold them into the badge for them —
+  // a manager would otherwise see a count with no tab to act on.
+  if (includeReservations) {
+    const rez = await supabase
+      .from('reservation_deletion_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    if (rez.error) throw wrapErr(rez.error);
+    total += rez.count ?? 0;
+  }
+  return total;
 }
 
 export async function approveCashTransaction(id: string): Promise<CashTxRow> {
@@ -109,4 +124,51 @@ export async function rejectCashTransaction(
   });
   if (error) throw wrapErr(error);
   return data as CashTxRow;
+}
+
+// =============================================================================
+// Pending reservation DELETION requests — filed by non-admins (migration 090).
+// SUPER_ADMIN approves (deletes the reservation → Çöp Kutusu) or denies (keeps
+// it) from the Onaylar "Rezervasyonlar" tab.
+// =============================================================================
+
+export interface PendingReservationDeletion {
+  id: string;
+  reservation_id: string;
+  reason: string | null;
+  requested_by: string | null;
+  created_at: string;
+  reservation: {
+    stay_start: string;
+    stay_end: string;
+    guest: { full_name: string } | null;
+    unit: { name: string } | null;
+    property: { name: string } | null;
+  } | null;
+}
+
+export async function listPendingReservationDeletions(): Promise<PendingReservationDeletion[]> {
+  const { data, error } = await supabase
+    .from('reservation_deletion_requests')
+    .select(
+      'id, reservation_id, reason, requested_by, created_at, reservation:reservations(stay_start, stay_end, guest:guests(full_name), unit:units(name), property:properties(name))',
+    )
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) throw wrapErr(error);
+  return (data as unknown as PendingReservationDeletion[]) ?? [];
+}
+
+export async function approveReservationDeletion(requestId: string): Promise<void> {
+  const { error } = await supabase.rpc('approve_reservation_deletion', {
+    _request_id: requestId,
+  });
+  if (error) throw wrapErr(error);
+}
+
+export async function denyReservationDeletion(requestId: string): Promise<void> {
+  const { error } = await supabase.rpc('deny_reservation_deletion', {
+    _request_id: requestId,
+  });
+  if (error) throw wrapErr(error);
 }

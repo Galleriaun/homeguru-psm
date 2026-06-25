@@ -14,7 +14,7 @@ export function PropertiesListPage() {
   const [properties, setProperties] = useState<Property[] | null>(null);
   const [units, setUnits] = useState<Unit[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'ALL' | 'HOTEL' | 'APARTMENT'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'HOTEL' | 'APARTMENT' | 'BORNOVA'>('ALL');
 
   useEffect(() => {
     // Load properties + units in parallel so the card can show each mülk's
@@ -74,7 +74,18 @@ export function PropertiesListPage() {
   }, [units]);
 
   const canCreate = profile && can(profile.role, 'admin:*');
-  const filtered = (properties?.filter((p) => filter === 'ALL' || p.type === filter) ?? [])
+  // The Bornova filter only helps someone who sees BOTH regions: the Yönetici
+  // (SUPER_ADMIN) and the Alt Yönetici (PROPERTY_MANAGER). A Yönetici Bornova
+  // sees only Bornova, so the chip would be pointless for them.
+  const canSeeBornovaFilter =
+    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
+  const filtered = (
+    properties?.filter((p) => {
+      if (filter === 'ALL') return true;
+      if (filter === 'BORNOVA') return p.region === 'bornova';
+      return p.type === filter;
+    }) ?? []
+  )
     // On "Tümü", show hotels first; within each type, preserve oldest-first order
     .sort((a, b) => {
       if (filter === 'ALL' && a.type !== b.type) {
@@ -100,8 +111,15 @@ export function PropertiesListPage() {
       </div>
 
       {/* Filter chips */}
-      <div className="flex gap-2">
-        {(['ALL', 'HOTEL', 'APARTMENT'] as const).map((f) => (
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            'ALL',
+            'HOTEL',
+            'APARTMENT',
+            ...(canSeeBornovaFilter ? (['BORNOVA'] as const) : []),
+          ] as const
+        ).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -111,7 +129,13 @@ export function PropertiesListPage() {
                 : 'rounded-full border border-stone-300 px-4 py-1 text-sm text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800'
             }
           >
-            {f === 'ALL' ? 'Tümü' : f === 'HOTEL' ? 'Binalar' : 'Daireler'}
+            {f === 'ALL'
+              ? 'Tümü'
+              : f === 'HOTEL'
+                ? 'Binalar'
+                : f === 'APARTMENT'
+                  ? 'Daireler'
+                  : 'Bornova'}
           </button>
         ))}
       </div>
@@ -169,6 +193,11 @@ export function PropertiesListPage() {
                       {priceByProperty.has(p.id) && (
                         <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                           {priceByProperty.get(p.id)}
+                        </span>
+                      )}
+                      {p.region && (
+                        <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium capitalize tracking-wide text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                          {p.region}
                         </span>
                       )}
                     </div>

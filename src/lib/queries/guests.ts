@@ -42,6 +42,21 @@ export async function listGuests(): Promise<GuestSummary[]> {
 }
 
 /**
+ * IDs of guests who have at least one (active) reservation at a Bornova mülk.
+ * Powers the "Bornova" filter on the misafir list for the Yönetici / Alt
+ * Yönetici (a guest is "Bornova" only by virtue of a Bornova reservation).
+ */
+export async function listBornovaGuestIds(): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('guest_id, properties!inner(region)')
+    .eq('properties.region', 'bornova')
+    .is('deleted_at', null);
+  if (error) throw new Error(`${error.message}${error.code ? ` (${error.code})` : ''}`);
+  return new Set((data ?? []).map((r) => (r as { guest_id: string }).guest_id));
+}
+
+/**
  * Fetches a guest with TC/passport decrypted server-side.
  * Each call writes an entry to audit_log (KVKK requirement).
  */

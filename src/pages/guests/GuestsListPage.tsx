@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
-import { listGuests, type GuestSummary } from '@/lib/queries/guests';
+import { listGuests, listBornovaGuestIds, type GuestSummary } from '@/lib/queries/guests';
 import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -12,9 +12,16 @@ import { formatDate } from '@/lib/utils';
 
 export function GuestsListPage() {
   const { profile } = useAuth();
+  // The Bornova filter is for those who see every region's guests — Yönetici
+  // (SUPER_ADMIN) and Alt Yönetici (PROPERTY_MANAGER). Bornova roles already see
+  // only Bornova guests, so they need no filter.
+  const seesAllRegions =
+    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
   const [guests, setGuests] = useState<GuestSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [region, setRegion] = useState<'ALL' | 'BORNOVA'>('ALL');
+  const [bornovaIds, setBornovaIds] = useState<Set<string> | null>(null);
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   useEffect(() => {
@@ -23,21 +30,31 @@ export function GuestsListPage() {
       .catch((e) => setError(e?.message ?? 'Misafirler yüklenemedi'));
     // Best-effort: powers the "Oluşturan: X" line on each guest box.
     loadStaffDirectory().then(setStaffMap).catch(() => {});
-  }, []);
+    // Bornova-linked guest ids power the Bornova filter (admins/Alt Yönetici).
+    if (seesAllRegions) {
+      listBornovaGuestIds().then(setBornovaIds).catch(() => {});
+    }
+  }, [seesAllRegions]);
 
   const canCreate = profile && can(profile.role, 'guest:create');
 
   const filtered = useMemo(() => {
     if (!guests) return [];
+    let list = guests;
+    if (region === 'BORNOVA' && bornovaIds) {
+      list = list.filter((g) => bornovaIds.has(g.id));
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return guests;
-    return guests.filter(
-      (g) =>
-        g.full_name.toLowerCase().includes(q) ||
-        (g.phone ?? '').toLowerCase().includes(q) ||
-        (g.email ?? '').toLowerCase().includes(q),
-    );
-  }, [guests, search]);
+    if (q) {
+      list = list.filter(
+        (g) =>
+          g.full_name.toLowerCase().includes(q) ||
+          (g.phone ?? '').toLowerCase().includes(q) ||
+          (g.email ?? '').toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [guests, search, region, bornovaIds]);
 
   return (
     <div className="space-y-6">
@@ -63,6 +80,24 @@ export function GuestsListPage() {
           placeholder="Ad, telefon veya e-posta ile ara…"
         />
       </div>
+
+      {seesAllRegions && (
+        <div className="flex flex-wrap gap-2">
+          {(['ALL', 'BORNOVA'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setRegion(f)}
+              className={
+                region === f
+                  ? 'rounded-full bg-emerald-600 px-4 py-1 text-sm font-medium text-white'
+                  : 'rounded-full border border-stone-300 px-4 py-1 text-sm text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800'
+              }
+            >
+              {f === 'ALL' ? 'Tümü' : 'Bornova'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">

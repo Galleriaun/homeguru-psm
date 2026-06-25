@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { cn } from '@/lib/utils';
 import {
   uploadPropertyPhoto,
   propertyPhotoUrl,
@@ -25,6 +26,9 @@ export function PropertyFormPage() {
   const [name, setName] = useState('');
   const [type, setType] = useState<PropertyType>('HOTEL');
   const [address, setAddress] = useState('');
+  /** Region/bölge label — groups mülkler for region-scoped managers. Empty =
+      ana grup (HQ). Stored lowercase so the staff match is never case-tripped. */
+  const [region, setRegion] = useState('');
   /** Current ordered list of photo paths to persist on save. */
   const [photoPaths, setPhotoPaths] = useState<string[]>([]);
   /** Snapshot of the original photo_paths from the DB — used to detect removals. */
@@ -49,6 +53,7 @@ export function PropertyFormPage() {
         setName(p.name);
         setType(p.type);
         setAddress(p.address ?? '');
+        setRegion(p.region ?? '');
         setPhotoPaths(p.photo_paths ?? []);
         setOriginalPaths(p.photo_paths ?? []);
       })
@@ -98,6 +103,7 @@ export function PropertyFormPage() {
         type,
         address: address.trim() || null,
         photo_paths: photoPaths,
+        region: region.trim().toLowerCase() || null,
       };
       let nextId = id;
       if (isEdit && id) {
@@ -170,6 +176,29 @@ export function PropertyFormPage() {
             onChange={(e) => setAddress(e.target.value)}
             placeholder="Mahalle, Sokak, Daire"
           />
+
+          <div>
+            <label className="block text-sm font-medium text-stone-700 dark:text-stone-300">
+              Bölge
+            </label>
+            <div className="mt-1">
+              <button
+                type="button"
+                onClick={() => setRegion(region === 'bornova' ? '' : 'bornova')}
+                className={cn(
+                  'rounded-md border px-4 py-1.5 text-sm font-medium transition-colors',
+                  region === 'bornova'
+                    ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-300'
+                    : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+                )}
+              >
+                Bornova
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+              "Bornova"ya tıklarsanız bu mülk Bornova bölgesine bağlanır
+            </p>
+          </div>
 
           {/* Photo gallery */}
           <div>

@@ -17,7 +17,9 @@ interface Props {
 const ALL_ROLES: Role[] = [
   'SUPER_ADMIN',
   'PROPERTY_MANAGER',
+  'YONETICI_BORNOVA',
   'YETKILI',
+  'PERSONEL_BORNOVA',
   'RECEPTION',
   'HOUSEKEEPING',
   'PENDING',

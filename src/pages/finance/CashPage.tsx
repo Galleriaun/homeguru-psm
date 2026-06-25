@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import {
-  getGeneralKasa,
+  listCashAccounts,
   listCashTransactions,
   deleteCashTransaction,
   balanceOf,
@@ -56,6 +56,10 @@ export function CashPage() {
   const { profile, user } = useAuth();
 
   const [account, setAccount] = useState<CashAccount | null>(null);
+  // Every kasa the user can see. >1 only for a SUPER_ADMIN (Genel + Bornova),
+  // which is what surfaces the kasa switcher.
+  const [accounts, setAccounts] = useState<CashAccount[]>([]);
+  const [switchingKasa, setSwitchingKasa] = useState(false);
   const [transactions, setTransactions] = useState<CashTransactionWithRefs[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,8 +74,10 @@ export function CashPage() {
   );
   /** Sub-range for the Gün Bazlı view: Bugün / Hafta / Ay. */
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month'>('day');
-  /** Selected calendar day (ISO) when kasaView === 'calendar'. Defaults to today. */
-  const [calendarDate, setCalendarDate] = useState<string>(() => istanbulToday());
+  /** Selected Takvim date range (ISO, inclusive). Both default to today, so the
+      view opens on a single day and can be widened into a range. */
+  const [calendarStart, setCalendarStart] = useState<string>(() => istanbulToday());
+  const [calendarEnd, setCalendarEnd] = useState<string>(() => istanbulToday());
   /** Selected property id when kasaView === 'property'. */
   const [propertyFilter, setPropertyFilter] = useState<string>('');
   /** Selected day (ISO) for the Mülk Bazlı view — used only when range is Takvim. */
@@ -107,6 +113,17 @@ export function CashPage() {
     return d.toISOString().slice(0, 10);
   };
 
+  // Takvim range, normalised so the earlier date is always the low bound (the
+  // user may pick the end before the start). String compare on 'YYYY-MM-DD' is
+  // chronological.
+  const calendarRange = useMemo(
+    () =>
+      calendarStart <= calendarEnd
+        ? { lo: calendarStart, hi: calendarEnd }
+        : { lo: calendarEnd, hi: calendarStart },
+    [calendarStart, calendarEnd],
+  );
+
   // Apply the view-mode cut first (Genel / Gün / Mülk), then the direction
   // chip (Gelir / Gider / Tümü). Balance + totals at the top reflect the
   // view cut only (so flipping Gelir vs Gider doesn't change the headline
@@ -128,12 +145,13 @@ export function CashPage() {
       });
     }
     if (kasaView === 'calendar') {
-      // Ciro for one chosen calendar day, anchored on each tx's date (see
-      // txDateBasis): guest payments on the reservation's aktif olma date,
+      // Ciro for the chosen date range (inclusive), anchored on each tx's date
+      // (see txDateBasis): guest payments on the reservation's aktif olma date,
       // manual entries on created_at.
-      return transactions.filter(
-        (t) => toIstanbulDate(txDateBasis(t)) === calendarDate,
-      );
+      return transactions.filter((t) => {
+        const d = toIstanbulDate(txDateBasis(t));
+        return d >= calendarRange.lo && d <= calendarRange.hi;
+      });
     }
     if (kasaView === 'property') {
       if (!propertyFilter) return [];
@@ -160,7 +178,7 @@ export function CashPage() {
     propertyDate,
     propertyRange,
     timeRange,
-    calendarDate,
+    calendarRange,
   ]);
 
   const filteredTransactions = useMemo(() => {
@@ -195,11 +213,13 @@ export function CashPage() {
     setError(null);
     (async () => {
       try {
-        const a = await getGeneralKasa();
-        if (!a) {
-          setError('Genel kasa bulunamadı. 036 numaralı migration uygulanmalı.');
+        const accs = await listCashAccounts();
+        if (accs.length === 0) {
+          setError('Kasa bulunamadı. Kasa migration\'ları uygulanmalı.');
           return;
         }
+        setAccounts(accs);
+        const a = accs[0];
         setAccount(a);
         setTransactions(await listCashTransactions(a.id));
         loadStaffDirectory().then(setStaffMap).catch(() => {});
@@ -211,6 +231,22 @@ export function CashPage() {
       }
     })();
   }, []);
+
+  // Switch which kasa (Genel / Bornova) the page shows. Reloads that kasa's
+  // movements; balance + all views recompute from the new set.
+  const selectKasa = async (acc: CashAccount) => {
+    if (acc.id === account?.id) return;
+    setSwitchingKasa(true);
+    setError(null);
+    try {
+      setAccount(acc);
+      setTransactions(await listCashTransactions(acc.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Kasa yüklenemedi');
+    } finally {
+      setSwitchingKasa(false);
+    }
+  };
 
   const handleDeleteTx = async () => {
     if (!txToDelete) return;
@@ -249,11 +285,34 @@ export function CashPage() {
             Kasa
           </h1>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
-            İşletmenin genel nakit kasası
+            {account?.name ?? 'İşletmenin nakit kasası'}
           </p>
         </div>
         <FinanceTabs />
       </div>
+
+      {/* Kasa switcher — only when the user can see more than one kasa (admin:
+          Genel + Bornova). A region manager sees a single kasa and no switcher. */}
+      {accounts.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {accounts.map((acc) => (
+            <button
+              key={acc.id}
+              type="button"
+              onClick={() => selectKasa(acc)}
+              disabled={switchingKasa}
+              className={cn(
+                'rounded-full border px-4 py-1 text-sm font-medium transition-colors disabled:opacity-60',
+                acc.id === account?.id
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+              )}
+            >
+              {acc.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
@@ -413,13 +472,22 @@ export function CashPage() {
 
           {kasaView === 'calendar' && (
             <Card>
-              <DateInput
-                label="Gün seçin"
-                name="cash_calendar_date"
-                value={calendarDate}
-                onChange={(iso) => iso && setCalendarDate(iso)}
-                max={istanbulToday()}
-              />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <DateInput
+                  label="Başlangıç"
+                  name="cash_calendar_start"
+                  value={calendarStart}
+                  onChange={(iso) => iso && setCalendarStart(iso)}
+                  max={istanbulToday()}
+                />
+                <DateInput
+                  label="Bitiş"
+                  name="cash_calendar_end"
+                  value={calendarEnd}
+                  onChange={(iso) => iso && setCalendarEnd(iso)}
+                  max={istanbulToday()}
+                />
+              </div>
             </Card>
           )}
 
@@ -477,7 +545,9 @@ export function CashPage() {
           {kasaView === 'calendar' && (
             <Card className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-stone-600 dark:text-stone-300">
-                {formatDate(calendarDate)} Cirosu
+                {calendarRange.lo === calendarRange.hi
+                  ? `${formatDate(calendarRange.lo)} Cirosu`
+                  : `${formatDate(calendarRange.lo)} – ${formatDate(calendarRange.hi)} Cirosu`}
               </p>
               <div className="flex flex-wrap items-baseline gap-4">
                 <p className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">

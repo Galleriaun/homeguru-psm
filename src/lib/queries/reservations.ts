@@ -61,7 +61,7 @@ export async function listReservations(): Promise<ReservationWithRefs[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, note, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
     .order('stay_start', { ascending: false })
     .limit(1000);
@@ -79,7 +79,7 @@ export async function listActiveReservations(): Promise<ReservationWithRefs[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, note, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
     .eq('status', 'active')
     .order('stay_start', { ascending: false });
@@ -98,7 +98,7 @@ export async function listReservationsInRange(
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
+      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, note, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
     )
     .lt('stay_start', endISO)
     .gt('stay_end', startISO)
@@ -180,4 +180,39 @@ export async function deleteReservation(id: string): Promise<void> {
     }
     throw e;
   }
+}
+
+/**
+ * A non-admin files a reservation DELETION REQUEST (migration 090). The request
+ * lands in Onaylar for a SUPER_ADMIN to approve (deletes) or deny (keeps); the
+ * reservation stays untouched until then. Idempotent server-side (one pending
+ * request per reservation).
+ */
+export async function requestReservationDeletion(
+  id: string,
+  reason: string | null = null,
+): Promise<void> {
+  const { error } = await supabase.rpc('request_reservation_deletion', {
+    _reservation_id: id,
+    _reason: reason,
+  });
+  if (error) throw wrapErr(error);
+}
+
+/**
+ * The pending deletion request for a reservation, if any — drives the detail
+ * page "onay bekliyor" banner. Returns null when there is none (or it isn't
+ * visible to the caller under RLS).
+ */
+export async function getPendingDeletionRequest(
+  reservationId: string,
+): Promise<{ id: string; requested_by: string | null; created_at: string } | null> {
+  const { data, error } = await supabase
+    .from('reservation_deletion_requests')
+    .select('id, requested_by, created_at')
+    .eq('reservation_id', reservationId)
+    .eq('status', 'pending')
+    .maybeSingle();
+  if (error) throw wrapErr(error);
+  return data ?? null;
 }

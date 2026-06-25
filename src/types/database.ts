@@ -21,9 +21,15 @@ export type Json =
 export type Role =
   | 'SUPER_ADMIN'
   | 'PROPERTY_MANAGER'
+  // Region yönetici — behaves as PROPERTY_MANAGER but scoped to the Bornova
+  // region (server: auth_role() normalises it to PROPERTY_MANAGER, auth_region()
+  // derives 'bornova'). Migration 098.
+  | 'YONETICI_BORNOVA'
   | 'RECEPTION'
   | 'HOUSEKEEPING'
   | 'YETKILI'
+  // Region personel — behaves as YETKILI but scoped to Bornova. Migration 100.
+  | 'PERSONEL_BORNOVA'
   | 'PENDING';
 /** Which properties a staff member works across (branch isolation, migration 033). */
 export type AccessScope = 'ALL' | 'HOTELS' | 'APARTMENTS';
@@ -58,6 +64,7 @@ export type Database = {
           address: string | null;
           manager_user_id: string | null;
           photo_paths: string[];
+          region: string | null;
           created_at: string;
         };
         Insert: {
@@ -67,6 +74,7 @@ export type Database = {
           address?: string | null;
           manager_user_id?: string | null;
           photo_paths?: string[];
+          region?: string | null;
           created_at?: string;
         };
         Update: {
@@ -76,6 +84,7 @@ export type Database = {
           address?: string | null;
           manager_user_id?: string | null;
           photo_paths?: string[];
+          region?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -123,6 +132,7 @@ export type Database = {
           role: Role;
           property_id: string | null;
           access_scope: AccessScope;
+          region: string | null;
           salary: number | null;
           salary_day: number | null;
           hire_date: string | null;
@@ -135,6 +145,7 @@ export type Database = {
           role: Role;
           property_id?: string | null;
           access_scope?: AccessScope;
+          region?: string | null;
           salary?: number | null;
           salary_day?: number | null;
           hire_date?: string | null;
@@ -147,6 +158,7 @@ export type Database = {
           role?: Role;
           property_id?: string | null;
           access_scope?: AccessScope;
+          region?: string | null;
           salary?: number | null;
           salary_day?: number | null;
           hire_date?: string | null;
@@ -473,6 +485,7 @@ export type Database = {
           cari_blocked: boolean;
           deleted_property_name: string | null;
           deleted_unit_name: string | null;
+          note: string | null;
         };
         Insert: {
           id?: string;
@@ -494,6 +507,7 @@ export type Database = {
           cari_blocked?: boolean;
           deleted_property_name?: string | null;
           deleted_unit_name?: string | null;
+          note?: string | null;
         };
         Update: {
           id?: string;
@@ -515,6 +529,43 @@ export type Database = {
           cari_blocked?: boolean;
           deleted_property_name?: string | null;
           deleted_unit_name?: string | null;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      reservation_deletion_requests: {
+        Row: {
+          id: string;
+          reservation_id: string;
+          property_id: string | null;
+          requested_by: string | null;
+          reason: string | null;
+          status: 'pending' | 'approved' | 'denied';
+          resolved_by: string | null;
+          resolved_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          reservation_id: string;
+          property_id?: string | null;
+          requested_by?: string | null;
+          reason?: string | null;
+          status?: 'pending' | 'approved' | 'denied';
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          reservation_id?: string;
+          property_id?: string | null;
+          requested_by?: string | null;
+          reason?: string | null;
+          status?: 'pending' | 'approved' | 'denied';
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -890,6 +941,8 @@ export type Database = {
           paid_from_kasa: boolean;
           recurring_source_id: string | null;
           recurring_day: number | null;
+          region: string | null;
+          unit_id: string | null;
           approval_status: 'pending' | 'approved' | 'rejected';
           reviewed_by: string | null;
           reviewed_at: string | null;
@@ -909,6 +962,8 @@ export type Database = {
           paid_from_kasa?: boolean;
           recurring_source_id?: string | null;
           recurring_day?: number | null;
+          region?: string | null;
+          unit_id?: string | null;
           approval_status?: 'pending' | 'approved' | 'rejected';
           reviewed_by?: string | null;
           reviewed_at?: string | null;
@@ -928,6 +983,8 @@ export type Database = {
           paid_from_kasa?: boolean;
           recurring_source_id?: string | null;
           recurring_day?: number | null;
+          region?: string | null;
+          unit_id?: string | null;
           approval_status?: 'pending' | 'approved' | 'rejected';
           reviewed_by?: string | null;
           reviewed_at?: string | null;
@@ -1198,6 +1255,18 @@ export type Database = {
       post_recurring_instance_now: {
         Args: { _template_id: string };
         Returns: Database['public']['Tables']['expenses']['Row'];
+      };
+      request_reservation_deletion: {
+        Args: { _reservation_id: string; _reason?: string | null };
+        Returns: Database['public']['Tables']['reservation_deletion_requests']['Row'];
+      };
+      approve_reservation_deletion: {
+        Args: { _request_id: string };
+        Returns: void;
+      };
+      deny_reservation_deletion: {
+        Args: { _request_id: string };
+        Returns: void;
       };
       submit_cash_tx: {
         Args: {

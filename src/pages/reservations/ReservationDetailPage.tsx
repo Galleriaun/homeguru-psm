@@ -5,6 +5,8 @@ import { can, canCollectPayment } from '@/lib/rbac';
 import {
   cancelReservation,
   deleteReservation,
+  requestReservationDeletion,
+  getPendingDeletionRequest,
   getReservation,
   setCariBlocked,
   isOrphanedReservation,
@@ -76,6 +78,10 @@ export function ReservationDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Deletion approval (migration 090): non-admins file a request a SUPER_ADMIN
+  // resolves in Onaylar. `deletionPending` drives the "onay bekliyor" badge.
+  const [requesting, setRequesting] = useState(false);
+  const [deletionPending, setDeletionPending] = useState(false);
 
   // Cari hesap (ledger) — gated to finance:read
   const [ledger, setLedger] = useState<LedgerEntry[] | null>(null);
@@ -135,6 +141,10 @@ export function ReservationDetailPage() {
         setReservation(r);
         setProperty(p);
         setUnit(u);
+        // Best-effort: surface an existing pending deletion request as a badge.
+        getPendingDeletionRequest(id)
+          .then((req) => setDeletionPending(Boolean(req)))
+          .catch(() => {});
         setGuestName(g.data?.full_name ?? '');
         setGuestPhone(g.data?.phone ?? null);
         setGuestIsProblematic(g.data?.is_problematic ?? false);
@@ -194,6 +204,9 @@ export function ReservationDetailPage() {
   const canEdit = profile && can(profile.role, 'reservation:update');
   const canCancel = profile && can(profile.role, 'reservation:cancel');
   const canDelete = profile && can(profile.role, 'reservation:delete');
+  // SUPER_ADMIN deletes outright; everyone else's delete becomes a request that
+  // a SUPER_ADMIN approves/denies in Onaylar (migration 090).
+  const isSuperAdmin = profile?.role === 'SUPER_ADMIN';
   /** Can flip the persistent guest warning flag. */
   const canEditGuest = Boolean(profile && can(profile.role, 'guest:update'));
   // Ödeme Topla — type-conditional: HOTEL=reception, APARTMENT=housekeeping; manager+admin everywhere.
@@ -261,6 +274,22 @@ export function ReservationDetailPage() {
       // Keep the dialog open and show the reason inside it
       setDeleteError(e instanceof Error ? e.message : 'Silme başarısız');
       setDeleting(false);
+    }
+  };
+
+  // Non-admin path: file a deletion request (stays on the page; the reservation
+  // is untouched until a SUPER_ADMIN approves it in Onaylar).
+  const handleRequestDeletion = async () => {
+    if (!id) return;
+    setRequesting(true);
+    setDeleteError(null);
+    try {
+      await requestReservationDeletion(id);
+      setDeletionPending(true);
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Talep gönderilemedi');
+    } finally {
+      setRequesting(false);
     }
   };
 
@@ -402,17 +431,29 @@ export function ReservationDetailPage() {
               İptal Et
             </Button>
           )}
-          {canDelete && (
+          {canDelete && (isSuperAdmin || !deletionPending) && (
             <Button
               variant="danger"
               size="sm"
+              loading={!isSuperAdmin && requesting}
               onClick={() => {
                 setDeleteError(null);
-                setConfirmDelete(true);
+                // SUPER_ADMIN confirms a real delete; everyone else files the
+                // request straight away (no confirm step).
+                if (isSuperAdmin) setConfirmDelete(true);
+                else handleRequestDeletion();
               }}
             >
               Sil
             </Button>
+          )}
+          {deletionPending && (
+            <span className="inline-flex items-center rounded-md bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              Silme talebi onay bekliyor
+            </span>
+          )}
+          {!isSuperAdmin && deleteError && (
+            <p className="w-full text-sm text-red-600 dark:text-red-400">{deleteError}</p>
           )}
         </div>
       </div>
@@ -478,6 +519,16 @@ export function ReservationDetailPage() {
           />
           <Field label="Durum" value={STATUS_LABELS[reservation.status]} />
         </dl>
+        {reservation.note && (
+          <div className="mt-4 border-t border-stone-200 pt-3 dark:border-stone-700">
+            <p className="text-xs font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+              Not
+            </p>
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-stone-800 dark:text-stone-200">
+              {reservation.note}
+            </p>
+          </div>
+        )}
       </Card>
 
       {canSeeLedger && (

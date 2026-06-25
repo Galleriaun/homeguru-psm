@@ -17,6 +17,19 @@ export async function listProperties() {
   return data;
 }
 
+/** Distinct region (bölge) labels currently in use — powers the Bölge picker
+ *  so an existing region is clicked, not re-typed. RLS-filtered. */
+export async function listRegions(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('properties')
+    .select('region')
+    .not('region', 'is', null);
+  if (error) throw error;
+  const set = new Set<string>();
+  for (const r of data ?? []) if (r.region) set.add(r.region);
+  return [...set].sort();
+}
+
 /** Fetch a single property by ID. Returns null if not found / not visible. */
 export async function getProperty(id: string) {
   const { data, error } = await supabase

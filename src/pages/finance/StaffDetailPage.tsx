@@ -21,6 +21,7 @@ import { PaySalaryModal } from './PaySalaryModal';
 import { AssignScopeModal } from './AssignScopeModal';
 import { EditRoleModal } from './EditRoleModal';
 import { formatDate, formatTRY, formatRole, formatScope } from '@/lib/utils';
+import { baseRole } from '@/lib/rbac';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', {
   timeZone: 'Europe/Istanbul',
@@ -80,7 +81,8 @@ export function StaffDetailPage() {
   const canAssignScope = profile?.role === 'SUPER_ADMIN';
   const canChangeRole = profile?.role === 'SUPER_ADMIN';
   const canPaySalary =
-    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
+    baseRole(profile?.role) === 'SUPER_ADMIN' ||
+    baseRole(profile?.role) === 'PROPERTY_MANAGER';
   // delete_staff RPC blocks self-delete on the server too, but hiding the
   // button up-front saves the operator the round trip + error toast.
   const canDelete = profile?.role === 'SUPER_ADMIN' && userId !== user?.id;

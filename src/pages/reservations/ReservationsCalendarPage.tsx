@@ -175,6 +175,9 @@ export function ReservationsCalendarPage() {
   };
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  // Region filter for the Yönetici / Alt Yönetici (who see every region). The
+  // Bornova roles already see only Bornova, so they get no toggle.
+  const [regionFilter, setRegionFilter] = useState<'ALL' | 'BORNOVA'>('ALL');
   const [reservations, setReservations] = useState<ReservationWithRefs[]>([]);
   const [blocks, setBlocks] = useState<PropertyBlock[]>([]);
   const [notes, setNotes] = useState<PropertyDateNote[]>([]);
@@ -274,6 +277,8 @@ export function ReservationsCalendarPage() {
 
   const today = istanbulToday();
   const canCreate = Boolean(profile && can(profile.role, 'reservation:create'));
+  const seesAllRegions =
+    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
 
   // Properties + units load once
   useEffect(() => {
@@ -355,32 +360,56 @@ export function ReservationsCalendarPage() {
   // Stack overlapping stays into vertical lanes so two reservations on the same
   // unit never render on top of each other. Completed stays no longer block new
   // ones (migration 066), so a finished stay can overlap a fresh booking — those
-  // go on separate lanes. Greedy interval partitioning (sorted by start, each
-  // stay takes the first lane whose previous stay has already ended) → minimum
-  // lanes = max overlap depth. `count` drives the unit row height in BOTH panes.
+  // go on separate lanes. Every row stays ONE uniform height; a stay shrinks to
+  // a fraction of it ONLY where it actually overlaps another (localCount), so a
+  // standalone booking stays full height even if the unit overlaps elsewhere.
   const lanesByUnit = useMemo(() => {
-    const map = new Map<string, { lane: Map<string, number>; count: number }>();
+    const map = new Map<
+      string,
+      { lane: Map<string, number>; localCount: Map<string, number> }
+    >();
     for (const [unitId, list] of reservationsByUnit) {
-      const sorted = [...list].sort(
-        (a, b) =>
-          dayIndex(RANGE_START, istanbulDateOf(a.stay_start)) -
-          dayIndex(RANGE_START, istanbulDateOf(b.stay_start)),
-      );
+      // Only stays that actually render as a bar take a lane. Day-use stays
+      // (giriş = çıkış → zero-width, shown in the separate day-use calendar)
+      // are excluded so they never push a real bar into a half-height lane.
+      const spans = list
+        .map((r) => ({
+          id: r.id,
+          s: dayIndex(RANGE_START, istanbulDateOf(r.stay_start)),
+          e: dayIndex(RANGE_START, istanbulDateOf(r.stay_end)),
+        }))
+        .filter((x) => x.e > x.s)
+        .sort((a, b) => a.s - b.s);
+
       const laneEnd: number[] = []; // exclusive end-index of each lane's last stay
       const lane = new Map<string, number>();
-      for (const r of sorted) {
-        const s = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
-        const e = dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
-        let idx = laneEnd.findIndex((end) => s >= end);
+      const placed: { id: string; s: number; e: number; lane: number }[] = [];
+      for (const x of spans) {
+        let idx = laneEnd.findIndex((end) => x.s >= end);
         if (idx === -1) {
           idx = laneEnd.length;
-          laneEnd.push(e);
+          laneEnd.push(x.e);
         } else {
-          laneEnd[idx] = e;
+          laneEnd[idx] = x.e;
         }
-        lane.set(r.id, idx);
+        lane.set(x.id, idx);
+        placed.push({ ...x, lane: idx });
       }
-      map.set(unitId, { lane, count: Math.max(1, laneEnd.length) });
+
+      // Local split factor: height = row / (1 + highest lane among the stays a
+      // stay overlaps, itself included). Half-open overlap, so back-to-back
+      // stays (A çıkış = B giriş) don't count and both stay full height.
+      const localCount = new Map<string, number>();
+      for (const a of placed) {
+        let maxLane = a.lane;
+        for (const b of placed) {
+          if (b.id !== a.id && a.s < b.e && b.s < a.e && b.lane > maxLane) {
+            maxLane = b.lane;
+          }
+        }
+        localCount.set(a.id, maxLane + 1);
+      }
+      map.set(unitId, { lane, localCount });
     }
     return map;
   }, [reservationsByUnit]);
@@ -388,22 +417,37 @@ export function ReservationsCalendarPage() {
   // Group properties into "Daireler" (APARTMENT) and "Binalar" (HOTEL) sections,
   // each sorted by name. Empty groups are dropped so a section header only shows
   // when it has properties. Both panes iterate this identically to stay aligned.
+  // Properties shown on the grid. An all-regions user (Yönetici / Alt Yönetici)
+  // sees Ana Grup by default and switches to Bornova with the toggle — Bornova
+  // mülkler (e.g. Bornova Bina) stay OUT of the default view. Everyone else just
+  // sees their RLS-scoped set.
+  const visibleProperties = useMemo(() => {
+    if (!seesAllRegions) return properties;
+    return regionFilter === 'BORNOVA'
+      ? properties.filter((p) => p.region === 'bornova')
+      : properties.filter((p) => p.region == null);
+  }, [properties, regionFilter, seesAllRegions]);
+
   const groups = useMemo(() => {
-    const byName = (a: Property, b: Property) =>
-      a.name.localeCompare(b.name, 'tr', { numeric: true });
+    // Pin "Daireler" to the top of its section; everything else alphabetical.
+    const byName = (a: Property, b: Property) => {
+      if (a.name === 'Daireler' && b.name !== 'Daireler') return -1;
+      if (b.name === 'Daireler' && a.name !== 'Daireler') return 1;
+      return a.name.localeCompare(b.name, 'tr', { numeric: true });
+    };
     return [
       {
         key: 'APARTMENT',
         label: 'Daireler',
-        items: properties.filter((p) => p.type === 'APARTMENT').sort(byName),
+        items: visibleProperties.filter((p) => p.type === 'APARTMENT').sort(byName),
       },
       {
         key: 'HOTEL',
         label: 'Binalar',
-        items: properties.filter((p) => p.type === 'HOTEL').sort(byName),
+        items: visibleProperties.filter((p) => p.type === 'HOTEL').sort(byName),
       },
     ].filter((g) => g.items.length > 0);
-  }, [properties]);
+  }, [visibleProperties]);
 
   const blocksByUnit = useMemo(() => {
     const map = new Map<string, PropertyBlock[]>();
@@ -653,6 +697,14 @@ export function ReservationsCalendarPage() {
               )}
             </Button>
           )}
+          {seesAllRegions && (
+            <Button
+              variant={regionFilter === 'BORNOVA' ? 'primary' : 'secondary'}
+              onClick={() => setRegionFilter((f) => (f === 'BORNOVA' ? 'ALL' : 'BORNOVA'))}
+            >
+              Bornova
+            </Button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600 dark:text-stone-300">
           {(['pending', 'upcoming', 'active', 'completed'] as const).map((s) => (
@@ -793,7 +845,7 @@ export function ReservationsCalendarPage() {
                       <div
                         key={u.id}
                         className="flex items-center gap-1.5 border-b border-stone-200 px-3 text-sm text-stone-800 dark:border-stone-700 dark:text-stone-200"
-                        style={{ height: (lanesByUnit.get(u.id)?.count ?? 1) * ROW_H }}
+                        style={{ height: ROW_H }}
                       >
                         <span className="truncate">{u.name}</span>
                         <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
@@ -878,7 +930,7 @@ export function ReservationsCalendarPage() {
                         <div
                           key={u.id}
                           className="relative border-b border-stone-200 dark:border-stone-700"
-                          style={{ height: (unitLanes?.count ?? 1) * ROW_H }}
+                          style={{ height: ROW_H }}
                         >
                             {/* Clickable day-cell background. Shift-click (or
                                 "Aralık modu" on) routes through the same
@@ -1016,6 +1068,13 @@ export function ReservationsCalendarPage() {
                               // right end so it stays visible when the wide bar is
                               // scrolled away from its start.
                               const isLong = eIdx - sIdx >= 10;
+                              // Every row is one uniform height; overlapping stays
+                              // SPLIT that fixed height into stacked half-height
+                              // (or thirds…) lanes instead of growing the row.
+                              const laneCount = unitLanes?.localCount.get(r.id) ?? 1;
+                              const laneIdx = unitLanes?.lane.get(r.id) ?? 0;
+                              const laneH = (ROW_H - BAR_INSET * 2) / laneCount;
+                              const laneGap = laneCount > 1 ? 2 : 0;
                               return (
                                 <button
                                   key={r.id}
@@ -1034,8 +1093,8 @@ export function ReservationsCalendarPage() {
                                   style={{
                                     left: left * DAY_W + padLeft,
                                     width: (right - left) * DAY_W - padLeft - padRight,
-                                    top: (unitLanes?.lane.get(r.id) ?? 0) * ROW_H + BAR_INSET,
-                                    height: ROW_H - BAR_INSET * 2,
+                                    top: BAR_INSET + laneIdx * laneH,
+                                    height: laneH - laneGap,
                                   }}
                                 >
                                   <span className="truncate">
@@ -1072,7 +1131,14 @@ export function ReservationsCalendarPage() {
       {/* Güniçi (gündüz kullanımı) stays never appear as bars on the timeline
           above (giriş ve çıkış aynı gündedir → zero-width), so they get their
           own month-grid calendar with a timed chip per stay. */}
-      {!error && <DayUseMonthCalendar refreshKey={reservationVersion} />}
+      {!error && (
+        <DayUseMonthCalendar
+          refreshKey={reservationVersion}
+          allowedPropertyIds={
+            seesAllRegions ? new Set(visibleProperties.map((p) => p.id)) : null
+          }
+        />
+      )}
 
       {loading && (
         <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>

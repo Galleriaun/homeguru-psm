@@ -16,6 +16,7 @@ interface StaffProfile {
   full_name: string;
   role: Role;
   property_id: string | null;
+  region: string | null;
 }
 
 interface AuthContextValue {
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from('staff_profiles')
-      .select('user_id, full_name, role, property_id')
+      .select('user_id, full_name, role, property_id, region')
       .eq('user_id', userId)
       .single();
     if (error) {

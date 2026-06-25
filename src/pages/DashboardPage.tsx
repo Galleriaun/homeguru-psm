@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
+import { can, baseRole } from '@/lib/rbac';
 import { loadDashboardCounts, type DashboardCounts } from '@/lib/queries/dashboard';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
@@ -161,7 +161,7 @@ export function DashboardPage() {
           )}
           {/* Personel (YETKILI) has no Finans menu, but can submit giderler.
               The form lands the row in 'pending' for yönetici onay. */}
-          {profile?.role === 'YETKILI' && (
+          {baseRole(profile?.role) === 'YETKILI' && (
             <QuickAction
               to="/finance/expenses/new"
               icon={<ExclamationCircleIcon className="h-5 w-5" />}

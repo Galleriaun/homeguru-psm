@@ -310,6 +310,14 @@ function ReservationRows({
                     Güniçi
                   </span>
                 )}
+                {r.note && (
+                  <span
+                    title={r.note}
+                    className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+                  >
+                    Not
+                  </span>
+                )}
               </p>
               <span
                 className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}
@@ -381,6 +389,14 @@ function ReservationRows({
                       {r.stay_type === 'DAYUSE' && (
                         <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                           Güniçi
+                        </span>
+                      )}
+                      {r.note && (
+                        <span
+                          title={r.note}
+                          className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300"
+                        >
+                          Not
                         </span>
                       )}
                     </Link>

@@ -9,6 +9,7 @@ export type Expense = ExpenseRow;
 
 export interface ExpenseWithProperty extends ExpenseRow {
   property: { name: string; type: string } | null;
+  unit: { name: string } | null;
 }
 
 /** Common expense categories — kept in code because the schema is free-form (no CHECK). */
@@ -56,7 +57,7 @@ export async function listExpenses(
   let q = supabase
     .from('expenses')
     .select(
-      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, deleted_property_name, property:properties(name, type)',
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, deleted_property_name, property:properties(name, type), unit:units(name)',
     )
     .order('expense_date', { ascending: false })
     .order('created_at', { ascending: false });
@@ -98,7 +99,7 @@ export async function listRecurringTemplates(): Promise<ExpenseWithProperty[]> {
   const { data, error } = await supabase
     .from('expenses')
     .select(
-      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, deleted_property_name, property:properties(name, type)',
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, deleted_property_name, property:properties(name, type), unit:units(name)',
     )
     .eq('is_recurring', true)
     .is('recurring_source_id', null);
@@ -131,6 +132,13 @@ export interface NewExpenseInput {
    * month. Null for one-off expenses. Mirrors staff_profiles.salary_day.
    */
   recurringDay: number | null;
+  /**
+   * Region for a GENEL (mülksüz) gider — 'bornova' or null (Ana Grup). Ignored
+   * for a mülk gider (the trigger derives region from the mülk). Migration 099.
+   */
+  region: string | null;
+  /** Optional birim (unit) within the mülk. Null = Tüm birimler. Migration 105. */
+  unitId: string | null;
 }
 
 /**
@@ -148,6 +156,8 @@ export async function createExpense(input: NewExpenseInput): Promise<ExpenseRow>
     _is_recurring: input.isRecurring,
     _paid_from_kasa: input.paidFromKasa,
     _recurring_day: input.recurringDay,
+    _region: input.region,
+    _unit_id: input.unitId,
   });
   if (error) throw wrapErr(error);
   return data as ExpenseRow;

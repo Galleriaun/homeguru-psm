@@ -51,6 +51,8 @@ const monthYearFmt = new Intl.DateTimeFormat('tr-TR', {
 interface DayUseMonthCalendarProps {
   /** Bump to force a refetch (e.g. after a reservation edit elsewhere on the page). */
   refreshKey?: number;
+  /** When set, only show stays whose mülk id is in this set (Bornova filter). */
+  allowedPropertyIds?: Set<string> | null;
 }
 
 /**
@@ -62,7 +64,10 @@ interface DayUseMonthCalendarProps {
  * Self-contained: it fetches its own month range so it stays decoupled from the
  * Gantt's window and navigation.
  */
-export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps) {
+export function DayUseMonthCalendar({
+  refreshKey = 0,
+  allowedPropertyIds = null,
+}: DayUseMonthCalendarProps) {
   const navigate = useNavigate();
   const [view, setView] = useState<'calendar' | 'list'>('list');
   const [monthStart, setMonthStart] = useState(() => istanbulToday().slice(0, 7) + '-01');
@@ -117,10 +122,19 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
     loadStaffDirectory().then(setStaffMap).catch(() => {});
   }, []);
 
+  // Apply the Bornova region filter (by mülk) before any view computes.
+  const visibleStays = useMemo(
+    () =>
+      allowedPropertyIds
+        ? stays.filter((r) => r.property_id && allowedPropertyIds.has(r.property_id))
+        : stays,
+    [stays, allowedPropertyIds],
+  );
+
   // Calendar: bucket stays by their Istanbul calendar day, earliest giriş first.
   const byDay = useMemo(() => {
     const m = new Map<string, ReservationWithRefs[]>();
-    for (const r of stays) {
+    for (const r of visibleStays) {
       const day = istanbulDay(r.stay_start);
       const arr = m.get(day) ?? [];
       arr.push(r);
@@ -130,17 +144,17 @@ export function DayUseMonthCalendar({ refreshKey = 0 }: DayUseMonthCalendarProps
       arr.sort((a, b) => a.stay_start.localeCompare(b.stay_start));
     }
     return m;
-  }, [stays]);
+  }, [visibleStays]);
 
   // List: all fetched stays filtered by the name search, newest first.
   const listStays = useMemo(() => {
     const q = search.trim().toLocaleLowerCase('tr');
-    return stays
+    return visibleStays
       .filter(
         (r) => !q || (r.guest?.full_name ?? '').toLocaleLowerCase('tr').includes(q),
       )
       .sort((a, b) => b.stay_start.localeCompare(a.stay_start));
-  }, [stays, search]);
+  }, [visibleStays, search]);
 
   const cells = useMemo(
     () =>

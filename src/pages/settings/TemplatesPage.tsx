@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
+import { can, baseRole } from '@/lib/rbac';
 import {
   listTemplates,
   deleteTemplate,
@@ -23,7 +23,9 @@ export function TemplatesPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const canWrite = Boolean(profile && can(profile.role, 'admin:*')) || profile?.role === 'PROPERTY_MANAGER';
+  const canWrite =
+    Boolean(profile && can(profile.role, 'admin:*')) ||
+    baseRole(profile?.role) === 'PROPERTY_MANAGER';
 
   useEffect(() => {
     listTemplates()
