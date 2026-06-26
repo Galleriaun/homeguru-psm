@@ -47,10 +47,20 @@ export async function listGuests(): Promise<GuestSummary[]> {
  * Yönetici (a guest is "Bornova" only by virtue of a Bornova reservation).
  */
 export async function listBornovaGuestIds(): Promise<Set<string>> {
+  // 1) the Bornova mülk ids, then 2) the guests with a reservation in them.
+  // (Two plain queries — avoids the embedded-filter syntax that silently failed.)
+  const { data: props, error: pe } = await supabase
+    .from('properties')
+    .select('id')
+    .eq('region', 'bornova');
+  if (pe) throw new Error(`${pe.message}${pe.code ? ` (${pe.code})` : ''}`);
+  const ids = (props ?? []).map((p) => p.id);
+  if (ids.length === 0) return new Set();
+
   const { data, error } = await supabase
     .from('reservations')
-    .select('guest_id, properties!inner(region)')
-    .eq('properties.region', 'bornova')
+    .select('guest_id')
+    .in('property_id', ids)
     .is('deleted_at', null);
   if (error) throw new Error(`${error.message}${error.code ? ` (${error.code})` : ''}`);
   return new Set((data ?? []).map((r) => (r as { guest_id: string }).guest_id));

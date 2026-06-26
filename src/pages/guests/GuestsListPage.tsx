@@ -32,7 +32,9 @@ export function GuestsListPage() {
     loadStaffDirectory().then(setStaffMap).catch(() => {});
     // Bornova-linked guest ids power the Bornova filter (admins/Alt Yönetici).
     if (seesAllRegions) {
-      listBornovaGuestIds().then(setBornovaIds).catch(() => {});
+      listBornovaGuestIds()
+        .then(setBornovaIds)
+        .catch((e) => console.error('Bornova misafir filtresi yüklenemedi:', e));
     }
   }, [seesAllRegions]);
 
