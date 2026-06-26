@@ -57,11 +57,12 @@ export async function listBornovaGuestIds(): Promise<Set<string>> {
   const ids = (props ?? []).map((p) => p.id);
   if (ids.length === 0) return new Set();
 
+  // Soft-deleted reservations live in trash_entries, not here — no deleted_at
+  // column to filter (filtering a missing column errored and broke the filter).
   const { data, error } = await supabase
     .from('reservations')
     .select('guest_id')
-    .in('property_id', ids)
-    .is('deleted_at', null);
+    .in('property_id', ids);
   if (error) throw new Error(`${error.message}${error.code ? ` (${error.code})` : ''}`);
   return new Set((data ?? []).map((r) => (r as { guest_id: string }).guest_id));
 }
