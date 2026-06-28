@@ -53,12 +53,15 @@ export async function rejectExpense(
 // at which point cash_account_balances() starts counting the row.
 // =============================================================================
 
-export type PendingCashTx = CashTxRow;
+export interface PendingCashTx extends CashTxRow {
+  // The kasa this movement belongs to → its region (Genel = NULL / Bornova).
+  cash_account: { region: string | null } | null;
+}
 
 export async function listPendingCashTransactions(): Promise<PendingCashTx[]> {
   const { data, error } = await supabase
     .from('cash_transactions')
-    .select('*')
+    .select('*, cash_account:cash_accounts(region)')
     .eq('approval_status', 'pending')
     .order('created_at', { ascending: false });
   if (error) throw wrapErr(error);
@@ -143,7 +146,7 @@ export interface PendingReservationDeletion {
     stay_end: string;
     guest: { full_name: string } | null;
     unit: { name: string } | null;
-    property: { name: string } | null;
+    property: { name: string; region: string | null } | null;
   } | null;
 }
 
@@ -151,7 +154,7 @@ export async function listPendingReservationDeletions(): Promise<PendingReservat
   const { data, error } = await supabase
     .from('reservation_deletion_requests')
     .select(
-      'id, reservation_id, reason, requested_by, created_at, reservation:reservations(stay_start, stay_end, guest:guests(full_name), unit:units(name), property:properties(name))',
+      'id, reservation_id, reason, requested_by, created_at, reservation:reservations(stay_start, stay_end, guest:guests(full_name), unit:units(name), property:properties(name, region))',
     )
     .eq('status', 'pending')
     .order('created_at', { ascending: false });

@@ -14,7 +14,7 @@ export interface PendingPaymentWithRefs extends PaymentCollectionRow {
     guest: { full_name: string } | null;
     unit: { name: string } | null;
   } | null;
-  property: { name: string; type: string } | null;
+  property: { name: string; type: string; region: string | null } | null;
 }
 
 export interface CollectPaymentInput {
@@ -83,7 +83,7 @@ export async function listUnconfirmedPayments(): Promise<PendingPaymentWithRefs[
   const { data, error } = await supabase
     .from('payment_collections')
     .select(
-      'id, reservation_id, property_id, collected_by_user_id, amount, method, receipt_photo_path, status, confirmed_by, confirmed_at, created_at, reservation:reservations(guest:guests(full_name), unit:units(name)), property:properties(name, type)',
+      'id, reservation_id, property_id, collected_by_user_id, amount, method, receipt_photo_path, status, confirmed_by, confirmed_at, created_at, reservation:reservations(guest:guests(full_name), unit:units(name)), property:properties(name, type, region)',
     )
     .eq('status', 'UNCONFIRMED' satisfies PaymentStatus)
     .order('created_at', { ascending: false });

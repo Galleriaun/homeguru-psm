@@ -107,6 +107,12 @@ export function PendingPaymentsPage() {
   // a region manager to their own region's requests (migration 097).
   const canResolveDeletions =
     profile?.role === 'SUPER_ADMIN' || profile?.role === 'YONETICI_BORNOVA';
+  // Region split for users who see every region (Yönetici / Alt Yönetici): show
+  // Genel (Ana Grup) vs Bornova onaylar separately so the totals never mix. A
+  // Bornova role already sees only its own region (RLS), so it gets no toggle.
+  const seesAllRegions =
+    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
+  const [regionFilter, setRegionFilter] = useState<'GENEL' | 'BORNOVA'>('GENEL');
   const [tab, setTab] = useState<Tab>('payments');
 
   const [payments, setPayments] = useState<PendingPaymentWithRefs[] | null>(null);
@@ -200,13 +206,38 @@ export function PendingPaymentsPage() {
     }
   };
 
-  const counts: Record<Tab, number> = {
-    payments: payments?.length ?? 0,
-    expenses: expenses?.length ?? 0,
-    cash_tx: cashTxs?.length ?? 0,
-    reservations: reservationDeletions?.length ?? 0,
+  // Narrow each list to the selected region (only for all-regions users). An
+  // item is "Bornova" when its region === 'bornova', otherwise Ana Grup (Genel).
+  const isBornova = regionFilter === 'BORNOVA';
+  const pick = <T,>(arr: T[] | null, region: (x: T) => string | null | undefined): T[] | null => {
+    if (!arr || !seesAllRegions) return arr;
+    return arr.filter((x) => (isBornova ? region(x) === 'bornova' : !region(x)));
   };
-  const subtotal = tabSubtotal(tab, payments, expenses, cashTxs);
+  const vPayments = pick(payments, (p) => p.property?.region);
+  const vExpenses = pick(expenses, (e) => e.region);
+  const vCashTxs = pick(cashTxs, (t) => t.cash_account?.region);
+  const vDeletions = pick(reservationDeletions, (d) => d.reservation?.property?.region);
+
+  const counts: Record<Tab, number> = {
+    payments: vPayments?.length ?? 0,
+    expenses: vExpenses?.length ?? 0,
+    cash_tx: vCashTxs?.length ?? 0,
+    reservations: vDeletions?.length ?? 0,
+  };
+  const subtotal = tabSubtotal(tab, vPayments, vExpenses, vCashTxs);
+
+  // Per-region totals across all sections → count badge on each region button,
+  // so pending onaylar in the other region aren't missed.
+  const regionCounts = { GENEL: 0, BORNOVA: 0 };
+  if (seesAllRegions) {
+    const tally = (r: string | null | undefined) =>
+      r === 'bornova' ? regionCounts.BORNOVA++ : regionCounts.GENEL++;
+    for (const p of payments ?? []) tally(p.property?.region);
+    for (const e of expenses ?? []) tally(e.region);
+    for (const t of cashTxs ?? []) tally(t.cash_account?.region);
+    if (canResolveDeletions)
+      for (const d of reservationDeletions ?? []) tally(d.reservation?.property?.region);
+  }
 
   return (
     <div className="space-y-6">
@@ -235,9 +266,41 @@ export function PendingPaymentsPage() {
         showReservations={canResolveDeletions}
       />
 
+      {/* Region split — keeps Genel and Bornova onaylar (and their Ara Toplam)
+          separate so transactions don't get mixed up. */}
+      {seesAllRegions && (
+        <div className="flex flex-wrap gap-2">
+          {(['GENEL', 'BORNOVA'] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRegionFilter(r)}
+              className={
+                regionFilter === r
+                  ? 'rounded-full bg-emerald-600 px-4 py-1 text-sm font-medium text-white'
+                  : 'rounded-full border border-stone-300 px-4 py-1 text-sm text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800'
+              }
+            >
+              {r === 'GENEL' ? 'Genel' : 'Bornova'}
+              {regionCounts[r] > 0 && (
+                <span
+                  className={
+                    'ml-1.5 rounded-full px-1.5 py-0.5 text-xs ' +
+                    (regionFilter === r
+                      ? 'bg-white/25 text-white'
+                      : 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200')
+                  }
+                >
+                  {regionCounts[r]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {tab === 'payments' && (
         <PaymentsList
-          items={payments}
+          items={vPayments}
           staffMap={staffMap}
           onConfirm={(it) => {
             setDialogError(null);
@@ -252,7 +315,7 @@ export function PendingPaymentsPage() {
 
       {tab === 'expenses' && (
         <ExpensesList
-          items={expenses}
+          items={vExpenses}
           onApprove={(it) => {
             setDialogError(null);
             setPending({ type: 'approve-expense', item: it });
@@ -266,7 +329,7 @@ export function PendingPaymentsPage() {
 
       {tab === 'cash_tx' && (
         <CashTxList
-          items={cashTxs}
+          items={vCashTxs}
           onApprove={(it) => {
             setDialogError(null);
             setPending({ type: 'approve-cash', item: it });
@@ -280,7 +343,7 @@ export function PendingPaymentsPage() {
 
       {tab === 'reservations' && (
         <ReservationDeletionsList
-          items={reservationDeletions}
+          items={vDeletions}
           onApprove={(it) => {
             setDialogError(null);
             setPending({ type: 'approve-reservation', item: it });
