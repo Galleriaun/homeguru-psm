@@ -57,6 +57,7 @@ const ROLE_LABELS: Record<string, string> = {
   HOUSEKEEPING: 'Temizlik',
   YETKILI: 'Personel',
   PERSONEL_BORNOVA: 'Personel Bornova',
+  TEKNIK_PERSONEL_BORNOVA: 'Teknik Personel Bornova',
   PENDING: 'Onay Bekliyor',
 };
 

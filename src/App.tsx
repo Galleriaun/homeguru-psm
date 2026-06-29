@@ -39,8 +39,18 @@ const FINANCE_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER'] as const;
 // Roles that can submit a new gider. YETKILI's submission goes through the
 // onay queue (migration 055 + 064) instead of posting straight to the kasa.
 const EXPENSE_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
-const HOUSEKEEPING_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'HOUSEKEEPING', 'YETKILI'] as const;
+const HOUSEKEEPING_ACCESS = [
+  'SUPER_ADMIN',
+  'PROPERTY_MANAGER',
+  'HOUSEKEEPING',
+  'YETKILI',
+  'TEKNIK_PERSONEL_BORNOVA',
+] as const;
 const UNIT_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
+// Narrow technical role — blocked from otherwise-open pages (guests, properties,
+// reservation calendar/availability). Its server access is HOUSEKEEPING-level,
+// so the router must hide what the UI shouldn't expose.
+const TEKNIK_BLOCKED = ['TEKNIK_PERSONEL_BORNOVA'] as const;
 
 export default function App() {
   return (
@@ -66,7 +76,14 @@ export default function App() {
           <Route path="/settings/profile" element={<ProfilePage />} />
 
           {/* Properties */}
-          <Route path="/properties" element={<PropertiesListPage />} />
+          <Route
+            path="/properties"
+            element={
+              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+                <PropertiesListPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/properties/new"
             element={
@@ -75,7 +92,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/properties/:id" element={<PropertyDetailPage />} />
+          <Route
+            path="/properties/:id"
+            element={
+              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+                <PropertyDetailPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/properties/:id/edit"
             element={
@@ -102,7 +126,14 @@ export default function App() {
           />
 
           {/* Guests */}
-          <Route path="/guests" element={<GuestsListPage />} />
+          <Route
+            path="/guests"
+            element={
+              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+                <GuestsListPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/guests/new"
             element={
@@ -111,7 +142,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/guests/:id" element={<GuestDetailPage />} />
+          <Route
+            path="/guests/:id"
+            element={
+              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+                <GuestDetailPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/guests/:id/edit"
             element={
@@ -123,8 +161,22 @@ export default function App() {
 
           {/* Reservations */}
           <Route path="/reservations" element={<ReservationsListPage />} />
-          <Route path="/reservations/calendar" element={<ReservationsCalendarPage />} />
-          <Route path="/reservations/availability" element={<ReservationsAvailabilityPage />} />
+          <Route
+            path="/reservations/calendar"
+            element={
+              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+                <ReservationsCalendarPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reservations/availability"
+            element={
+              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+                <ReservationsAvailabilityPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/reservations/google-pending"
             element={

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { Role } from '@/types/database';
 
 /**
  * The set of event keys the ring-icon settings modal toggles. Must stay in
@@ -50,6 +51,29 @@ export const NOTIFICATION_EVENT_HINTS: Record<NotificationEventType, string> = {
   reservation_auto_completed: 'Sistem bir rezervasyonu otomatik tamamladığında.',
   salary_auto_paid: 'Sistem otomatik maaş ödemesi yaptığında.',
 };
+
+/**
+ * Which staff roles actually RECEIVE each event's push, by RAW role — mirrors the
+ * trigger recipient lists (migrations 070 / 072 / 114 / 115). The settings modal
+ * uses this to show a role only the toggles it can act on. KEEP IN SYNC WITH THE DB.
+ */
+export const EVENT_RECIPIENT_ROLES: Record<NotificationEventType, Role[]> = {
+  new_issue: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA', 'TEKNIK_PERSONEL_BORNOVA'],
+  payment_unconfirmed: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
+  pending_approval: ['SUPER_ADMIN'],
+  pending_google_reservation: ['SUPER_ADMIN'],
+  new_reservation: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
+  reservation_auto_completed: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
+  salary_auto_paid: ['SUPER_ADMIN'],
+  upcoming_reservation_2d: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
+};
+
+/** Event types the given (raw) role can actually receive — drives the role-aware
+ *  settings modal so no one sees a toggle for a push they'll never get. */
+export function eventsForRole(role: Role | undefined): NotificationEventType[] {
+  if (!role) return [];
+  return NOTIFICATION_EVENT_TYPES.filter((k) => EVENT_RECIPIENT_ROLES[k].includes(role));
+}
 
 /**
  * Load this user's per-event preferences. Returns a fully-populated map: any

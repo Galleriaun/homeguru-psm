@@ -1,4 +1,6 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { isTeknikPersonel } from '@/lib/rbac';
 import { cn } from '@/lib/utils';
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
@@ -48,16 +50,24 @@ function SearchIcon() {
 }
 
 export function ReservationsViewTabs() {
+  const { profile } = useAuth();
+  // Teknik Personel gets the read-only Liste only — no availability/calendar
+  // tools (the routes are also guarded server-of-router-side in App.tsx).
+  const restricted = isTeknikPersonel(profile?.role);
   return (
     <div className="flex flex-wrap gap-2">
-      <NavLink to="/reservations/availability" className={tabClass}>
-        <SearchIcon />
-        Müsaitlik
-      </NavLink>
-      <NavLink to="/reservations/calendar" className={tabClass}>
-        <CalendarIcon />
-        Takvim
-      </NavLink>
+      {!restricted && (
+        <>
+          <NavLink to="/reservations/availability" className={tabClass}>
+            <SearchIcon />
+            Müsaitlik
+          </NavLink>
+          <NavLink to="/reservations/calendar" className={tabClass}>
+            <CalendarIcon />
+            Takvim
+          </NavLink>
+        </>
+      )}
       <NavLink to="/reservations" end className={tabClass}>
         Liste
       </NavLink>

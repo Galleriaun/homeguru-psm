@@ -22,6 +22,9 @@ export type Permission =
   | 'staff:write'
   | 'housekeeping:read'
   | 'housekeeping:write'
+  // Report / resolve housekeeping issues. Split from housekeeping:write so a
+  // technical role can file issues WITHOUT being able to change cleaning status.
+  | 'issue:write'
   | 'payment:collect'
   | 'report:property'
   | 'report:all'
@@ -44,6 +47,7 @@ const MANAGER_PERMS: Permission[] = [
   'staff:write',
   'housekeeping:read',
   'housekeeping:write',
+  'issue:write',
   'payment:collect',
   'report:property',
 ];
@@ -61,6 +65,7 @@ const PERSONEL_PERMS: Permission[] = [
   'guest:update',
   'housekeeping:read',
   'housekeeping:write',
+  'issue:write',
   'payment:collect',
   'report:property',
 ];
@@ -79,7 +84,7 @@ const BASE: Record<Role, Permission[]> = {
     'guest:create',
     'guest:update',
   ],
-  HOUSEKEEPING: ['housekeeping:read', 'housekeeping:write'],
+  HOUSEKEEPING: ['housekeeping:read', 'housekeeping:write', 'issue:write'],
   // New-signup holding role. Zero permissions and in no RLS allow-list — the
   // account is inert until a SUPER_ADMIN promotes it to a real role.
   PENDING: [],
@@ -90,6 +95,11 @@ const BASE: Record<Role, Permission[]> = {
   // Region personel — a Personel scoped to the Bornova region (region scoping is
   // enforced server-side via auth_region()). Same permission set as YETKILI.
   PERSONEL_BORNOVA: PERSONEL_PERMS,
+  // Region technical staff — deliberately narrow: read-only reservation Liste +
+  // issue reporting only. No cleaning-status write (housekeeping:write), no
+  // finance / guest / property / staff. Region scoping is server-side
+  // (auth_role() → HOUSEKEEPING, auth_region() → 'bornova'). Migration 114.
+  TEKNIK_PERSONEL_BORNOVA: ['housekeeping:read', 'issue:write', 'reservation:read'],
 };
 
 /**
@@ -107,6 +117,16 @@ export function baseRole(role: Role | undefined): Role | undefined {
 export function can(role: Role, permission: Permission): boolean {
   if (role === 'SUPER_ADMIN') return true;
   return BASE[role].includes(permission);
+}
+
+/**
+ * Teknik Personel Bornova is a deliberately narrow role (read-only reservation
+ * Liste + issue reporting). This flags it so the few UI surfaces it must NOT
+ * see — guest/property nav, availability/calendar tools, the Kirli Daireler
+ * tile — can hide them without each re-listing the role literal.
+ */
+export function isTeknikPersonel(role: Role | undefined): boolean {
+  return role === 'TEKNIK_PERSONEL_BORNOVA';
 }
 
 /**

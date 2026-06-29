@@ -8,9 +8,15 @@ interface Props {
   children: ReactNode;
   /** Optional: restrict to specific roles. Defaults to any authenticated user. */
   allowedRoles?: Role[];
+  /**
+   * Optional: block specific roles from an otherwise-open route. Checked against
+   * the RAW role (not baseRole) so a narrow role like TEKNIK_PERSONEL_BORNOVA can
+   * be denied pages its server access would otherwise let it load.
+   */
+  deniedRoles?: Role[];
 }
 
-export function ProtectedRoute({ children, allowedRoles }: Props) {
+export function ProtectedRoute({ children, allowedRoles, deniedRoles }: Props) {
   const { user, profile, loading } = useAuth();
   const location = useLocation();
 
@@ -38,6 +44,12 @@ export function ProtectedRoute({ children, allowedRoles }: Props) {
   // Region-scoped roles (e.g. YONETICI_BORNOVA, PERSONEL_BORNOVA) gate routes as
   // their base role; the region restriction is enforced server-side by RLS.
   if (allowedRoles && !allowedRoles.includes(baseRole(profile.role) as Role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Deny-list takes precedence: a blocked role is redirected even if it would
+  // otherwise pass allowedRoles. Uses the raw role.
+  if (deniedRoles && deniedRoles.includes(profile.role)) {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import {
   listNotificationPreferences,
   setNotificationPreference,
-  NOTIFICATION_EVENT_TYPES,
   NOTIFICATION_EVENT_LABELS,
   NOTIFICATION_EVENT_HINTS,
+  eventsForRole,
   type NotificationEventType,
 } from '@/lib/queries/notification_preferences';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { XMarkIcon } from '@/components/icons/ActionIcons';
@@ -27,6 +28,10 @@ export function NotificationSettingsModal({ onClose }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null);
   /** Per-event row spinner so toggles feel responsive without a global lock. */
   const [savingKey, setSavingKey] = useState<NotificationEventType | null>(null);
+  const { profile } = useAuth();
+  // Show only the toggles this role can actually receive a push for (mirrors the
+  // trigger recipient lists). Roles that receive nothing get an empty-state note.
+  const visibleEventTypes = eventsForRole(profile?.role);
 
   useEffect(() => {
     listNotificationPreferences()
@@ -99,8 +104,13 @@ export function NotificationSettingsModal({ onClose }: Props) {
 
         {prefs && (
           <>
+            {visibleEventTypes.length === 0 ? (
+              <p className="py-2 text-sm text-stone-600 dark:text-stone-300">
+                Rolünüz için yapılandırılabilir bir bildirim yok.
+              </p>
+            ) : (
             <ul className="divide-y divide-stone-200 dark:divide-stone-700">
-              {NOTIFICATION_EVENT_TYPES.map((key) => {
+              {visibleEventTypes.map((key) => {
                 const enabled = prefs[key];
                 const busy = savingKey === key;
                 return (
@@ -136,6 +146,7 @@ export function NotificationSettingsModal({ onClose }: Props) {
                 );
               })}
             </ul>
+            )}
 
             {saveError && (
               <p className="mt-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
+import { can, isTeknikPersonel } from '@/lib/rbac';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
@@ -172,12 +172,16 @@ export function Layout() {
                 Temizlik
               </NavLink>
             )}
-            <NavLink to="/guests" className={navLinkClasses}>
-              Misafirler
-            </NavLink>
-            <NavLink to="/properties" className={navLinkClasses}>
-              Mülkler
-            </NavLink>
+            {profile && !isTeknikPersonel(profile.role) && (
+              <>
+                <NavLink to="/guests" className={navLinkClasses}>
+                  Misafirler
+                </NavLink>
+                <NavLink to="/properties" className={navLinkClasses}>
+                  Mülkler
+                </NavLink>
+              </>
+            )}
             {profile && can(profile.role, 'finance:read') && (
               <NavLink to="/finance/cash" className={navLinkClasses}>
                 Finans
@@ -345,12 +349,16 @@ export function Layout() {
                   Temizlik
                 </NavLink>
               )}
-              <NavLink to="/guests" className={drawerLinkClasses} onClick={closeMobile}>
-                Misafirler
-              </NavLink>
-              <NavLink to="/properties" className={drawerLinkClasses} onClick={closeMobile}>
-                Mülkler
-              </NavLink>
+              {profile && !isTeknikPersonel(profile.role) && (
+                <>
+                  <NavLink to="/guests" className={drawerLinkClasses} onClick={closeMobile}>
+                    Misafirler
+                  </NavLink>
+                  <NavLink to="/properties" className={drawerLinkClasses} onClick={closeMobile}>
+                    Mülkler
+                  </NavLink>
+                </>
+              )}
               {profile && can(profile.role, 'finance:read') && (
                 <NavLink
                   to="/finance/cash"

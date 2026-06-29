@@ -218,25 +218,30 @@ export function PendingPaymentsPage() {
   const vCashTxs = pick(cashTxs, (t) => t.cash_account?.region);
   const vDeletions = pick(reservationDeletions, (d) => d.reservation?.property?.region);
 
+  // Tab badges show the COMBINED Genel + Bornova total per category (the full
+  // lists), so an all-regions reviewer sees the grand total per tab at a glance.
+  // The region toggle below still filters only the displayed list + subtotal —
+  // not these counts. (A region-scoped role only has its own region anyway.)
   const counts: Record<Tab, number> = {
-    payments: vPayments?.length ?? 0,
-    expenses: vExpenses?.length ?? 0,
-    cash_tx: vCashTxs?.length ?? 0,
-    reservations: vDeletions?.length ?? 0,
+    payments: payments?.length ?? 0,
+    expenses: expenses?.length ?? 0,
+    cash_tx: cashTxs?.length ?? 0,
+    reservations: reservationDeletions?.length ?? 0,
   };
   const subtotal = tabSubtotal(tab, vPayments, vExpenses, vCashTxs);
 
-  // Per-region totals across all sections → count badge on each region button,
-  // so pending onaylar in the other region aren't missed.
+  // Per-region split for the ACTIVE section only → each region button shows how
+  // many of THIS tab's onaylar belong to it (and the badge hides at 0, so an
+  // empty section shows no numbers). The region accessor differs per tab.
   const regionCounts = { GENEL: 0, BORNOVA: 0 };
   if (seesAllRegions) {
     const tally = (r: string | null | undefined) =>
       r === 'bornova' ? regionCounts.BORNOVA++ : regionCounts.GENEL++;
-    for (const p of payments ?? []) tally(p.property?.region);
-    for (const e of expenses ?? []) tally(e.region);
-    for (const t of cashTxs ?? []) tally(t.cash_account?.region);
-    if (canResolveDeletions)
-      for (const d of reservationDeletions ?? []) tally(d.reservation?.property?.region);
+    if (tab === 'payments') (payments ?? []).forEach((p) => tally(p.property?.region));
+    else if (tab === 'expenses') (expenses ?? []).forEach((e) => tally(e.region));
+    else if (tab === 'cash_tx') (cashTxs ?? []).forEach((t) => tally(t.cash_account?.region));
+    else if (tab === 'reservations' && canResolveDeletions)
+      (reservationDeletions ?? []).forEach((d) => tally(d.reservation?.property?.region));
   }
 
   return (

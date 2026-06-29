@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can, baseRole } from '@/lib/rbac';
+import { can, baseRole, isTeknikPersonel } from '@/lib/rbac';
 import { loadDashboardCounts, type DashboardCounts } from '@/lib/queries/dashboard';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
@@ -38,8 +38,12 @@ export function DashboardPage() {
 
   const canReadFinance = can(profile.role, 'finance:read');
   const canReadHousekeeping = can(profile.role, 'housekeeping:read');
+  // Cleaning-status capability — gates the "Kirli Daireler" tile so a read-only
+  // issue role (Teknik Personel) sees "Açık Sorun" but not the cleaning count.
+  const canWriteHousekeeping = can(profile.role, 'housekeeping:write');
   const canCreateReservation = can(profile.role, 'reservation:create');
   const canCreateGuest = can(profile.role, 'guest:create');
+  const teknik = isTeknikPersonel(profile.role);
 
   return (
     <div className="space-y-6">
@@ -67,7 +71,7 @@ export function DashboardPage() {
           <Tile to="/reservations" label="Bugün Giriş" value={counts?.checkInsToday} />
           <Tile to="/reservations" label="Bugün Çıkış" value={counts?.checkOutsToday} />
           <Tile
-            to="/reservations/calendar"
+            to={teknik ? '/reservations' : '/reservations/calendar'}
             label="Şu An Aktif"
             value={counts?.activeNow}
           />
@@ -88,7 +92,7 @@ export function DashboardPage() {
               watchTone="red"
             />
           )}
-          {canReadHousekeeping && (
+          {canWriteHousekeeping && (
             <Tile
               to="/housekeeping?filter=dirty"
               label="Kirli Daireler"
@@ -121,12 +125,14 @@ export function DashboardPage() {
               description="Müsait birim seçerek hızlıca rezervasyon oluştur"
             />
           )}
-          <QuickAction
-            to="/reservations/availability"
-            icon={<MagnifyingGlassIcon className="h-5 w-5" />}
-            label="Müsaitlik Ara"
-            description="Tarih ve gece sayısına göre uygun birimleri bul"
-          />
+          {!teknik && (
+            <QuickAction
+              to="/reservations/availability"
+              icon={<MagnifyingGlassIcon className="h-5 w-5" />}
+              label="Müsaitlik Ara"
+              description="Tarih ve gece sayısına göre uygun birimleri bul"
+            />
+          )}
           {canCreateGuest && (
             <QuickAction
               to="/guests/new"

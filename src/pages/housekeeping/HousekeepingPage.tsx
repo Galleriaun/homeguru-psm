@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
+import { can, isTeknikPersonel } from '@/lib/rbac';
 import {
   listProperties,
   sortHotelsFirst,
@@ -80,6 +80,12 @@ export function HousekeepingPage() {
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
 
   const canWrite = Boolean(profile && can(profile.role, 'housekeeping:write'));
+  // Issue reporting is split from cleaning-status write (housekeeping:write) so
+  // a read-only role (Teknik Personel) can file/resolve issues without being
+  // able to change Kirli/Temizleniyor/Temiz status.
+  const canWriteIssue = Boolean(profile && can(profile.role, 'issue:write'));
+  // Teknik Personel only reports issues — hide the cleaning-status filter chips.
+  const teknik = isTeknikPersonel(profile?.role);
   const canDelete = profile?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
@@ -225,7 +231,9 @@ export function HousekeepingPage() {
         })}
       </div>
 
-      {/* Status filter chips with counts */}
+      {/* Status filter chips with counts — hidden for Teknik Personel, whose
+          page is issue-reporting only (no cleaning-status filtering). */}
+      {!teknik && (
       <div className="flex flex-wrap gap-2">
         {(['ALL', 'DIRTY', 'IN_PROGRESS', 'CLEAN', 'ISSUES'] as const).map((f) => {
           const count =
@@ -263,6 +271,7 @@ export function HousekeepingPage() {
           );
         })}
       </div>
+      )}
 
       {error && (
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
@@ -288,7 +297,7 @@ export function HousekeepingPage() {
           unitName={issueModalUnit.name}
           propertyId={issueModalUnit.property_id}
           reportedByUserId={user.id}
-          canWrite={canWrite}
+          canWrite={canWriteIssue}
           canDelete={canDelete}
           onClose={() => setIssueModalUnit(null)}
           onChange={refreshIssueCounts}
@@ -336,22 +345,27 @@ export function HousekeepingPage() {
                                   <p className="text-xs text-stone-600 dark:text-stone-300">
                                     {formatRoomType(unit.room_type)}
                                   </p>
-                                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                                    {latest
-                                      ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
-                                      : 'Henüz kayıt yok'}
-                                  </p>
-                                  {(() => {
-                                    const changer = latest?.updated_by
-                                      ? staffMap.get(latest.updated_by)
-                                      : undefined;
-                                    if (!changer) return null;
-                                    return (
-                                      <p className="text-xs text-stone-500 dark:text-stone-400">
-                                        Son Değiştiren: {changer}
-                                      </p>
-                                    );
-                                  })()}
+                                  {/* Cleaning-status metadata — irrelevant to the
+                                      issue-only Teknik Personel role, so hidden. */}
+                                  {!teknik && (
+                                    <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                                      {latest
+                                        ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
+                                        : 'Henüz kayıt yok'}
+                                    </p>
+                                  )}
+                                  {!teknik &&
+                                    (() => {
+                                      const changer = latest?.updated_by
+                                        ? staffMap.get(latest.updated_by)
+                                        : undefined;
+                                      if (!changer) return null;
+                                      return (
+                                        <p className="text-xs text-stone-500 dark:text-stone-400">
+                                          Son Değiştiren: {changer}
+                                        </p>
+                                      );
+                                    })()}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {isSaving && (
@@ -368,27 +382,31 @@ export function HousekeepingPage() {
                                 </div>
                               </div>
 
-                              {/* Status buttons: current is filled, others are outlined */}
-                              <div className="grid grid-cols-3 gap-2">
-                                {(['DIRTY', 'IN_PROGRESS', 'CLEAN'] as const).map((s) => {
-                                  const isCurrent = s === current;
-                                  return (
-                                    <button
-                                      key={s}
-                                      type="button"
-                                      disabled={!canWrite || isSaving}
-                                      onClick={() => handleChangeStatus(unit, s)}
-                                      className={cn(
-                                        'rounded-md px-2 py-2 text-xs font-medium transition-colors',
-                                        isCurrent ? STATUS_ACTIVE[s] : STATUS_INACTIVE,
-                                        (!canWrite || isSaving) && 'cursor-not-allowed opacity-60',
-                                      )}
-                                    >
-                                      {STATUS_LABELS[s]}
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                              {/* Status buttons: current is filled, others are outlined.
+                                  Hidden for read-only roles (e.g. Teknik Personel) —
+                                  only cleaning staff change Kirli/Temiz status. */}
+                              {canWrite && (
+                                <div className="grid grid-cols-3 gap-2">
+                                  {(['DIRTY', 'IN_PROGRESS', 'CLEAN'] as const).map((s) => {
+                                    const isCurrent = s === current;
+                                    return (
+                                      <button
+                                        key={s}
+                                        type="button"
+                                        disabled={isSaving}
+                                        onClick={() => handleChangeStatus(unit, s)}
+                                        className={cn(
+                                          'rounded-md px-2 py-2 text-xs font-medium transition-colors',
+                                          isCurrent ? STATUS_ACTIVE[s] : STATUS_INACTIVE,
+                                          isSaving && 'cursor-not-allowed opacity-60',
+                                        )}
+                                      >
+                                        {STATUS_LABELS[s]}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
 
                               <Button
                                 variant="secondary"
