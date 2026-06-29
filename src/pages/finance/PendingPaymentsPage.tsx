@@ -229,6 +229,17 @@ export function PendingPaymentsPage() {
     reservations: reservationDeletions?.length ?? 0,
   };
   const subtotal = tabSubtotal(tab, vPayments, vExpenses, vCashTxs);
+  // Count for the bottom "Toplam X onay" — the SELECTED region's items in the
+  // active tab, so it matches the visible list + Ara Toplam. Distinct from the
+  // tab badges (counts), which show the combined Genel + Bornova total.
+  const visibleCount =
+    tab === 'payments'
+      ? vPayments?.length ?? 0
+      : tab === 'expenses'
+        ? vExpenses?.length ?? 0
+        : tab === 'cash_tx'
+          ? vCashTxs?.length ?? 0
+          : vDeletions?.length ?? 0;
 
   // Per-region split for the ACTIVE section only → each region button shows how
   // many of THIS tab's onaylar belong to it (and the badge hides at 0, so an
@@ -362,10 +373,10 @@ export function PendingPaymentsPage() {
 
       {/* Bottom summary — count (right) + money subtotal with a per-category
           breakdown that sums to "Ara Toplam", for the active sub-tab. */}
-      {counts[tab] > 0 && (
+      {visibleCount > 0 && (
         <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3">
           <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-            Toplam {counts[tab]} onay
+            Toplam {visibleCount} onay
           </p>
           {subtotal.total > 0 && (
             <div className="text-right">
