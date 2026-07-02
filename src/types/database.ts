@@ -30,10 +30,10 @@ export type Role =
   | 'YETKILI'
   // Region personel — behaves as YETKILI but scoped to Bornova. Migration 100.
   | 'PERSONEL_BORNOVA'
-  // Region technical staff — read-only reservation Liste + issue reporting only,
-  // scoped to Bornova (server: auth_role() normalises to HOUSEKEEPING,
-  // auth_region() derives 'bornova'). Migration 114.
-  | 'TEKNIK_PERSONEL_BORNOVA'
+  // Technical staff — read-only reservation Liste + issue reporting only, across
+  // ALL regions (server: auth_role() normalises to HOUSEKEEPING, sees every
+  // property via an auth_sees_property bypass). Migrations 114 + 117.
+  | 'TEKNIK_PERSONEL'
   | 'PENDING';
 /** Which properties a staff member works across (branch isolation, migration 033). */
 export type AccessScope = 'ALL' | 'HOTELS' | 'APARTMENTS';

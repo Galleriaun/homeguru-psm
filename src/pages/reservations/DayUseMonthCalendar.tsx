@@ -308,7 +308,8 @@ export function DayUseMonthCalendar({
           </div>
         </div>
       ) : (
-        /* Liste — compact, newest-first, only the displayed month. */
+        /* Liste — compact, newest-first across the ~2-year fetch window (past +
+           upcoming, see the effect above), name-searchable. */
         listStays.length === 0 ? (
           <p className="px-3 py-4 text-center text-sm text-stone-500 dark:text-stone-400">
             {search.trim() ? 'Eşleşen güniçi konaklama bulunamadı.' : 'Güniçi konaklama yok.'}

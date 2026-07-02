@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import {
-  listActiveReservations,
-  type ReservationWithRefs,
-} from '@/lib/queries/reservations';
 import { createIssue } from '@/lib/queries/housekeepingIssues';
+import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
+import { listUnitsForProperty, type Unit } from '@/lib/queries/units';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
-import { formatDate } from '@/lib/utils';
 import { XMarkIcon } from '@/components/icons/ActionIcons';
 
 interface Props {
@@ -18,41 +15,49 @@ interface Props {
 }
 
 /**
- * Panel "Sorunlar" quick-action modal: lists units that currently have an
- * active reservation and lets housekeeping file a problem report against the
- * one they're cleaning. Skips photo upload on purpose — the full IssuesModal
- * on the Temizlik page is the place for that; this entry point is optimised
- * for a one-handed "I see a problem, log it" flow.
+ * Dashboard "Sorunlar" quick-action modal: pick any mülk, then a birim within it,
+ * and file a problem report — no active reservation required (a unit can have a
+ * fault while empty). Skips photo upload on purpose — the full IssuesModal on the
+ * Temizlik page is the place for that; this entry point is optimised for a fast
+ * "I see a problem, log it" flow.
  *
- * Writes into housekeeping_issues via the same createIssue path the existing
- * IssuesModal uses, so RLS, audit, and the open-issue counter all stay in
- * sync without any extra plumbing.
+ * Writes into housekeeping_issues via the same createIssue path the IssuesModal
+ * uses, so RLS, audit, and the open-issue counter all stay in sync. Both the
+ * mülk list and the birim list are RLS-filtered to what the caller may see.
  */
 export function QuickIssueModal({ onClose, onCreated }: Props) {
   const { user } = useAuth();
-  const [activeReservations, setActiveReservations] = useState<ReservationWithRefs[] | null>(
-    null,
-  );
+  const [properties, setProperties] = useState<Property[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [reservationId, setReservationId] = useState('');
+  const [propertyId, setPropertyId] = useState('');
+  const [units, setUnits] = useState<Unit[] | null>(null);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+  const [unitId, setUnitId] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Load the mülk list once.
   useEffect(() => {
     setLoadError(null);
-    listActiveReservations()
-      .then((rows) => {
-        setActiveReservations(rows);
-        // Default-select the first active reservation so the form is one
-        // textarea away from submittable.
-        if (rows.length > 0) {
-          setReservationId((prev) => prev || rows[0].id);
-        }
-      })
-      .catch((e) => setLoadError(e?.message ?? 'Aktif konaklamalar yüklenemedi'));
+    listProperties()
+      .then((rows) => setProperties(sortHotelsFirst(rows)))
+      .catch((e) => setLoadError(e?.message ?? 'Mülkler yüklenemedi'));
   }, []);
+
+  // Load the chosen mülk's birimler; reset the birim pick whenever the mülk changes.
+  useEffect(() => {
+    setUnitId('');
+    setUnits(null);
+    if (!propertyId) return;
+    setUnitsLoading(true);
+    setError(null);
+    listUnitsForProperty(propertyId)
+      .then((rows) => setUnits(rows))
+      .catch((e) => setError(e?.message ?? 'Birimler yüklenemedi'))
+      .finally(() => setUnitsLoading(false));
+  }, [propertyId]);
 
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
@@ -62,31 +67,15 @@ export function QuickIssueModal({ onClose, onCreated }: Props) {
     return () => document.removeEventListener('keydown', handle);
   }, [onClose]);
 
-  /** Build "Birim — Misafir (Giriş→Çıkış)" labels for the dropdown options. */
-  const options = useMemo(() => {
-    if (!activeReservations) return [];
-    return activeReservations.map((r) => {
-      const unit = r.unit?.name ?? '—';
-      const property = r.property?.name ?? '';
-      const guest = r.guest?.full_name ?? 'Misafir';
-      const dates = `${formatDate(r.stay_start)}→${formatDate(r.stay_end)}`;
-      return {
-        value: r.id,
-        label: `${unit} (${property}) — ${guest} · ${dates}`,
-      };
-    });
-  }, [activeReservations]);
-
-  const selectedReservation = useMemo(
-    () => activeReservations?.find((r) => r.id === reservationId) ?? null,
-    [activeReservations, reservationId],
-  );
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!selectedReservation) {
-      setError('Aktif bir konaklama seçin.');
+    if (!propertyId) {
+      setError('Bir mülk seçin.');
+      return;
+    }
+    if (!unitId) {
+      setError('Bir birim seçin.');
       return;
     }
     if (!description.trim()) {
@@ -100,8 +89,8 @@ export function QuickIssueModal({ onClose, onCreated }: Props) {
     setSaving(true);
     try {
       await createIssue({
-        property_id: selectedReservation.property_id,
-        unit_id: selectedReservation.unit_id,
+        property_id: propertyId,
+        unit_id: unitId,
         description: description.trim(),
         photo_paths: [],
         reported_by: user.id,
@@ -114,7 +103,8 @@ export function QuickIssueModal({ onClose, onCreated }: Props) {
     }
   };
 
-  const noActive = activeReservations !== null && activeReservations.length === 0;
+  const propertyOptions = (properties ?? []).map((p) => ({ value: p.id, label: p.name }));
+  const unitOptions = (units ?? []).map((u) => ({ value: u.id, label: u.name }));
 
   return (
     <div
@@ -130,7 +120,7 @@ export function QuickIssueModal({ onClose, onCreated }: Props) {
               Sorun Bildir
             </h2>
             <p className="text-sm text-stone-600 dark:text-stone-300">
-              Aktif konaklaması olan bir birim seçip sorunu kısaca yazın.
+              Bir mülk ve birim seçip sorunu kısaca yazın.
             </p>
           </div>
           <button
@@ -149,27 +139,47 @@ export function QuickIssueModal({ onClose, onCreated }: Props) {
           </p>
         )}
 
-        {!loadError && activeReservations === null && (
+        {!loadError && properties === null && (
           <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
         )}
 
-        {noActive && (
+        {properties !== null && properties.length === 0 && (
           <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-            Şu anda aktif konaklaması olan birim yok.
+            Görüntüleyebileceğiniz bir mülk yok.
           </p>
         )}
 
-        {activeReservations !== null && activeReservations.length > 0 && (
+        {properties !== null && properties.length > 0 && (
           <form onSubmit={handleSubmit} className="space-y-3" noValidate>
             <Select
-              label="Aktif Birim"
-              name="active_reservation"
+              label="Mülk"
+              name="issue_property"
               required
               searchable
-              value={reservationId}
-              onChange={setReservationId}
-              options={options}
-              placeholder="Aktif birim seçin"
+              value={propertyId}
+              onChange={setPropertyId}
+              options={propertyOptions}
+              placeholder="Mülk seçin"
+            />
+
+            <Select
+              label="Birim"
+              name="issue_unit"
+              required
+              searchable
+              disabled={!propertyId}
+              value={unitId}
+              onChange={setUnitId}
+              options={unitOptions}
+              placeholder={
+                !propertyId
+                  ? 'Önce mülk seçin'
+                  : unitsLoading
+                    ? 'Yükleniyor…'
+                    : unitOptions.length === 0
+                      ? 'Bu mülkte birim yok'
+                      : 'Birim seçin'
+              }
             />
 
             <div>
@@ -186,7 +196,6 @@ export function QuickIssueModal({ onClose, onCreated }: Props) {
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={500}
                 rows={3}
-                autoFocus
                 placeholder="Örn: Klima çalışmıyor, duşta sızıntı var."
                 className="mt-1 block w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 placeholder-stone-400 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:placeholder-stone-500"
               />

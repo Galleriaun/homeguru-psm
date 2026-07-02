@@ -10,7 +10,7 @@ interface Props {
   allowedRoles?: Role[];
   /**
    * Optional: block specific roles from an otherwise-open route. Checked against
-   * the RAW role (not baseRole) so a narrow role like TEKNIK_PERSONEL_BORNOVA can
+   * the RAW role (not baseRole) so a narrow role like TEKNIK_PERSONEL can
    * be denied pages its server access would otherwise let it load.
    */
   deniedRoles?: Role[];

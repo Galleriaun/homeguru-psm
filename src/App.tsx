@@ -44,13 +44,13 @@ const HOUSEKEEPING_ACCESS = [
   'PROPERTY_MANAGER',
   'HOUSEKEEPING',
   'YETKILI',
-  'TEKNIK_PERSONEL_BORNOVA',
+  'TEKNIK_PERSONEL',
 ] as const;
 const UNIT_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
 // Narrow technical role — blocked from otherwise-open pages (guests, properties,
 // reservation calendar/availability). Its server access is HOUSEKEEPING-level,
 // so the router must hide what the UI shouldn't expose.
-const TEKNIK_BLOCKED = ['TEKNIK_PERSONEL_BORNOVA'] as const;
+const TEKNIK_BLOCKED = ['TEKNIK_PERSONEL'] as const;
 
 export default function App() {
   return (

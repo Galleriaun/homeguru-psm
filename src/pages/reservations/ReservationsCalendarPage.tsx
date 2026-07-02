@@ -120,6 +120,13 @@ function istanbulDateOf(iso: string): string {
     .toISOString()
     .slice(0, 10);
 }
+// Istanbul wall-clock "HH:MM" from a stored UTC timestamp (fixed +3h). Used to
+// label güniçi (day-use) bars, which carry a meaningful giriş/çıkış time.
+function istanbulClock(iso: string): string {
+  return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(11, 16);
+}
 
 const weekdayFmt = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
 const monthFmt = new Intl.DateTimeFormat('tr-TR', { month: 'short', timeZone: 'UTC' });
@@ -347,9 +354,14 @@ export function ReservationsCalendarPage() {
   }, [units]);
 
   const reservationsByUnit = useMemo(() => {
+    const now = Date.now();
     const map = new Map<string, ReservationWithRefs[]>();
     for (const r of reservations) {
       if (r.status === 'cancelled') continue;
+      // Güniçi (day-use) stays show on the Gantt as a one-day bar, but only until
+      // their çıkış time passes — after that they drop off here and remain solely
+      // in the Güniçi list below. Overnight stays are unaffected (history stays).
+      if (r.stay_type === 'DAYUSE' && new Date(r.stay_end).getTime() <= now) continue;
       const arr = map.get(r.unit_id) ?? [];
       arr.push(r);
       map.set(r.unit_id, arr);
@@ -369,15 +381,18 @@ export function ReservationsCalendarPage() {
       { lane: Map<string, number>; localCount: Map<string, number> }
     >();
     for (const [unitId, list] of reservationsByUnit) {
-      // Only stays that actually render as a bar take a lane. Day-use stays
-      // (giriş = çıkış → zero-width, shown in the separate day-use calendar)
-      // are excluded so they never push a real bar into a half-height lane.
+      // Every rendered stay takes a lane so overlaps stack. Day-use (giriş =
+      // çıkış) collapses to one day → give it a 1-day span so it stacks with any
+      // overnight stay sharing that day instead of vanishing.
       const spans = list
-        .map((r) => ({
-          id: r.id,
-          s: dayIndex(RANGE_START, istanbulDateOf(r.stay_start)),
-          e: dayIndex(RANGE_START, istanbulDateOf(r.stay_end)),
-        }))
+        .map((r) => {
+          const s = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
+          const e =
+            r.stay_type === 'DAYUSE'
+              ? s + 1
+              : dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
+          return { id: r.id, s, e };
+        })
         .filter((x) => x.e > x.s)
         .sort((a, b) => a.s - b.s);
 
@@ -713,6 +728,10 @@ export function ReservationsCalendarPage() {
               {STATUS_LABELS[s]}
             </span>
           ))}
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-sm bg-amber-500" />
+            Güniçi
+          </span>
         </div>
       </div>
 
@@ -1053,10 +1072,17 @@ export function ReservationsCalendarPage() {
                               );
                             })}
 
-                            {/* Reservation bars */}
+                            {/* Reservation bars — overnight span multiple days;
+                                güniçi (day-use) render one cell wide in amber with
+                                the giriş saati (they leave once the çıkış passes). */}
                             {unitRes.map((r) => {
+                              const isDayUse = r.stay_type === 'DAYUSE';
                               const sIdx = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
-                              const eIdx = dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
+                              // Day-use collapses to one day (giriş = çıkış) → render
+                              // a single-cell bar so it's actually visible.
+                              const eIdx = isDayUse
+                                ? sIdx + 1
+                                : dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
                               const left = Math.max(sIdx, 0);
                               const right = Math.min(eIdx, windowDays);
                               if (right <= left) return null;
@@ -1080,13 +1106,23 @@ export function ReservationsCalendarPage() {
                                   key={r.id}
                                   type="button"
                                   onClick={() => handleReservationBarClick(r)}
-                                  title={`${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
-                                    r.stay_start,
-                                  )} → ${istanbulDateOf(r.stay_end)} · ${STATUS_LABELS[r.status]}`}
+                                  title={
+                                    isDayUse
+                                      ? `${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
+                                          r.stay_start,
+                                        )} · ${istanbulClock(r.stay_start)}–${istanbulClock(
+                                          r.stay_end,
+                                        )} · Güniçi`
+                                      : `${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
+                                          r.stay_start,
+                                        )} → ${istanbulDateOf(r.stay_end)} · ${STATUS_LABELS[r.status]}`
+                                  }
                                   className={cn(
                                     'absolute z-10 flex items-center overflow-hidden px-1.5 text-xs font-medium text-white shadow-sm transition-colors',
                                     isLong && 'justify-between gap-2',
-                                    STATUS_BAR[r.status],
+                                    isDayUse
+                                      ? 'bg-amber-500 hover:bg-amber-600'
+                                      : STATUS_BAR[r.status],
                                     clippedLeft ? '' : 'rounded-l',
                                     clippedRight ? '' : 'rounded-r',
                                   )}
@@ -1098,9 +1134,11 @@ export function ReservationsCalendarPage() {
                                   }}
                                 >
                                   <span className="truncate">
-                                    {r.guest?.full_name ?? '—'}
+                                    {isDayUse
+                                      ? istanbulClock(r.stay_start)
+                                      : (r.guest?.full_name ?? '—')}
                                   </span>
-                                  {isLong && (
+                                  {isLong && !isDayUse && (
                                     <span className="truncate">
                                       {r.guest?.full_name ?? '—'}
                                     </span>
@@ -1128,9 +1166,9 @@ export function ReservationsCalendarPage() {
         </p>
       )}
 
-      {/* Güniçi (gündüz kullanımı) stays never appear as bars on the timeline
-          above (giriş ve çıkış aynı gündedir → zero-width), so they get their
-          own month-grid calendar with a timed chip per stay. */}
+      {/* Güniçi (gündüz kullanımı) stays show as a one-day amber bar on the
+          timeline above while upcoming/ongoing, then drop off once their çıkış
+          passes. This month-grid + list keeps their full record (past included). */}
       {!error && (
         <DayUseMonthCalendar
           refreshKey={reservationVersion}

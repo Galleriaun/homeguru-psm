@@ -95,11 +95,11 @@ const BASE: Record<Role, Permission[]> = {
   // Region personel — a Personel scoped to the Bornova region (region scoping is
   // enforced server-side via auth_region()). Same permission set as YETKILI.
   PERSONEL_BORNOVA: PERSONEL_PERMS,
-  // Region technical staff — deliberately narrow: read-only reservation Liste +
-  // issue reporting only. No cleaning-status write (housekeeping:write), no
-  // finance / guest / property / staff. Region scoping is server-side
-  // (auth_role() → HOUSEKEEPING, auth_region() → 'bornova'). Migration 114.
-  TEKNIK_PERSONEL_BORNOVA: ['housekeeping:read', 'issue:write', 'reservation:read'],
+  // Technical staff — deliberately narrow: read-only reservation Liste + issue
+  // reporting only, across ALL regions. No cleaning-status write, no finance /
+  // guest-PII / property / staff. Server: auth_role() → HOUSEKEEPING with an
+  // all-property bypass in auth_sees_property. Migrations 114 + 117.
+  TEKNIK_PERSONEL: ['housekeeping:read', 'issue:write', 'reservation:read'],
 };
 
 /**
@@ -120,13 +120,13 @@ export function can(role: Role, permission: Permission): boolean {
 }
 
 /**
- * Teknik Personel Bornova is a deliberately narrow role (read-only reservation
- * Liste + issue reporting). This flags it so the few UI surfaces it must NOT
- * see — guest/property nav, availability/calendar tools, the Kirli Daireler
- * tile — can hide them without each re-listing the role literal.
+ * Teknik Personel is a deliberately narrow role (read-only reservation Liste +
+ * issue reporting, across all regions). This flags it so the few UI surfaces it
+ * must NOT see — guest/property nav, availability/calendar tools, the Kirli
+ * Daireler tile — can hide them without each re-listing the role literal.
  */
 export function isTeknikPersonel(role: Role | undefined): boolean {
-  return role === 'TEKNIK_PERSONEL_BORNOVA';
+  return role === 'TEKNIK_PERSONEL';
 }
 
 /**

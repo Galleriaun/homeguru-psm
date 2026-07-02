@@ -58,14 +58,14 @@ export const NOTIFICATION_EVENT_HINTS: Record<NotificationEventType, string> = {
  * uses this to show a role only the toggles it can act on. KEEP IN SYNC WITH THE DB.
  */
 export const EVENT_RECIPIENT_ROLES: Record<NotificationEventType, Role[]> = {
-  new_issue: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA', 'TEKNIK_PERSONEL_BORNOVA'],
+  new_issue: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA', 'TEKNIK_PERSONEL'],
   payment_unconfirmed: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
   pending_approval: ['SUPER_ADMIN'],
   pending_google_reservation: ['SUPER_ADMIN'],
-  new_reservation: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
+  new_reservation: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA', 'PERSONEL_BORNOVA', 'RECEPTION', 'HOUSEKEEPING', 'YETKILI'],
   reservation_auto_completed: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
   salary_auto_paid: ['SUPER_ADMIN'],
-  upcoming_reservation_2d: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
+  upcoming_reservation_2d: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA', 'PERSONEL_BORNOVA', 'RECEPTION', 'HOUSEKEEPING', 'YETKILI'],
 };
 
 /** Event types the given (raw) role can actually receive — drives the role-aware
