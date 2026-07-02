@@ -114,7 +114,7 @@ export function DashboardPage() {
               onClick={() => setShowIssueModal(true)}
               icon={<ExclamationCircleIcon className="h-5 w-5" />}
               label="Sorunlar"
-              description="Aktif konaklaması olan bir birime hızlıca sorun bildir"
+              description="Bir mülk ve birim seçip hızlıca sorun bildir"
             />
           )}
           {canCreateReservation && (
