@@ -1074,7 +1074,7 @@ export function ReservationsCalendarPage() {
 
                             {/* Reservation bars — overnight span multiple days;
                                 güniçi (day-use) render one cell wide in amber with
-                                the giriş saati (they leave once the çıkış passes). */}
+                                the çıkış saati (they leave once the çıkış passes). */}
                             {unitRes.map((r) => {
                               const isDayUse = r.stay_type === 'DAYUSE';
                               const sIdx = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
@@ -1135,7 +1135,7 @@ export function ReservationsCalendarPage() {
                                 >
                                   <span className="truncate">
                                     {isDayUse
-                                      ? istanbulClock(r.stay_start)
+                                      ? istanbulClock(r.stay_end)
                                       : (r.guest?.full_name ?? '—')}
                                   </span>
                                   {isLong && !isDayUse && (
