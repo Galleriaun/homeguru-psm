@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
 import { listAllUnits, type Unit } from '@/lib/queries/units';
 import {
@@ -37,6 +37,7 @@ export function ExpenseFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile } = useAuth();
 
   const [properties, setProperties] = useState<Property[]>([]);
@@ -238,12 +239,15 @@ export function ExpenseFormPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
-      <Link
-        to="/finance/expenses"
+      <button
+        type="button"
+        onClick={() =>
+          location.key === 'default' ? navigate('/finance/expenses') : navigate(-1)
+        }
         className="inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
       >
-        ← Giderler
-      </Link>
+        ← Geri
+      </button>
 
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">

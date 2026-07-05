@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import {
   createGuest,
   updateGuest,
@@ -15,6 +15,7 @@ export function GuestFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [fullName, setFullName] = useState('');
   const [tcKimlik, setTcKimlik] = useState('');
@@ -140,12 +141,17 @@ export function GuestFormPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
-      <Link
-        to={isEdit && id ? `/guests/${id}` : '/guests'}
+      <button
+        type="button"
+        onClick={() =>
+          location.key === 'default'
+            ? navigate(isEdit && id ? `/guests/${id}` : '/guests')
+            : navigate(-1)
+        }
         className="inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
       >
         ← Geri
-      </Link>
+      </button>
       <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
         {isEdit ? 'Misafir Düzenle' : 'Yeni Misafir'}
       </h1>

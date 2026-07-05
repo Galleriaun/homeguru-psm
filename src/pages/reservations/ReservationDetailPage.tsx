@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can, canCollectPayment } from '@/lib/rbac';
 import {
@@ -61,6 +61,13 @@ export function ReservationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { profile, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // "← Geri" returns to wherever the user came from (Takvim, Liste, Müsaitlik, a
+  // notification link…) rather than always dumping them on the list.
+  // location.key === 'default' means they landed here directly (deep link /
+  // refresh) with no in-app history → fall back to the reservations list.
+  const goBack = () =>
+    location.key === 'default' ? navigate('/reservations') : navigate(-1);
 
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [property, setProperty] = useState<Property | null>(null);
@@ -187,12 +194,13 @@ export function ReservationDetailPage() {
     return (
       <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
         <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-        <Link
-          to="/reservations"
+        <button
+          type="button"
+          onClick={goBack}
           className="mt-3 inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
         >
-          ← Rezervasyonlara dön
-        </Link>
+          ← Geri
+        </button>
       </Card>
     );
   }
@@ -319,12 +327,13 @@ export function ReservationDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to="/reservations"
+      <button
+        type="button"
+        onClick={goBack}
         className="inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
       >
-        ← Rezervasyonlar
-      </Link>
+        ← Geri
+      </button>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">

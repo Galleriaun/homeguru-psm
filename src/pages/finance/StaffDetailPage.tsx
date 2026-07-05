@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   deleteStaff,
@@ -59,6 +59,11 @@ export function StaffDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // "← Geri" returns to where the user came from; fall back to the staff list
+  // only on a direct/deep-link entry (no in-app history).
+  const goBack = () =>
+    location.key === 'default' ? navigate('/finance/staff') : navigate(-1);
 
   const [staff, setStaff] = useState<StaffProfileWithProperty | null>(null);
   const [advances, setAdvances] = useState<StaffAdvance[]>([]);
@@ -116,12 +121,13 @@ export function StaffDetailPage() {
     return (
       <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
         <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-        <Link
-          to="/finance/staff"
+        <button
+          type="button"
+          onClick={goBack}
           className="mt-3 inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
         >
-          ← Personel listesine dön
-        </Link>
+          ← Geri
+        </button>
       </Card>
     );
   }
@@ -150,12 +156,13 @@ export function StaffDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to="/finance/staff"
+      <button
+        type="button"
+        onClick={goBack}
         className="inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
       >
-        ← Personel
-      </Link>
+        ← Geri
+      </button>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">

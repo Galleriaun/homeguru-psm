@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
+import { can, isTeknikPersonel } from '@/lib/rbac';
 import {
   listReservations,
   reservationPropertyLabel,
@@ -102,6 +102,9 @@ export function ReservationsListPage() {
   }, []);
 
   const canCreate = profile && can(profile.role, 'reservation:create');
+  // Teknik Personel has no finance access — hide the tahsilat (Ödeme) badge and
+  // don't rely on payment data it can't read (RLS blocks it, migration 121).
+  const isTeknik = isTeknikPersonel(profile?.role);
 
   // Name search — applied before status filtering/grouping so it works in both
   // the "Tümü" grouped view and the single-status views.
@@ -271,12 +274,22 @@ export function ReservationsListPage() {
                     {g.items.length}
                   </span>
                 </h2>
-                <ReservationRows items={g.items} staffMap={staffMap} paidMap={paidMap} />
+                <ReservationRows
+                  items={g.items}
+                  staffMap={staffMap}
+                  paidMap={paidMap}
+                  showPayment={!isTeknik}
+                />
               </section>
             ))}
           </div>
         ) : (
-          <ReservationRows items={filtered} staffMap={staffMap} paidMap={paidMap} />
+          <ReservationRows
+            items={filtered}
+            staffMap={staffMap}
+            paidMap={paidMap}
+            showPayment={!isTeknik}
+          />
         ))}
     </div>
   );
@@ -287,10 +300,12 @@ function ReservationRows({
   items,
   staffMap,
   paidMap,
+  showPayment,
 }: {
   items: ReservationWithRefs[];
   staffMap: Map<string, string>;
   paidMap: Map<string, number>;
+  showPayment: boolean;
 }) {
   return (
     <>
@@ -349,13 +364,14 @@ function ReservationRows({
                 <span className="font-semibold text-stone-900 dark:text-stone-100">
                   {formatTRY(Number(r.total_amount))}
                 </span>
-                {(() => {
-                  const badge = paymentBadge(
-                    paidMap.get(r.id) ?? 0,
-                    Number(r.total_amount),
-                  );
-                  return <span className={badge.className}>{badge.label}</span>;
-                })()}
+                {showPayment &&
+                  (() => {
+                    const badge = paymentBadge(
+                      paidMap.get(r.id) ?? 0,
+                      Number(r.total_amount),
+                    );
+                    return <span className={badge.className}>{badge.label}</span>;
+                  })()}
               </span>
             </p>
             {staffMap.get(r.created_by) && (

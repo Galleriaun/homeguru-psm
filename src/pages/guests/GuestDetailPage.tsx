@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can } from '@/lib/rbac';
 import {
@@ -24,6 +24,11 @@ export function GuestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // "← Geri" returns to where the user came from; fall back to the list only on
+  // a direct/deep-link entry (no in-app history).
+  const goBack = () =>
+    location.key === 'default' ? navigate('/guests') : navigate(-1);
 
   const [guest, setGuest] = useState<DecryptedGuest | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,12 +83,13 @@ export function GuestDetailPage() {
     return (
       <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
         <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-        <Link
-          to="/guests"
+        <button
+          type="button"
+          onClick={goBack}
           className="mt-3 inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
         >
-          ← Misafirlere dön
-        </Link>
+          ← Geri
+        </button>
       </Card>
     );
   }
@@ -148,12 +154,13 @@ export function GuestDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to="/guests"
+      <button
+        type="button"
+        onClick={goBack}
         className="inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
       >
-        ← Misafirler
-      </Link>
+        ← Geri
+      </button>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import {
   getProperty,
   createProperty,
@@ -22,6 +22,7 @@ export function PropertyFormPage() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [name, setName] = useState('');
   const [type, setType] = useState<PropertyType>('HOTEL');
@@ -136,12 +137,17 @@ export function PropertyFormPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
-      <Link
-        to={isEdit && id ? `/properties/${id}` : '/properties'}
+      <button
+        type="button"
+        onClick={() =>
+          location.key === 'default'
+            ? navigate(isEdit && id ? `/properties/${id}` : '/properties')
+            : navigate(-1)
+        }
         className="inline-block text-sm text-emerald-600 hover:underline dark:text-emerald-500"
       >
         ← Geri
-      </Link>
+      </button>
       <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
         {isEdit ? 'Mülk Düzenle' : 'Yeni Mülk'}
       </h1>
