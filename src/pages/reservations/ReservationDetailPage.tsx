@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can, canCollectPayment } from '@/lib/rbac';
+import { can, canCollectPayment, isTeknikPersonel } from '@/lib/rbac';
 import {
   cancelReservation,
   deleteReservation,
@@ -217,6 +217,8 @@ export function ReservationDetailPage() {
   const isSuperAdmin = profile?.role === 'SUPER_ADMIN';
   /** Can flip the persistent guest warning flag. */
   const canEditGuest = Boolean(profile && can(profile.role, 'guest:update'));
+  // Teknik Personel has no finance access — hide reservation pricing (tutar/kapora).
+  const isTeknik = isTeknikPersonel(profile?.role);
   // Ödeme Topla — type-conditional: HOTEL=reception, APARTMENT=housekeeping; manager+admin everywhere.
   const canCollect = Boolean(
     profile && property && canCollectPayment(profile.role, property.type),
@@ -520,8 +522,12 @@ export function ReservationDetailPage() {
                 : formatDate(reservation.stay_end)
             }
           />
-          <Field label="Toplam Tutar" value={formatTRY(Number(reservation.total_amount))} />
-          <Field label="Kapora" value={formatTRY(Number(reservation.deposit))} />
+          {!isTeknik && (
+            <>
+              <Field label="Toplam Tutar" value={formatTRY(Number(reservation.total_amount))} />
+              <Field label="Kapora" value={formatTRY(Number(reservation.deposit))} />
+            </>
+          )}
           <Field
             label="Otomatik Borçlandır"
             value={reservation.auto_debit ? 'Evet' : 'Hayır'}

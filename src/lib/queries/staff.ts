@@ -143,6 +143,20 @@ export async function createAdvance(input: AdvanceInsert): Promise<AdvanceRow> {
   return data;
 }
 
+/**
+ * Delete an avans AND its linked kasa hareketi together, atomically, via the
+ * delete_advance_cascade RPC (migration 122): both go to Çöp Kutusu in ONE
+ * transaction — a partial failure rolls back, no orphans — and it's idempotent
+ * (skips an already-trashed side). Also used by CashPage's reverse cascade:
+ * deleting the kasa hareketi passes its ref_id (the same advance id) here.
+ */
+export async function deleteAdvance(advanceId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_advance_cascade', {
+    p_advance_id: advanceId,
+  });
+  if (error) throw wrapErr(error);
+}
+
 /** Sum of advance amounts in the supplied list. */
 export function totalAdvanceAmount(rows: AdvanceRow[]): number {
   return rows.reduce((acc, r) => acc + Number(r.amount), 0);

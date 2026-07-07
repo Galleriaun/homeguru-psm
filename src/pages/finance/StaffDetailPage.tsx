@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   deleteStaff,
+  deleteAdvance,
   getStaff,
   listAdvancesForStaff,
   type StaffAdvance,
@@ -78,6 +79,10 @@ export function StaffDetailPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  /** Per-avans delete — SUPER_ADMIN-only; removes the avans AND its kasa hareketi. */
+  const [advanceToDelete, setAdvanceToDelete] = useState<StaffAdvance | null>(null);
+  const [advanceDeleting, setAdvanceDeleting] = useState(false);
+  const [advanceDeleteError, setAdvanceDeleteError] = useState<string | null>(null);
 
   // RLS (staff_profiles_modify) limits salary edits, scope, and role changes
   // to SUPER_ADMIN. The pay_staff_salary RPC server-side accepts SUPER_ADMIN
@@ -91,6 +96,9 @@ export function StaffDetailPage() {
   // delete_staff RPC blocks self-delete on the server too, but hiding the
   // button up-front saves the operator the round trip + error toast.
   const canDelete = profile?.role === 'SUPER_ADMIN' && userId !== user?.id;
+  // Deleting an avans cascades to its kasa hareketi (cash_transactions delete is
+  // SUPER_ADMIN-only, migration 015), so the avans Sil is SUPER_ADMIN-only too.
+  const isSuperAdmin = profile?.role === 'SUPER_ADMIN';
 
   const currentMonth = currentIstanbulYearMonth();
 
@@ -363,6 +371,20 @@ export function StaffDetailPage() {
                       {formatTRY(Number(a.amount))}
                     </p>
                   </div>
+                  {isSuperAdmin && (
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdvanceDeleteError(null);
+                          setAdvanceToDelete(a);
+                        }}
+                        className="text-xs text-red-600 hover:underline dark:text-red-400"
+                      >
+                        Sil
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -376,6 +398,7 @@ export function StaffDetailPage() {
                       <th className="px-6 py-3 font-medium">Tarih</th>
                       <th className="px-6 py-3 font-medium">Açıklama</th>
                       <th className="px-6 py-3 text-right font-medium">Tutar</th>
+                      {isSuperAdmin && <th className="px-6 py-3" aria-label="Sil" />}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
@@ -393,6 +416,20 @@ export function StaffDetailPage() {
                         <td className="px-6 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
                           {formatTRY(Number(a.amount))}
                         </td>
+                        {isSuperAdmin && (
+                          <td className="px-6 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAdvanceDeleteError(null);
+                                setAdvanceToDelete(a);
+                              }}
+                              className="text-xs text-red-600 hover:underline dark:text-red-400"
+                            >
+                              Sil
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -510,6 +547,47 @@ export function StaffDetailPage() {
         onCancel={() => {
           setShowDelete(false);
           setDeleteError(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={advanceToDelete !== null}
+        title="Avans silinsin mi?"
+        description={
+          advanceToDelete && (
+            <>
+              <p>
+                <strong>{formatTRY(Number(advanceToDelete.amount))}</strong>
+                {advanceToDelete.note ? ` — ${advanceToDelete.note}` : ''} avansı silinecek.
+              </p>
+              <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">
+                Bağlı kasa hareketi de birlikte silinir; ikisi de Çöp Kutusu'na taşınır.
+              </p>
+            </>
+          )
+        }
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        destructive
+        loading={advanceDeleting}
+        error={advanceDeleteError}
+        onConfirm={async () => {
+          if (!advanceToDelete) return;
+          setAdvanceDeleting(true);
+          setAdvanceDeleteError(null);
+          try {
+            await deleteAdvance(advanceToDelete.id);
+            setAdvances((prev) => prev.filter((x) => x.id !== advanceToDelete.id));
+            setAdvanceToDelete(null);
+            setAdvanceDeleting(false);
+          } catch (err) {
+            setAdvanceDeleteError(err instanceof Error ? err.message : 'Silinemedi');
+            setAdvanceDeleting(false);
+          }
+        }}
+        onCancel={() => {
+          setAdvanceToDelete(null);
+          setAdvanceDeleteError(null);
         }}
       />
     </div>

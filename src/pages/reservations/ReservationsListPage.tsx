@@ -102,8 +102,8 @@ export function ReservationsListPage() {
   }, []);
 
   const canCreate = profile && can(profile.role, 'reservation:create');
-  // Teknik Personel has no finance access — hide the tahsilat (Ödeme) badge and
-  // don't rely on payment data it can't read (RLS blocks it, migration 121).
+  // Teknik Personel has no finance access — hide reservation tutar + the tahsilat
+  // (Ödeme) badge, and don't rely on payment data it can't read (migration 121).
   const isTeknik = isTeknikPersonel(profile?.role);
 
   // Name search — applied before status filtering/grouping so it works in both
@@ -278,7 +278,7 @@ export function ReservationsListPage() {
                   items={g.items}
                   staffMap={staffMap}
                   paidMap={paidMap}
-                  showPayment={!isTeknik}
+                  showAmounts={!isTeknik}
                 />
               </section>
             ))}
@@ -288,7 +288,7 @@ export function ReservationsListPage() {
             items={filtered}
             staffMap={staffMap}
             paidMap={paidMap}
-            showPayment={!isTeknik}
+            showAmounts={!isTeknik}
           />
         ))}
     </div>
@@ -300,12 +300,12 @@ function ReservationRows({
   items,
   staffMap,
   paidMap,
-  showPayment,
+  showAmounts,
 }: {
   items: ReservationWithRefs[];
   staffMap: Map<string, string>;
   paidMap: Map<string, number>;
-  showPayment: boolean;
+  showAmounts: boolean;
 }) {
   return (
     <>
@@ -360,19 +360,20 @@ function ReservationRows({
                   </>
                 )}
               </span>
-              <span className="flex flex-col items-end gap-0.5">
-                <span className="font-semibold text-stone-900 dark:text-stone-100">
-                  {formatTRY(Number(r.total_amount))}
-                </span>
-                {showPayment &&
-                  (() => {
+              {showAmounts && (
+                <span className="flex flex-col items-end gap-0.5">
+                  <span className="font-semibold text-stone-900 dark:text-stone-100">
+                    {formatTRY(Number(r.total_amount))}
+                  </span>
+                  {(() => {
                     const badge = paymentBadge(
                       paidMap.get(r.id) ?? 0,
                       Number(r.total_amount),
                     );
                     return <span className={badge.className}>{badge.label}</span>;
                   })()}
-              </span>
+                </span>
+              )}
             </p>
             {staffMap.get(r.created_by) && (
               <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
@@ -392,7 +393,7 @@ function ReservationRows({
                 <th className="px-6 py-3 font-medium">Misafir</th>
                 <th className="px-6 py-3 font-medium">Mülk / Birim</th>
                 <th className="px-6 py-3 font-medium">Tarih</th>
-                <th className="px-6 py-3 font-medium">Tutar</th>
+                {showAmounts && <th className="px-6 py-3 font-medium">Tutar</th>}
                 <th className="px-6 py-3 font-medium">Durum</th>
               </tr>
             </thead>
@@ -442,9 +443,11 @@ function ReservationRows({
                       </>
                     )}
                   </td>
-                  <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                    {formatTRY(Number(r.total_amount))}
-                  </td>
+                  {showAmounts && (
+                    <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
+                      {formatTRY(Number(r.total_amount))}
+                    </td>
+                  )}
                   <td className="px-6 py-3">
                     <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status]}`}>
                       {STATUS_LABELS[r.status]}

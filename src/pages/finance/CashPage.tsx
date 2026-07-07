@@ -12,6 +12,7 @@ import {
   type CashTransactionWithRefs,
 } from '@/lib/queries/cashAccounts';
 import { deletePaymentCollection } from '@/lib/queries/payments';
+import { deleteAdvance } from '@/lib/queries/staff';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -258,6 +259,10 @@ export function CashPage() {
         // ledger PAYMENT entry AND this cash_transactions row in one shot
         // (FK ON DELETE CASCADE — migration 016).
         await deletePaymentCollection(txToDelete.payment_collection_id);
+      } else if (txToDelete.ref_type === 'staff_advance' && txToDelete.ref_id) {
+        // Avans hareketi → delete the avans AND this kasa hareketi atomically,
+        // so the kasa and the personel Avans Geçmişi stay in sync (migration 122).
+        await deleteAdvance(txToDelete.ref_id);
       } else {
         // Manual cash entry — delete just this row.
         await deleteCashTransaction(txToDelete.id);

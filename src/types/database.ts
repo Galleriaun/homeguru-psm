@@ -1212,6 +1212,10 @@ export type Database = {
         Args: { p_type: string; p_id: string };
         Returns: string; // trash_entries.id
       };
+      delete_advance_cascade: {
+        Args: { p_advance_id: string };
+        Returns: undefined;
+      };
       restore_trash: {
         Args: { _trash_id: string };
         Returns: string; // trash_entries.id (renamed param + uuid return in migration 065)
