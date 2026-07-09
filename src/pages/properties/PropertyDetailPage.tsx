@@ -465,7 +465,20 @@ export function PropertyDetailPage() {
       <ConfirmDialog
         open={!!unitToDelete}
         title={unitToDelete ? `"${unitToDelete.name}" silinsin mi?` : ''}
-        description="Birim Çöp Kutusu'na taşınır ve oradan geri yüklenebilir."
+        description={
+          <>
+            <p>Birim Çöp Kutusu'na taşınır ve oradan geri yüklenebilir.</p>
+            <p className="mt-2">
+              Geçmiş <strong>rezervasyonlar korunur</strong> — birimle bağları
+              kopar ve “silinmiş olan{' '}
+              {unitToDelete ? unitToDelete.name : 'birim'}” olarak görünmeye
+              devam eder. Geri yüklemede bu bağ geri gelmez.
+            </p>
+            <p className="mt-2 font-medium">
+              Not: Aktif (devam eden) rezervasyonu olan birimler silinemez.
+            </p>
+          </>
+        }
         confirmLabel="Sil"
         destructive
         loading={busy}

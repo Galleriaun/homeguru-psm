@@ -75,7 +75,13 @@ export async function updateUnit(id: string, input: UnitUpdate) {
   return data;
 }
 
-/** Soft-delete a unit → lands in Çöp Kutusu (admin-restorable). */
+/**
+ * Soft-delete a unit → lands in Çöp Kutusu (admin-restorable). Reservations
+ * referencing the unit are PRESERVED (migration 123, mirrors delete_property):
+ * their unit_id is nulled and the unit's name snapshotted to deleted_unit_name.
+ * Irreversible tie-break — restoring the unit does NOT re-attach them. Refused
+ * while the unit has an active (ongoing) reservation.
+ */
 export async function deleteUnit(id: string) {
   await softDeleteEntity('units', id);
 }
