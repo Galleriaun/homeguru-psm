@@ -126,6 +126,25 @@ export function ExpenseFormPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isEdit]);
 
+  // A düzenli gider always lands on its tekrar günü — including the month it is
+  // set up in — so keep the date's DAY pinned to the picker. The month stays the
+  // user's choice (it selects the START month). The server enforces the same rule
+  // (migration 124); this only makes the form show the date that will be saved.
+  useEffect(() => {
+    if (recurringDay === '') return;
+    const day = Number(recurringDay);
+    if (!Number.isInteger(day) || day < 1 || day > 31) return;
+    setExpenseDate((prev) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(prev)) return prev;
+      const [y, m] = prev.split('-').map(Number);
+      const lastDay = new Date(y, m, 0).getDate(); // day 31 → 30/28
+      const aligned = `${y}-${String(m).padStart(2, '0')}-${String(
+        Math.min(day, lastDay),
+      ).padStart(2, '0')}`;
+      return aligned === prev ? prev : aligned;
+    });
+  }, [recurringDay, expenseDate]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);

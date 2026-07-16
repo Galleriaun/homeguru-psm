@@ -200,6 +200,9 @@ export function ExpensesListPage() {
     const lastDay = new Date(Number(y), Number(mm), 0).getDate();
     return templates
       .filter((t) => !postedTemplateIds.has(t.id))
+      // A template dated in a LATER month hasn't started yet — the generator
+      // skips it (migration 124), so never promise a "Beklenen" before then.
+      .filter((t) => t.expense_date.slice(0, 7) <= month)
       .filter((t) => {
         if (expenseType === 'GENEL') return t.property_id === null;
         if (expenseType === 'MULK')
