@@ -48,6 +48,16 @@ type DisplayExpense = ExpenseWithProperty & {
   __templateId?: string;
 };
 
+/**
+ * True for a düzenli TEMPLATE *and* for a month the cron generated from one.
+ * The generator inserts instances with is_recurring=false (only the template
+ * carries the flag), so keying the label off is_recurring alone made a gider
+ * show "Düzenli" while projected and then lose the label the moment it actually
+ * posted — the same gider looking one-off once it became real.
+ */
+const isRecurringRow = (e: ExpenseWithProperty) =>
+  e.is_recurring || e.recurring_source_id != null;
+
 /** True when this expense belonged to a now-deleted mülk ("bağı kopar"):
  *  property_id was nulled but the snapshotted name remains. */
 function isOrphanedExpense(e: DisplayExpense): boolean {
@@ -224,10 +234,21 @@ export function ExpensesListPage() {
 
   // Real expenses for the month + projected ones. Projections count toward the
   // total (a future month is all projection anyway).
-  const displayExpenses = useMemo<DisplayExpense[]>(
-    () => [...(expenses ?? []), ...projected],
-    [expenses, projected],
-  );
+  //
+  // Düzenli giderler (the template, the months generated from it, and any
+  // projection) are pinned TOGETHER at the TOP — scattered through the date
+  // order they were hard to follow. Everything else keeps the query's newest-
+  // first date order below them. Array.sort is stable, so rows sharing a date
+  // keep the created_at order the query already applied.
+  const displayExpenses = useMemo<DisplayExpense[]>(() => {
+    const all = [...(expenses ?? []), ...projected];
+    return all.sort((a, b) => {
+      const ar = isRecurringRow(a) ? 0 : 1;
+      const br = isRecurringRow(b) ? 0 : 1;
+      if (ar !== br) return ar - br;
+      return b.expense_date.localeCompare(a.expense_date);
+    });
+  }, [expenses, projected]);
 
   const total = totalAmount(displayExpenses);
 
@@ -342,7 +363,7 @@ export function ExpensesListPage() {
                     Tarih: formatDate(e.expense_date),
                     Mülk: expensePropertyLabel(e),
                     Kategori: e.category,
-                    Düzenli: e.is_recurring ? 'Evet' : 'Hayır',
+                    Düzenli: isRecurringRow(e) ? 'Evet' : 'Hayır',
                     Tutar: Number(e.amount).toFixed(2),
                     Açıklama: e.description ?? '',
                   }));
@@ -419,8 +440,8 @@ export function ExpensesListPage() {
                 düzenli gideri durdurulur.
               </p>
               <p className="mt-2 text-sm text-stone-600 dark:text-stone-300">
-                Bu ay ve sonraki aylar için artık oluşturulmaz. Geçmiş aylar olduğu
-                gibi görünür — yalnızca "Düzenli" etiketi kalkar.
+                Bu ay ve sonraki aylar için artık oluşturulmaz. Oluşturulmuş
+                aylar olduğu gibi kalır.
               </p>
             </>
           ) : null
@@ -512,7 +533,7 @@ function ExpenseSection({
                   <span className="rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200">
                     {e.category}
                   </span>
-                  {e.is_recurring && (
+                  {isRecurringRow(e) && (
                     <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
                       Düzenli
                     </span>
@@ -616,7 +637,7 @@ function ExpenseSection({
                       <span className="rounded bg-stone-200 px-2 py-0.5 text-xs font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200">
                         {e.category}
                       </span>
-                      {e.is_recurring && (
+                      {isRecurringRow(e) && (
                         <span
                           title="Düzenli (örn. her ay)"
                           className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
