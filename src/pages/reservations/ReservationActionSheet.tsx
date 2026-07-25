@@ -28,6 +28,12 @@ interface Props {
   nights: number;
   canEdit: boolean;
   canCancel: boolean;
+  /**
+   * True when this user's cancel becomes a REQUEST a Yönetici resolves rather
+   * than an immediate cancellation (migration 126). Only changes the wording —
+   * the DB trigger is what actually enforces it.
+   */
+  cancelNeedsApproval?: boolean;
   onPick: (action: ReservationAction) => void;
   onClose: () => void;
 }
@@ -68,6 +74,7 @@ export function ReservationActionSheet({
   nights,
   canEdit,
   canCancel,
+  cancelNeedsApproval = false,
   onPick,
   onClose,
 }: Props) {
@@ -126,8 +133,10 @@ export function ReservationActionSheet({
     actions.push({
       key: 'cancel',
       Icon: XMarkIcon,
-      label: 'İptal Et',
-      hint: 'Rezervasyonu iptal statüsüne çek (silmez).',
+      label: cancelNeedsApproval ? 'İptal Talebi Gönder' : 'İptal Et',
+      hint: cancelNeedsApproval
+        ? 'İptal için yönetici onayı ister; rezervasyon şimdilik olduğu gibi kalır.'
+        : 'Rezervasyonu iptal statüsüne çek (silmez).',
     });
   }
 

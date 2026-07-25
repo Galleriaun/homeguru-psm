@@ -573,6 +573,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      reservation_cancellation_requests: {
+        Row: {
+          id: string;
+          reservation_id: string;
+          property_id: string | null;
+          requested_by: string | null;
+          reason: string | null;
+          status: 'pending' | 'approved' | 'denied';
+          resolved_by: string | null;
+          resolved_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          reservation_id: string;
+          property_id?: string | null;
+          requested_by?: string | null;
+          reason?: string | null;
+          status?: 'pending' | 'approved' | 'denied';
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          reservation_id?: string;
+          property_id?: string | null;
+          requested_by?: string | null;
+          reason?: string | null;
+          status?: 'pending' | 'approved' | 'denied';
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       property_nightly_prices: {
         Row: {
           id: string;
@@ -1273,6 +1309,18 @@ export type Database = {
         Returns: void;
       };
       deny_reservation_deletion: {
+        Args: { _request_id: string };
+        Returns: void;
+      };
+      request_reservation_cancellation: {
+        Args: { _reservation_id: string; _reason?: string | null };
+        Returns: Database['public']['Tables']['reservation_cancellation_requests']['Row'];
+      };
+      approve_reservation_cancellation: {
+        Args: { _request_id: string };
+        Returns: void;
+      };
+      deny_reservation_cancellation: {
         Args: { _request_id: string };
         Returns: void;
       };

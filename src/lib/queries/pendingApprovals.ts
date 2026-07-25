@@ -101,12 +101,20 @@ export async function countPendingApprovals(
   // "Rezervasyonlar" tab is theirs), so only fold them into the badge for them —
   // a manager would otherwise see a count with no tab to act on.
   if (includeReservations) {
-    const rez = await supabase
-      .from('reservation_deletion_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending');
+    // Both request kinds live in that tab (Silme + İptal), so both count.
+    const [rez, cancel] = await Promise.all([
+      supabase
+        .from('reservation_deletion_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending'),
+      supabase
+        .from('reservation_cancellation_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending'),
+    ]);
     if (rez.error) throw wrapErr(rez.error);
-    total += rez.count ?? 0;
+    if (cancel.error) throw wrapErr(cancel.error);
+    total += (rez.count ?? 0) + (cancel.count ?? 0);
   }
   return total;
 }
@@ -171,6 +179,43 @@ export async function approveReservationDeletion(requestId: string): Promise<voi
 
 export async function denyReservationDeletion(requestId: string): Promise<void> {
   const { error } = await supabase.rpc('deny_reservation_deletion', {
+    _request_id: requestId,
+  });
+  if (error) throw wrapErr(error);
+}
+
+// =============================================================================
+// Pending reservation CANCELLATION requests (migration 126). Same shape as the
+// deletion requests above — approving sets status='cancelled' instead of
+// deleting — and they share the Onaylar "Rezervasyonlar" tab (İptal list).
+// =============================================================================
+
+/** Identical shape to PendingReservationDeletion — the tab renders both. */
+export type PendingReservationCancellation = PendingReservationDeletion;
+
+export async function listPendingReservationCancellations(): Promise<
+  PendingReservationCancellation[]
+> {
+  const { data, error } = await supabase
+    .from('reservation_cancellation_requests')
+    .select(
+      'id, reservation_id, reason, requested_by, created_at, reservation:reservations(stay_start, stay_end, guest:guests(full_name), unit:units(name), property:properties(name, region))',
+    )
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) throw wrapErr(error);
+  return (data as unknown as PendingReservationCancellation[]) ?? [];
+}
+
+export async function approveReservationCancellation(requestId: string): Promise<void> {
+  const { error } = await supabase.rpc('approve_reservation_cancellation', {
+    _request_id: requestId,
+  });
+  if (error) throw wrapErr(error);
+}
+
+export async function denyReservationCancellation(requestId: string): Promise<void> {
+  const { error } = await supabase.rpc('deny_reservation_cancellation', {
     _request_id: requestId,
   });
   if (error) throw wrapErr(error);

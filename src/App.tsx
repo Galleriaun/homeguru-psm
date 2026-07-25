@@ -3,6 +3,7 @@ import { AuthProvider } from '@/hooks/useAuth';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { Layout } from '@/components/Layout';
 import { PwaUpdatePrompt } from '@/components/PwaUpdatePrompt';
+import { PushNavigate } from '@/components/PushNavigate';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -31,6 +32,7 @@ import { TemplatesPage } from '@/pages/settings/TemplatesPage';
 import { TrashPage } from '@/pages/settings/TrashPage';
 import { AuditLogPage } from '@/pages/settings/AuditLogPage';
 import { ProfilePage } from '@/pages/settings/ProfilePage';
+import { NotificationsPage } from '@/pages/settings/NotificationsPage';
 import { UnitGalleryPage } from '@/pages/public/UnitGalleryPage';
 
 const RESERVATION_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'RECEPTION', 'YETKILI'] as const;
@@ -56,6 +58,7 @@ export default function App() {
   return (
     <AuthProvider>
       <PwaUpdatePrompt />
+      <PushNavigate />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 
@@ -74,6 +77,9 @@ export default function App() {
 
           {/* Profile — any authenticated user can edit their own display name */}
           <Route path="/settings/profile" element={<ProfilePage />} />
+
+          {/* Bildirimler — any authenticated user sees their own notifications */}
+          <Route path="/notifications" element={<NotificationsPage />} />
 
           {/* Properties */}
           <Route

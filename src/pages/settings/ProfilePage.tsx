@@ -1,20 +1,27 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { can } from '@/lib/rbac';
 import { updateOwnFullName } from '@/lib/queries/profile';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PushNotificationsCard } from '@/components/PushNotificationsCard';
+import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
 import { GoogleCalendarCard } from '@/components/GoogleCalendarCard';
 import { formatRole } from '@/lib/utils';
 
 export function ProfilePage() {
-  const { profile, user, refreshProfile } = useAuth();
+  const { profile, user, refreshProfile, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const [fullName, setFullName] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successAt, setSuccessAt] = useState<number | null>(null);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   // Seed the input once the profile arrives.
   useEffect(() => {
@@ -50,6 +57,12 @@ export function ProfilePage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    await signOut();
+    navigate('/login', { replace: true });
   };
 
   if (!profile) {
@@ -119,9 +132,56 @@ export function ProfilePage() {
         </form>
       </Card>
 
-      <PushNotificationsCard />
+      <Card className="space-y-6">
+        <PushNotificationsCard bare />
+        <div className="border-t border-stone-200 dark:border-stone-700" />
+        <NotificationSettingsCard bare />
+      </Card>
+
+      {can(profile.role, 'finance:read') && (
+        <Card>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">
+                WhatsApp Şablonları
+              </h2>
+              <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
+                Misafirlere gönderilecek mesaj şablonlarını yönetin.
+              </p>
+            </div>
+            <Link
+              to="/settings/templates"
+              className="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100 dark:border-stone-600 dark:text-stone-200 dark:hover:bg-stone-800"
+            >
+              Aç
+            </Link>
+          </div>
+        </Card>
+      )}
 
       <GoogleCalendarCard />
+
+      <div className="pt-2">
+        <Button
+          variant="danger"
+          className="w-full"
+          onClick={() => setConfirmSignOut(true)}
+        >
+          Çıkış Yap
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmSignOut}
+        title="Çıkış yapılsın mı?"
+        description="Oturumunuz kapatılacak ve giriş ekranına yönlendirileceksiniz."
+        confirmLabel="Çıkış Yap"
+        cancelLabel="Vazgeç"
+        destructive
+        loading={signingOut}
+        onConfirm={handleSignOut}
+        onCancel={() => setConfirmSignOut(false)}
+      />
     </div>
   );
 }

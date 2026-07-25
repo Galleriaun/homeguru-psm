@@ -1,23 +1,32 @@
 import { useEffect, useState } from 'react';
-import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can, isTeknikPersonel } from '@/lib/rbac';
+import { countUnreadNotifications } from '@/lib/queries/notifications';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { NotificationSettingsModal } from '@/components/NotificationSettingsModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { PendingApprovalPage } from '@/pages/PendingApprovalPage';
 import { cn, formatRole } from '@/lib/utils';
 
 export function Layout() {
-  const { profile, signOut } = useAuth();
-  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const location = useLocation();
 
-  const [confirmSignOut, setConfirmSignOut] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  /** Bell-icon settings modal — owns per-event push opt-in toggles. */
-  const [notifModalOpen, setNotifModalOpen] = useState(false);
+  /** Unread Bildirimler count for the bell badge. */
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+
+  // Refresh the unread count on login and on every navigation, so opening
+  // Bildirimler → marking read → leaving clears the badge. Cheap HEAD count.
+  useEffect(() => {
+    if (!profile) {
+      setUnreadNotifs(0);
+      return;
+    }
+    countUnreadNotifications()
+      .then(setUnreadNotifs)
+      .catch(() => {});
+  }, [profile, location.pathname]);
 
   // Close the mobile drawer on Esc + lock body scroll while open.
   useEffect(() => {
@@ -34,16 +43,10 @@ export function Layout() {
     };
   }, [mobileOpen]);
 
-  const handleSignOut = async () => {
-    setSigningOut(true);
-    await signOut();
-    navigate('/login', { replace: true });
-  };
-
   // Desktop NavLink — inline horizontal pill.
   const navLinkClasses = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+      'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
       isActive
         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
         : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800',
@@ -53,7 +56,7 @@ export function Layout() {
   // lives on its own row instead of wrapping flow-style alongside neighbors.
   const drawerLinkClasses = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'block w-full rounded-md px-3 py-3 text-base font-medium transition-colors',
+      'flex w-full items-center gap-3 rounded-md px-3 py-3 text-base font-medium transition-colors',
       isActive
         ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
         : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800',
@@ -112,8 +115,6 @@ export function Layout() {
     </svg>
   );
 
-  // Bell — opens the per-event notification preferences modal. Visible to
-  // every signed-in role (not gated to SUPER_ADMIN like audit/trash).
   const bellIcon = (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -132,13 +133,84 @@ export function Layout() {
     </svg>
   );
 
-  // Same look as the audit/trash icon links but as a <button> because it
-  // opens a modal instead of navigating.
-  const iconButtonClasses = cn(
-    'inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors',
-    'border-stone-300 text-stone-700 hover:bg-stone-100',
-    'dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
+  // Nav-item icon paths (feather/Lucide 24-grid). Rendered via navIcon() at the
+  // size each surface needs — 16px for the compact desktop pills, 20px for the
+  // larger drawer rows. Stroked with currentColor so they inherit the link's
+  // active/inactive + dark-mode colors, shrink-0 so a long label never squeezes
+  // them.
+  const navIconPaths = {
+    dashboard: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+      </>
+    ),
+    reservations: (
+      <>
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </>
+    ),
+    housekeeping: (
+      <>
+        <path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0L14.06 8.5A2 2 0 0 0 15.5 9.94l6.14 1.58a.5.5 0 0 1 0 .96L15.5 14.06a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z" />
+        <path d="M20 3v4" />
+        <path d="M22 5h-4" />
+        <path d="M4 17v2" />
+        <path d="M5 18H3" />
+      </>
+    ),
+    guests: (
+      <>
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
+    ),
+    properties: (
+      <>
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </>
+    ),
+    finance: (
+      <>
+        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+        <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+        <path d="M18 12a2 2 0 0 0 0 4h4v-4z" />
+      </>
+    ),
+  };
+  const navIcon = (name: keyof typeof navIconPaths, size: number) => (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      {navIconPaths[name]}
+    </svg>
   );
+
+  // Unread badge overlaid on the bell (99+ cap keeps it a single glyph wide).
+  const unreadBadge =
+    unreadNotifs > 0 ? (
+      <span className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+        {unreadNotifs > 99 ? '99+' : unreadNotifs}
+      </span>
+    ) : null;
 
   // PENDING signups have no role permissions and are in no RLS allow-list —
   // the app shell would just be empty. Show the holding screen instead.
@@ -162,34 +234,35 @@ export function Layout() {
           {/* Desktop nav (left of right-side actions) — hidden on mobile */}
           <nav className="ml-6 hidden flex-1 items-center gap-1 md:flex">
             <NavLink to="/dashboard" className={navLinkClasses}>
+              {navIcon('dashboard', 16)}
               Panel
             </NavLink>
             <NavLink to="/reservations" className={navLinkClasses}>
+              {navIcon('reservations', 16)}
               Rezervasyonlar
             </NavLink>
             {profile && can(profile.role, 'housekeeping:read') && (
               <NavLink to="/housekeeping" className={navLinkClasses}>
+                {navIcon('housekeeping', 16)}
                 Temizlik
               </NavLink>
             )}
             {profile && !isTeknikPersonel(profile.role) && (
               <>
                 <NavLink to="/guests" className={navLinkClasses}>
+                  {navIcon('guests', 16)}
                   Misafirler
                 </NavLink>
                 <NavLink to="/properties" className={navLinkClasses}>
+                  {navIcon('properties', 16)}
                   Mülkler
                 </NavLink>
               </>
             )}
             {profile && can(profile.role, 'finance:read') && (
               <NavLink to="/finance/cash" className={navLinkClasses}>
+                {navIcon('finance', 16)}
                 Finans
-              </NavLink>
-            )}
-            {profile && can(profile.role, 'finance:read') && (
-              <NavLink to="/settings/templates" className={navLinkClasses}>
-                Şablonlar
               </NavLink>
             )}
           </nav>
@@ -206,6 +279,17 @@ export function Layout() {
                 {profile?.role ? formatRole(profile.role) : ''}
               </span>
             </Link>
+            {profile && (
+              <NavLink
+                to="/notifications"
+                aria-label="Bildirimler"
+                title="Bildirimler"
+                className={(p) => cn(iconLinkClasses(p), 'relative')}
+              >
+                {bellIcon}
+                {unreadBadge}
+              </NavLink>
+            )}
             {profile?.role === 'SUPER_ADMIN' && (
               <NavLink
                 to="/settings/audit"
@@ -226,29 +310,7 @@ export function Layout() {
                 {trashIcon}
               </NavLink>
             )}
-            {profile && (
-              <button
-                type="button"
-                onClick={() => setNotifModalOpen(true)}
-                aria-label="Bildirim Ayarları"
-                title="Bildirim Ayarları"
-                className={iconButtonClasses}
-              >
-                {bellIcon}
-              </button>
-            )}
             <ThemeToggle />
-            <button
-              type="button"
-              onClick={() => setConfirmSignOut(true)}
-              className={cn(
-                'rounded-md border px-3 py-1 text-sm transition-colors',
-                'border-stone-300 text-stone-700 hover:bg-stone-100',
-                'dark:border-stone-600 dark:text-stone-200 dark:hover:bg-stone-800',
-              )}
-            >
-              Çıkış
-            </button>
           </div>
 
           {/* Mobile hamburger — visible only on mobile.
@@ -331,6 +393,7 @@ export function Layout() {
             {/* Drawer nav links — one per row */}
             <nav className="flex-1 space-y-1 overflow-y-auto p-3">
               <NavLink to="/dashboard" className={drawerLinkClasses} onClick={closeMobile}>
+                {navIcon('dashboard', 20)}
                 Panel
               </NavLink>
               <NavLink
@@ -338,6 +401,7 @@ export function Layout() {
                 className={drawerLinkClasses}
                 onClick={closeMobile}
               >
+                {navIcon('reservations', 20)}
                 Rezervasyonlar
               </NavLink>
               {profile && can(profile.role, 'housekeeping:read') && (
@@ -346,15 +410,18 @@ export function Layout() {
                   className={drawerLinkClasses}
                   onClick={closeMobile}
                 >
+                  {navIcon('housekeeping', 20)}
                   Temizlik
                 </NavLink>
               )}
               {profile && !isTeknikPersonel(profile.role) && (
                 <>
                   <NavLink to="/guests" className={drawerLinkClasses} onClick={closeMobile}>
+                    {navIcon('guests', 20)}
                     Misafirler
                   </NavLink>
                   <NavLink to="/properties" className={drawerLinkClasses} onClick={closeMobile}>
+                    {navIcon('properties', 20)}
                     Mülkler
                   </NavLink>
                 </>
@@ -365,21 +432,13 @@ export function Layout() {
                   className={drawerLinkClasses}
                   onClick={closeMobile}
                 >
+                  {navIcon('finance', 20)}
                   Finans
-                </NavLink>
-              )}
-              {profile && can(profile.role, 'finance:read') && (
-                <NavLink
-                  to="/settings/templates"
-                  className={drawerLinkClasses}
-                  onClick={closeMobile}
-                >
-                  Şablonlar
                 </NavLink>
               )}
             </nav>
 
-            {/* Drawer footer: admin shortcuts + theme + sign out */}
+            {/* Drawer footer: admin shortcuts + theme */}
             <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-3 py-3 dark:border-stone-700">
               <div className="flex items-center gap-2">
                 {profile?.role === 'SUPER_ADMIN' && (
@@ -405,35 +464,19 @@ export function Layout() {
                   </NavLink>
                 )}
                 {profile && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeMobile();
-                      setNotifModalOpen(true);
-                    }}
-                    aria-label="Bildirim Ayarları"
-                    title="Bildirim Ayarları"
-                    className={iconButtonClasses}
+                  <NavLink
+                    to="/notifications"
+                    aria-label="Bildirimler"
+                    title="Bildirimler"
+                    onClick={closeMobile}
+                    className={(p) => cn(iconLinkClasses(p), 'relative')}
                   >
                     {bellIcon}
-                  </button>
+                    {unreadBadge}
+                  </NavLink>
                 )}
                 <ThemeToggle />
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileOpen(false);
-                  setConfirmSignOut(true);
-                }}
-                className={cn(
-                  'rounded-md border px-3 py-1.5 text-sm transition-colors',
-                  'border-stone-300 text-stone-700 hover:bg-stone-100',
-                  'dark:border-stone-600 dark:text-stone-200 dark:hover:bg-stone-800',
-                )}
-              >
-                Çıkış
-              </button>
             </div>
           </aside>
         </div>
@@ -442,22 +485,6 @@ export function Layout() {
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Outlet />
       </main>
-
-      <ConfirmDialog
-        open={confirmSignOut}
-        title="Çıkış yapılsın mı?"
-        description="Oturumunuz kapatılacak ve giriş ekranına yönlendirileceksiniz."
-        confirmLabel="Çıkış Yap"
-        cancelLabel="Vazgeç"
-        destructive
-        loading={signingOut}
-        onConfirm={handleSignOut}
-        onCancel={() => setConfirmSignOut(false)}
-      />
-
-      {notifModalOpen && (
-        <NotificationSettingsModal onClose={() => setNotifModalOpen(false)} />
-      )}
     </div>
   );
 }

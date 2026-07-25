@@ -124,6 +124,39 @@ In your GitHub repo:
 
 ---
 
+## 8a. Activate the send-push shared secret (security)
+
+`send-push` previously accepted any valid project Bearer token (including the
+public anon key and any logged-in user's JWT), so a malicious insider could forge
+notifications. Migration 130 + the updated function close that with a shared
+secret. The rollout is **non-breaking and opt-in** — nothing changes until you
+set both halves below. Do it in this order (Vault first) so there is no gap:
+
+1. Pick a strong random value, e.g.:
+   ```bash
+   openssl rand -hex 32
+   ```
+2. **Vault secret** (so the DB pipeline sends it) — in the Supabase SQL editor:
+   ```sql
+   select vault.create_secret('<the-random-value>', 'push_secret');
+   ```
+3. **Function secret** (so the Edge Function enforces it) — same value:
+   ```bash
+   supabase secrets set PUSH_SECRET=<the-random-value>
+   ```
+4. Apply migration `130_send_push_shared_secret.sql`, then redeploy the function:
+   ```bash
+   supabase functions deploy send-push
+   ```
+
+Verify: notifications still arrive (e.g. create an UNCONFIRMED payment). A raw
+`curl` to the function URL with only a Bearer token now returns **403**; the DB
+triggers, which attach `x-push-secret` from Vault, still succeed. If either half
+is missing the code degrades to the old behavior, so a half-finished rollout
+won't drop pushes — it just won't be enforced yet.
+
+---
+
 ## 9. Verify the keepalive workflow
 
 After the first deploy, manually run `Supabase keepalive` once from the Actions tab to verify the secrets work. It should output a JSON array (possibly empty) and finish in seconds. After that, it runs automatically every 6 days.

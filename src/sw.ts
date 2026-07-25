@@ -66,6 +66,36 @@ interface PushPayload {
   icon?: string;
 }
 
+/**
+ * The app's base URL — "https://<user>.github.io/<repo>/" on GitHub Pages,
+ * "http://localhost:5173/" in dev. `registration.scope` IS the deploy base:
+ * the SW is served from `<base>sw.js` and takes its directory as scope.
+ */
+function appBase(): string {
+  const scope = self.registration.scope;
+  return scope.endsWith('/') ? scope : `${scope}/`;
+}
+
+/**
+ * Absolute URL for a router-relative notification path (e.g. "/reservations/1").
+ *
+ * The DB triggers store paths WITHOUT the deploy base — correct for the page,
+ * where React Router prepends `basename` itself. The SW has no router: handing
+ * "/reservations/1" straight to openWindow() resolves it against the ORIGIN
+ * ROOT, i.e. https://<user>.github.io/reservations/1 — GitHub's own 404 page,
+ * since the app actually lives under /<repo>/. Resolving against the base keeps
+ * that prefix. Leading slashes are stripped so the path resolves RELATIVE to
+ * the base instead of replacing it.
+ */
+function toAppUrl(path: string): string {
+  const base = appBase();
+  try {
+    return new URL(path.replace(/^\/+/, ''), base).href;
+  } catch {
+    return base;
+  }
+}
+
 self.addEventListener('push', (event) => {
   let payload: PushPayload = {};
   if (event.data) {
@@ -91,7 +121,11 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data as { url?: string } | undefined;
-  const targetUrl = data?.url || '/';
+  // Router-relative path exactly as the triggers store it ("/reservations/123").
+  // Anything else — absolute, or protocol-relative "//host" which would escape
+  // the origin — falls back to the app root.
+  const raw = data?.url;
+  const path = raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
 
   event.waitUntil(
     (async () => {
@@ -99,22 +133,30 @@ self.addEventListener('notificationclick', (event) => {
         type: 'window',
         includeUncontrolled: true,
       });
+      // Keep only windows inside our own base: `includeUncontrolled` also
+      // returns other same-origin apps (github.io serves every repo from one
+      // origin), and focusing one of those drops the operator into a different
+      // app that ignores the message below.
+      const base = appBase();
+      const appClients = allClients.filter((client) => client.url.startsWith(base));
+
       // Focus an existing HomeGuru tab and tell it where to go — much cheaper
-      // than opening a duplicate window.
-      for (const client of allClients) {
+      // than opening a duplicate window. The page's PushNavigate listener turns
+      // this into a React Router navigation (it re-adds the basename itself).
+      for (const client of appClients) {
         if ('focus' in client) {
           await client.focus();
           try {
-            client.postMessage({ type: 'PUSH_NAVIGATE', url: targetUrl });
+            client.postMessage({ type: 'PUSH_NAVIGATE', url: path });
           } catch {
             /* postMessage failures shouldn't block focusing */
           }
           return;
         }
       }
-      // No tab open — open one at the deep link.
+      // No app window open — open one at the BASE-PREFIXED deep link.
       if (self.clients.openWindow) {
-        await self.clients.openWindow(targetUrl);
+        await self.clients.openWindow(toAppUrl(path));
       }
     })(),
   );

@@ -13,6 +13,7 @@ export type NotificationEventType =
   | 'pending_approval'
   | 'pending_google_reservation'
   | 'new_reservation'
+  | 'reservation_changed'
   | 'reservation_auto_completed'
   | 'salary_auto_paid'
   | 'upcoming_reservation_2d';
@@ -23,6 +24,7 @@ export const NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   'pending_approval',
   'pending_google_reservation',
   'new_reservation',
+  'reservation_changed',
   'upcoming_reservation_2d',
   'reservation_auto_completed',
   'salary_auto_paid',
@@ -35,6 +37,7 @@ export const NOTIFICATION_EVENT_LABELS: Record<NotificationEventType, string> = 
   pending_approval: 'Onay bekleyen gider / kasa hareketi',
   pending_google_reservation: 'Yeni Google takvim rezervasyonu',
   new_reservation: 'Yeni rezervasyon',
+  reservation_changed: 'Rezervasyon değişikliği (gün / tutar)',
   upcoming_reservation_2d: 'Yaklaşan rezervasyon (2 gün önce)',
   reservation_auto_completed: 'Rezervasyon otomatik tamamlandı',
   salary_auto_paid: 'Otomatik maaş ödemesi',
@@ -47,6 +50,7 @@ export const NOTIFICATION_EVENT_HINTS: Record<NotificationEventType, string> = {
   pending_approval: 'Yetkili olmayan bir personel gider veya kasa hareketi gönderdiğinde.',
   pending_google_reservation: 'Google Takvim\'e dışarıdan (örn. Meta AI) yeni rezervasyon eklendiğinde.',
   new_reservation: 'Sisteme yeni bir rezervasyon eklendiğinde.',
+  reservation_changed: 'Bir rezervasyonun tarihi veya tutarı değiştirildiğinde.',
   upcoming_reservation_2d: 'Bir rezervasyonun girişine 2 gün kala.',
   reservation_auto_completed: 'Sistem bir rezervasyonu otomatik tamamladığında.',
   salary_auto_paid: 'Sistem otomatik maaş ödemesi yaptığında.',
@@ -63,6 +67,7 @@ export const EVENT_RECIPIENT_ROLES: Record<NotificationEventType, Role[]> = {
   pending_approval: ['SUPER_ADMIN'],
   pending_google_reservation: ['SUPER_ADMIN'],
   new_reservation: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA', 'PERSONEL_BORNOVA', 'RECEPTION', 'HOUSEKEEPING', 'YETKILI'],
+  reservation_changed: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
   reservation_auto_completed: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA'],
   salary_auto_paid: ['SUPER_ADMIN'],
   upcoming_reservation_2d: ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YONETICI_BORNOVA', 'PERSONEL_BORNOVA', 'RECEPTION', 'HOUSEKEEPING', 'YETKILI'],
@@ -89,6 +94,7 @@ export async function listNotificationPreferences(): Promise<
     pending_approval: true,
     pending_google_reservation: true,
     new_reservation: true,
+    reservation_changed: true,
     upcoming_reservation_2d: true,
     reservation_auto_completed: true,
     salary_auto_paid: true,

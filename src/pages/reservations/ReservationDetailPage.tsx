@@ -7,6 +7,8 @@ import {
   deleteReservation,
   requestReservationDeletion,
   getPendingDeletionRequest,
+  requestReservationCancellation,
+  getPendingCancellationRequest,
   getReservation,
   setCariBlocked,
   isOrphanedReservation,
@@ -89,6 +91,10 @@ export function ReservationDetailPage() {
   // resolves in Onaylar. `deletionPending` drives the "onay bekliyor" badge.
   const [requesting, setRequesting] = useState(false);
   const [deletionPending, setDeletionPending] = useState(false);
+  // Cancellation approval (migration 126) — same flow as deletion: a non-admin's
+  // "İptal Et" becomes a request a Yönetici resolves in Onaylar.
+  const [cancelRequesting, setCancelRequesting] = useState(false);
+  const [cancellationPending, setCancellationPending] = useState(false);
 
   // Cari hesap (ledger) — gated to finance:read
   const [ledger, setLedger] = useState<LedgerEntry[] | null>(null);
@@ -151,6 +157,9 @@ export function ReservationDetailPage() {
         // Best-effort: surface an existing pending deletion request as a badge.
         getPendingDeletionRequest(id)
           .then((req) => setDeletionPending(Boolean(req)))
+          .catch(() => {});
+        getPendingCancellationRequest(id)
+          .then((req) => setCancellationPending(Boolean(req)))
           .catch(() => {});
         setGuestName(g.data?.full_name ?? '');
         setGuestPhone(g.data?.phone ?? null);
@@ -270,6 +279,22 @@ export function ReservationDetailPage() {
       setError(e instanceof Error ? e.message : 'İptal başarısız');
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Non-admin "İptal Et" → a request a Yönetici resolves in Onaylar; the
+  // reservation stays as-is until then (migration 126).
+  const handleRequestCancellation = async () => {
+    if (!id) return;
+    setCancelRequesting(true);
+    setError(null);
+    try {
+      await requestReservationCancellation(id);
+      setCancellationPending(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'İptal talebi oluşturulamadı');
+    } finally {
+      setCancelRequesting(false);
     }
   };
 
@@ -432,15 +457,26 @@ export function ReservationDetailPage() {
               </Button>
             </Link>
           )}
-          {canCancel && !isCancelled && (
+          {canCancel && !isCancelled && (isSuperAdmin || !cancellationPending) && (
             <Button
               variant="danger"
               size="sm"
+              loading={!isSuperAdmin && cancelRequesting}
               className="border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-400 dark:hover:bg-red-900"
-              onClick={() => setConfirmCancel(true)}
+              onClick={() => {
+                // Yönetici cancels outright after a confirm; everyone else files
+                // the request straight away (mirrors the Sil flow).
+                if (isSuperAdmin) setConfirmCancel(true);
+                else handleRequestCancellation();
+              }}
             >
               İptal Et
             </Button>
+          )}
+          {cancellationPending && !isCancelled && (
+            <span className="inline-flex items-center rounded-md bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              İptal edilmesi için onay bekleniyor
+            </span>
           )}
           {canDelete && (isSuperAdmin || !deletionPending) && (
             <Button

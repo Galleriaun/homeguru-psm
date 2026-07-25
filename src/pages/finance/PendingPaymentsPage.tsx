@@ -12,6 +12,10 @@ import {
   approveExpense,
   approveReservationDeletion,
   denyReservationDeletion,
+  approveReservationCancellation,
+  denyReservationCancellation,
+  listPendingReservationCancellations,
+  type PendingReservationCancellation,
   listPendingCashTransactions,
   listPendingExpenses,
   listPendingReservationDeletions,
@@ -46,7 +50,9 @@ type PendingAction =
   | { type: 'approve-cash'; item: PendingCashTx }
   | { type: 'reject-cash'; item: PendingCashTx }
   | { type: 'approve-reservation'; item: PendingReservationDeletion }
-  | { type: 'deny-reservation'; item: PendingReservationDeletion };
+  | { type: 'deny-reservation'; item: PendingReservationDeletion }
+  | { type: 'approve-cancellation'; item: PendingReservationCancellation }
+  | { type: 'deny-cancellation'; item: PendingReservationCancellation };
 
 /**
  * Money subtotal + per-category breakdown for the active sub-tab. Every row is
@@ -121,6 +127,9 @@ export function PendingPaymentsPage() {
   const [reservationDeletions, setReservationDeletions] = useState<
     PendingReservationDeletion[] | null
   >(null);
+  const [reservationCancellations, setReservationCancellations] = useState<
+    PendingReservationCancellation[] | null
+  >(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -137,7 +146,10 @@ export function PendingPaymentsPage() {
       canResolveDeletions
         ? listPendingReservationDeletions()
         : Promise.resolve<PendingReservationDeletion[]>([]),
-    ]).then(([p, e, c, r]) => {
+      canResolveDeletions
+        ? listPendingReservationCancellations()
+        : Promise.resolve<PendingReservationCancellation[]>([]),
+    ]).then(([p, e, c, r, rc]) => {
       if (p.status === 'fulfilled') setPayments(p.value);
       else setLoadError(p.reason?.message ?? 'Tahsilatlar yüklenemedi');
       if (e.status === 'fulfilled') setExpenses(e.value);
@@ -146,6 +158,8 @@ export function PendingPaymentsPage() {
       else setLoadError(c.reason?.message ?? 'Kasa hareketleri yüklenemedi');
       if (r.status === 'fulfilled') setReservationDeletions(r.value);
       else setLoadError(r.reason?.message ?? 'Silme talepleri yüklenemedi');
+      if (rc.status === 'fulfilled') setReservationCancellations(rc.value);
+      else setLoadError(rc.reason?.message ?? 'İptal talepleri yüklenemedi');
     });
   }, [canResolveDeletions]);
 
@@ -197,6 +211,18 @@ export function PendingPaymentsPage() {
             (prev) => prev?.filter((r) => r.id !== pending.item.id) ?? prev,
           );
           break;
+        case 'approve-cancellation':
+          await approveReservationCancellation(pending.item.id);
+          setReservationCancellations(
+            (prev) => prev?.filter((r) => r.id !== pending.item.id) ?? prev,
+          );
+          break;
+        case 'deny-cancellation':
+          await denyReservationCancellation(pending.item.id);
+          setReservationCancellations(
+            (prev) => prev?.filter((r) => r.id !== pending.item.id) ?? prev,
+          );
+          break;
       }
       setPending(null);
     } catch (err) {
@@ -217,6 +243,10 @@ export function PendingPaymentsPage() {
   const vExpenses = pick(expenses, (e) => e.region);
   const vCashTxs = pick(cashTxs, (t) => t.cash_account?.region);
   const vDeletions = pick(reservationDeletions, (d) => d.reservation?.property?.region);
+  const vCancellations = pick(
+    reservationCancellations,
+    (d) => d.reservation?.property?.region,
+  );
 
   // Tab badges show the COMBINED Genel + Bornova total per category (the full
   // lists), so an all-regions reviewer sees the grand total per tab at a glance.
@@ -226,7 +256,9 @@ export function PendingPaymentsPage() {
     payments: payments?.length ?? 0,
     expenses: expenses?.length ?? 0,
     cash_tx: cashTxs?.length ?? 0,
-    reservations: reservationDeletions?.length ?? 0,
+    // The tab holds both request kinds (Silme + İptal), so the badge sums them.
+    reservations:
+      (reservationDeletions?.length ?? 0) + (reservationCancellations?.length ?? 0),
   };
   const subtotal = tabSubtotal(tab, vPayments, vExpenses, vCashTxs);
   // Count for the bottom "Toplam X onay" — the SELECTED region's items in the
@@ -239,7 +271,7 @@ export function PendingPaymentsPage() {
         ? vExpenses?.length ?? 0
         : tab === 'cash_tx'
           ? vCashTxs?.length ?? 0
-          : vDeletions?.length ?? 0;
+          : (vDeletions?.length ?? 0) + (vCancellations?.length ?? 0);
 
   // Per-region split for the ACTIVE section only → each region button shows how
   // many of THIS tab's onaylar belong to it (and the badge hides at 0, so an
@@ -251,8 +283,12 @@ export function PendingPaymentsPage() {
     if (tab === 'payments') (payments ?? []).forEach((p) => tally(p.property?.region));
     else if (tab === 'expenses') (expenses ?? []).forEach((e) => tally(e.region));
     else if (tab === 'cash_tx') (cashTxs ?? []).forEach((t) => tally(t.cash_account?.region));
-    else if (tab === 'reservations' && canResolveDeletions)
+    else if (tab === 'reservations' && canResolveDeletions) {
       (reservationDeletions ?? []).forEach((d) => tally(d.reservation?.property?.region));
+      (reservationCancellations ?? []).forEach((d) =>
+        tally(d.reservation?.property?.region),
+      );
+    }
   }
 
   return (
@@ -358,17 +394,51 @@ export function PendingPaymentsPage() {
       )}
 
       {tab === 'reservations' && (
-        <ReservationDeletionsList
-          items={vDeletions}
-          onApprove={(it) => {
-            setDialogError(null);
-            setPending({ type: 'approve-reservation', item: it });
-          }}
-          onDeny={(it) => {
-            setDialogError(null);
-            setPending({ type: 'deny-reservation', item: it });
-          }}
-        />
+        <div className="space-y-6">
+          {/* Two request kinds share this tab: Silme removes the reservation
+              (→ Çöp Kutusu), İptal only sets it to iptal. Kept as separate
+              labelled lists so the two decisions are never confused. */}
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+              Silme
+              <span className="ml-2 text-xs font-normal text-stone-500 dark:text-stone-400">
+                {vDeletions?.length ?? 0}
+              </span>
+            </h2>
+            <ReservationDeletionsList
+              items={vDeletions}
+              onApprove={(it) => {
+                setDialogError(null);
+                setPending({ type: 'approve-reservation', item: it });
+              }}
+              onDeny={(it) => {
+                setDialogError(null);
+                setPending({ type: 'deny-reservation', item: it });
+              }}
+            />
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+              İptal
+              <span className="ml-2 text-xs font-normal text-stone-500 dark:text-stone-400">
+                {vCancellations?.length ?? 0}
+              </span>
+            </h2>
+            <ReservationDeletionsList
+              items={vCancellations}
+              emptyLabel="Bekleyen iptal talebi yok."
+              onApprove={(it) => {
+                setDialogError(null);
+                setPending({ type: 'approve-cancellation', item: it });
+              }}
+              onDeny={(it) => {
+                setDialogError(null);
+                setPending({ type: 'deny-cancellation', item: it });
+              }}
+            />
+          </section>
+        </div>
       )}
 
       {/* Bottom summary — count (right) + money subtotal with a per-category
@@ -683,14 +753,17 @@ function CashTxList({
 // Rezervasyon silme talepleri — non-admins request a deletion; SUPER_ADMIN
 // approves (deletes the reservation) or denies (keeps it). Migration 090.
 // ----------------------------------------------------------------------------
+/** Renders both request kinds — deletion and cancellation share this shape. */
 function ReservationDeletionsList({
   items,
   onApprove,
   onDeny,
+  emptyLabel = 'Onay bekleyen silme talebi yok.',
 }: {
   items: PendingReservationDeletion[] | null;
   onApprove: (it: PendingReservationDeletion) => void;
   onDeny: (it: PendingReservationDeletion) => void;
+  emptyLabel?: string;
 }) {
   if (items === null) {
     return <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>;
@@ -699,7 +772,7 @@ function ReservationDeletionsList({
     return (
       <Card>
         <p className="text-center text-sm text-stone-600 dark:text-stone-300">
-          Onay bekleyen silme talebi yok.
+          {emptyLabel}
         </p>
       </Card>
     );
@@ -769,22 +842,28 @@ function actionTitle(a: PendingAction): string {
       return 'Silme talebi onaylansın mı?';
     case 'deny-reservation':
       return 'Silme talebi reddedilsin mi?';
+    case 'approve-cancellation':
+      return 'İptal talebi onaylansın mı?';
+    case 'deny-cancellation':
+      return 'İptal talebi reddedilsin mi?';
   }
 }
 
 function actionConfirmLabel(a: PendingAction): string {
   if (a.type === 'approve-reservation') return 'Sil';
-  if (a.type === 'deny-reservation') return 'Reddet';
+  if (a.type === 'approve-cancellation') return 'İptal Et';
+  if (a.type === 'deny-reservation' || a.type === 'deny-cancellation') return 'Reddet';
   return isDestructive(a) ? 'Reddet' : 'Onayla';
 }
 
 function isDestructive(a: PendingAction): boolean {
-  // approve-reservation deletes the reservation, so it's the destructive one;
-  // deny-reservation keeps it (safe).
+  // The "approve" side is destructive here: approve-reservation deletes,
+  // approve-cancellation cancels. The "deny" side keeps the reservation (safe).
   return (
     a.type.startsWith('dispute-') ||
     a.type.startsWith('reject-') ||
-    a.type === 'approve-reservation'
+    a.type === 'approve-reservation' ||
+    a.type === 'approve-cancellation'
   );
 }
 
@@ -853,6 +932,20 @@ function actionDescription(a: PendingAction): ReactNode {
         <p className="text-sm">
           <strong>{a.item.reservation?.guest?.full_name ?? 'Misafir'}</strong> için
           silme talebi reddedilir; rezervasyon olduğu gibi kalır.
+        </p>
+      );
+    case 'approve-cancellation':
+      return (
+        <p className="text-sm">
+          <strong>{a.item.reservation?.guest?.full_name ?? 'Misafir'}</strong>{' '}
+          rezervasyonu iptal edilir. Bu işlem iptal talebini onaylar.
+        </p>
+      );
+    case 'deny-cancellation':
+      return (
+        <p className="text-sm">
+          <strong>{a.item.reservation?.guest?.full_name ?? 'Misafir'}</strong> için
+          iptal talebi reddedilir; rezervasyon olduğu gibi kalır.
         </p>
       );
   }

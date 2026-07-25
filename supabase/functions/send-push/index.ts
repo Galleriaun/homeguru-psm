@@ -33,8 +33,31 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT')!;
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!;
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!;
+// Shared secret that only the DB pipeline (via Vault) knows. When set, callers
+// must present a matching `x-push-secret` header — closes the "any Bearer token
+// works" gap where any authenticated user / the public anon key could invoke
+// this. Left optional so the fix rolls out without a breakage gap (migration
+// 130 / SETUP.md §8a); set it to activate enforcement.
+const PUSH_SECRET = Deno.env.get('PUSH_SECRET');
+if (!PUSH_SECRET) {
+  console.warn(
+    '[send-push] PUSH_SECRET not set — x-push-secret enforcement is OFF; ' +
+      'any valid project Bearer token can invoke this. See SETUP.md §8a.',
+  );
+}
 
 webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+/** Constant-time string compare so a mismatch can't be timed out byte by byte. */
+function safeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
+}
 
 interface SendPushBody {
   user_ids?: string[];
@@ -49,16 +72,25 @@ interface SendPushBody {
 }
 
 Deno.serve(async (req) => {
-  // Auth gate — Supabase's gateway already validates that the Bearer token
-  // is a signed JWT for THIS project before routing here, so we just need
-  // a Bearer-prefixed Authorization header. Compared to the previous
-  // strict equality against SUPABASE_SERVICE_ROLE_KEY, this avoids the
-  // dual-key-format trap (legacy JWT vs sb_secret_ form) that broke pg_net
-  // calls when the dashboard surfaced one format and the env var held the
-  // other.
+  // Layer 1 — the gateway already validated the Bearer is a signed JWT for THIS
+  // project, so we only sanity-check the header shape here. This alone is NOT a
+  // real boundary: the public anon key (in the client bundle) and any user's JWT
+  // both pass it — hence layer 2 below.
   const auth = req.headers.get('Authorization');
   if (!auth?.startsWith('Bearer ')) {
     return new Response('Unauthorized', { status: 401 });
+  }
+
+  // Layer 2 — the real boundary: the caller must know the shared secret that
+  // only the DB pipeline holds (Vault → x-push-secret header, migration 130).
+  // Key-format-agnostic, so it sidesteps the legacy-JWT vs sb_secret_ trap that
+  // made service-role equality fragile. Enforced only when PUSH_SECRET is
+  // configured, so enabling it is a deliberate, gap-free switch.
+  if (PUSH_SECRET) {
+    const provided = req.headers.get('x-push-secret');
+    if (!provided || !safeEqual(provided, PUSH_SECRET)) {
+      return new Response('Forbidden', { status: 403 });
+    }
   }
 
   let payload: SendPushBody;

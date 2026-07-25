@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { listProperties, type Property } from '@/lib/queries/properties';
@@ -116,7 +116,15 @@ export function ReservationFormPage() {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  /**
+   * Only a reviewer may write status='cancelled' (migration 126's BEFORE UPDATE
+   * trigger). Offering "İptal" to everyone else meant the whole save was
+   * rejected — losing every unrelated edit in the same form — so the option is
+   * hidden instead, and the cancellation goes through the detail page's
+   * "İptal Et", which files a request. Matches the calendar + detail page.
+   */
+  const isCancelReviewer = profile?.role === 'SUPER_ADMIN';
 
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -145,6 +153,11 @@ export function ReservationFormPage() {
   // Tracks whether the operator has typed their own total. Once true, the
   // unit×nights auto-fill stops overwriting it.
   const [totalEdited, setTotalEdited] = useState(false);
+  // Per-night rate captured from a MANUALLY typed total (= typed total ÷ nights
+  // at that moment). Once set, changing "Gece" rescales the total by it, so a
+  // manual 1100 at 1 gece becomes 2200 at 2 gece. Null until the operator types
+  // a total, so it never interferes with the unit×nights pricing auto-fill.
+  const perNightRef = useRef<number | null>(null);
   const [deposit, setDeposit] = useState(0);
   const [autoDebit, setAutoDebit] = useState(false);
   const [status, setStatus] = useState<ReservationStatus>('active');
@@ -153,6 +166,22 @@ export function ReservationFormPage() {
   const [showNote, setShowNote] = useState(false);
   // Once the operator picks a status by hand, stop auto-deriving it from dates.
   const [statusEdited, setStatusEdited] = useState(false);
+
+  /**
+   * "İptal" is only offered to a reviewer — see isCancelReviewer above. The one
+   * exception is a reservation that is ALREADY cancelled: the option has to stay
+   * in the list or the Select would render a value it doesn't contain, and
+   * saving would silently rewrite the status to whatever it fell back to.
+   * Re-saving an unchanged 'cancelled' is fine — the trigger only guards the
+   * transition INTO it.
+   */
+  const statusOptions = useMemo(
+    () =>
+      isCancelReviewer || status === 'cancelled'
+        ? STATUS_OPTIONS
+        : STATUS_OPTIONS.filter((o) => o.value !== 'cancelled'),
+    [isCancelReviewer, status],
+  );
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -348,6 +377,18 @@ export function ReservationFormPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestedTotal]);
+
+  // Changing "Gece" rescales a MANUALLY typed total by its captured per-night
+  // rate (typed 1100 at 1 gece → 2200 at 2 gece). Only when the operator has
+  // typed a total (perNightRef set) — otherwise the unit×nights pricing
+  // auto-fill above owns the total. Rounded to kuruş; the min={1} stepper never
+  // yields 0 nights.
+  const handleNightsChange = (n: number) => {
+    if (totalEdited && perNightRef.current !== null && n > 0) {
+      setTotalAmount(Math.round(perNightRef.current * n * 100) / 100);
+    }
+    setNights(n);
+  };
 
   // New reservations take their status from the check-in date — future stay
   // 'upcoming', current one 'active', past one 'completed' — until the
@@ -631,7 +672,7 @@ export function ReservationFormPage() {
                   max={365}
                   required
                   value={nights}
-                  onChange={setNights}
+                  onChange={handleNightsChange}
                 />
               </div>
 
@@ -752,6 +793,8 @@ export function ReservationFormPage() {
             onChange={(v) => {
               setTotalAmount(v);
               setTotalEdited(true);
+              // Capture the per-night rate so a later "Gece" change rescales it.
+              perNightRef.current = nights > 0 ? v / nights : null;
             }}
           />
 
@@ -773,8 +816,14 @@ export function ReservationFormPage() {
               setStatus(v as ReservationStatus);
               setStatusEdited(true);
             }}
-            options={STATUS_OPTIONS}
+            options={statusOptions}
           />
+          {!isCancelReviewer && status !== 'cancelled' && (
+            <p className="-mt-2 text-xs text-stone-500 dark:text-stone-400">
+              İptal için rezervasyon detayındaki “İptal Et” ile yönetici onayı
+              isteyin.
+            </p>
+          )}
 
           {/* Auto-debit accrues the stay night by night: each day, at the
               check-in hour, one night's share (toplam / gece sayısı) is posted

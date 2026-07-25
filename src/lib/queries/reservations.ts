@@ -154,12 +154,53 @@ export async function updateReservation(
   return data;
 }
 
+/**
+ * Cancel outright. Only a reviewer (Yönetici anywhere, Alt Yönetici in their own
+ * region) may do this — migration 126 enforces it with a BEFORE UPDATE trigger,
+ * so a non-reviewer gets a Turkish refusal here and must file a request via
+ * requestReservationCancellation() instead.
+ */
 export async function cancelReservation(id: string): Promise<void> {
   const { error } = await supabase
     .from('reservations')
     .update({ status: 'cancelled' satisfies ReservationStatus })
     .eq('id', id);
   if (error) throw wrapErr(error);
+}
+
+/**
+ * A non-reviewer files a reservation CANCELLATION REQUEST (migration 126). It
+ * lands in Onaylar → Rezervasyonlar → İptal for a Yönetici to approve (cancels)
+ * or deny (keeps). The reservation stays untouched until then. Idempotent
+ * server-side (one pending request per reservation).
+ */
+export async function requestReservationCancellation(
+  id: string,
+  reason: string | null = null,
+): Promise<void> {
+  const { error } = await supabase.rpc('request_reservation_cancellation', {
+    _reservation_id: id,
+    _reason: reason,
+  });
+  if (error) throw wrapErr(error);
+}
+
+/**
+ * The pending cancellation request for a reservation, if any — drives the detail
+ * page "iptal edilmesi için onay bekleniyor" banner. Returns null when there is
+ * none (or it isn't visible to the caller under RLS).
+ */
+export async function getPendingCancellationRequest(
+  reservationId: string,
+): Promise<{ id: string; requested_by: string | null; created_at: string } | null> {
+  const { data, error } = await supabase
+    .from('reservation_cancellation_requests')
+    .select('id, requested_by, created_at')
+    .eq('reservation_id', reservationId)
+    .eq('status', 'pending')
+    .maybeSingle();
+  if (error) throw wrapErr(error);
+  return data ?? null;
 }
 
 /**

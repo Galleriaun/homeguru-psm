@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { can, isTeknikPersonel } from '@/lib/rbac';
@@ -14,6 +14,7 @@ import { ReservationsViewTabs } from './ViewTabs';
 import { formatTRY, formatDate, checkoutTimeLabel, istanbulToday } from '@/lib/utils';
 import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { loadReservationsWithPayments } from '@/lib/queries/payments';
+import { PAYMENT_META, paymentState } from '@/lib/paymentStatus';
 import type { ReservationStatus } from '@/types/database';
 
 const timeFmt = new Intl.DateTimeFormat('tr-TR', { timeStyle: 'short' });
@@ -29,24 +30,25 @@ function istanbulTomorrow(): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Payment badge: compares the collected sum against the reservation total.
-//   none → Ödeme Alınmadı, < total → Kısmi, = total → Ödeme Alındı, > total → Fazladan.
-// A small epsilon absorbs float rounding so an exact-amount payment reads "tam".
-function paymentBadge(
-  paid: number,
-  total: number,
-): { label: string; className: string } {
-  const amber =
-    'rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
-  const emerald =
-    'rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300';
-  const sky =
-    'rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300';
-  if (paid <= 0) return { label: 'Ödeme Alınmadı', className: amber };
-  if (paid < total - 0.005) return { label: 'Kısmi Ödeme Alındı', className: amber };
-  if (paid > total + 0.005) return { label: 'Fazladan Ödeme Alındı', className: sky };
-  return { label: 'Ödeme Alındı', className: emerald };
+// Payment badge: none → Ödeme Alınmadı, < total → Kısmi, = total → Ödeme
+// Alındı, > total → Fazladan. State + colours live in @/lib/paymentStatus so
+// this page's badges/filters and the Takvim bar lines stay identical.
+function paymentBadge(paid: number, total: number) {
+  return PAYMENT_META[paymentState(paid, total)];
 }
+
+// The payment filters, shown in their own icon dropdown next to the durum chip.
+// Keyed by the paymentState they select; label + colour come from PAYMENT_META.
+// Ordered by how much has been collected: none → partial → over.
+const PAYMENT_FILTERS = [
+  { value: 'UNPAID', state: 'none' },
+  { value: 'PARTIAL', state: 'partial' },
+  { value: 'OVERPAID', state: 'over' },
+] as const;
+type PaymentFilter = (typeof PAYMENT_FILTERS)[number]['value'];
+
+const isPaymentFilter = (f: string): f is PaymentFilter =>
+  PAYMENT_FILTERS.some((p) => p.value === f);
 
 const STATUS_LABELS: Record<ReservationStatus, string> = {
   pending: 'Beklemede',
@@ -63,6 +65,14 @@ const STATUS_COLORS: Record<ReservationStatus, string> = {
   completed: 'bg-stone-200 text-stone-700 dark:bg-stone-700 dark:text-stone-200',
   cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 };
+
+// These three share one dropdown in the filter row instead of a chip each.
+// Tamamlandı leads, as it is the one reached most often.
+const GROUPED_STATUSES = ['completed', 'pending', 'cancelled'] as const;
+type GroupedStatus = (typeof GROUPED_STATUSES)[number];
+
+const isGroupedStatus = (f: string): f is GroupedStatus =>
+  (GROUPED_STATUSES as readonly string[]).includes(f);
 
 // The "Tümü" view groups reservations under one heading per status, in this
 // order — so Yakında, Aktif etc. each get their own section.
@@ -82,15 +92,63 @@ export function ReservationsListPage() {
   /** reservation_id → total collected (active payments) — drives the
       "Kısmi / tam / fazladan Ödeme Alındı" badge on each card. */
   const [paidMap, setPaidMap] = useState<Map<string, number>>(() => new Map());
+  /** Whether paidMap actually arrived — see the load below. */
+  const [paidLoaded, setPaidLoaded] = useState(false);
   // 'CHECKOUT_TODAY' is a virtual filter — it cuts across statuses and shows
   // any reservation whose stay_end is on today's Istanbul calendar date.
   // Cancelled stays are excluded — "bugün çıkacaklar" is a reception-desk
   // view that should only highlight guests who are actually leaving.
   const [filter, setFilter] = useState<
-    'ALL' | 'CHECKOUT_TODAY' | 'CHECKOUT_TOMORROW' | ReservationStatus
+    'ALL' | 'CHECKOUT_TODAY' | 'CHECKOUT_TOMORROW' | PaymentFilter | ReservationStatus
   >('ALL');
   /** Free-text search over guest name. Applied before status filtering. */
   const [search, setSearch] = useState('');
+  /** Durum dropdown (Tamamlandı / Beklemede / İptal). */
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const statusMenuRef = useRef<HTMLDivElement | null>(null);
+  /** Whether one of the three grouped statuses is the active filter. */
+  const groupedActive = isGroupedStatus(filter);
+  /** Label on the split chip: the picked status, else Tamamlandı (the default,
+   *  so it is always reachable in a single click without opening the menu). */
+  const shownStatus: GroupedStatus = groupedActive ? filter : 'completed';
+
+  /** Ödeme durumu dropdown (Ödeme Alınmadı / Fazladan Ödeme Alındı). */
+  const [payMenuOpen, setPayMenuOpen] = useState(false);
+  const payMenuRef = useRef<HTMLDivElement | null>(null);
+  /** Whether a payment filter is the active one. */
+  const payActive = isPaymentFilter(filter);
+  /** A payment filter is on but the tahsilat data never arrived — results would
+   *  be wrong (everything reads as unpaid), so the list is withheld. */
+  const payDataMissing = payActive && !paidLoaded;
+  /** Names the icon-only button: the active payment filter, else the generic. */
+  const payButtonLabel = payActive
+    ? PAYMENT_META[PAYMENT_FILTERS.find((p) => p.value === filter)!.state].label
+    : 'Ödeme durumu';
+
+  // Close either dropdown on an outside click or Escape. Listeners are only
+  // attached while one is open, and removed on close/unmount.
+  useEffect(() => {
+    if (!statusMenuOpen && !payMenuOpen) return;
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (!statusMenuRef.current?.contains(t)) setStatusMenuOpen(false);
+      if (!payMenuRef.current?.contains(t)) setPayMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setStatusMenuOpen(false);
+        setPayMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('touchstart', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('touchstart', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [statusMenuOpen, payMenuOpen]);
 
   useEffect(() => {
     listReservations()
@@ -98,7 +156,16 @@ export function ReservationsListPage() {
       .catch((e) => setError(e?.message ?? 'Rezervasyonlar yüklenemedi'));
     // Best-effort: staff directory powers the "Oluşturan: X" line.
     loadStaffDirectory().then(setStaffMap).catch(() => {});
-    loadReservationsWithPayments().then(setPaidMap).catch(() => {});
+    // paidLoaded gates the payment filters: an empty paidMap is indistinguishable
+    // from "nobody paid", so without this a failed load would confidently list
+    // every reservation as "Ödeme Alınmadı". The badge tolerates it; a filter
+    // must not.
+    loadReservationsWithPayments()
+      .then((m) => {
+        setPaidMap(m);
+        setPaidLoaded(true);
+      })
+      .catch(() => setPaidLoaded(false));
   }, []);
 
   const canCreate = profile && can(profile.role, 'reservation:create');
@@ -133,8 +200,19 @@ export function ReservationsListPage() {
         (r) => r.stay_end.slice(0, 10) === tomorrow && r.status !== 'cancelled',
       );
     }
+    // Payment filters read the same paymentState as the card badge. Cancelled
+    // stays are excluded — an unpaid cancellation isn't money to chase, and it
+    // would bury the actionable rows (same reasoning as the çıkış filters).
+    if (isPaymentFilter(filter)) {
+      const want = PAYMENT_FILTERS.find((p) => p.value === filter)!.state;
+      return searched.filter(
+        (r) =>
+          r.status !== 'cancelled' &&
+          paymentState(paidMap.get(r.id) ?? 0, Number(r.total_amount)) === want,
+      );
+    }
     return searched.filter((r) => r.status === filter);
-  }, [searched, filter]);
+  }, [searched, filter, paidMap]);
 
   // The "Tümü" view: one section per status, plus a virtual "Bugün Çıkış"
   // section inserted right after Aktif (rezervasyonlar bugün çıkıyor — same
@@ -207,9 +285,9 @@ export function ReservationsListPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {(
-          ['ALL', 'active', 'CHECKOUT_TODAY', 'CHECKOUT_TOMORROW', 'upcoming', 'completed', 'pending', 'cancelled'] as const
+          ['ALL', 'active', 'CHECKOUT_TODAY', 'CHECKOUT_TOMORROW', 'upcoming'] as const
         ).map((f) => {
           const isActive = filter === f;
           const label =
@@ -234,6 +312,187 @@ export function ReservationsListPage() {
             </button>
           );
         })}
+
+        {/* Split chip: the label is a filter button in its own right (so
+            Tamamlandı — the one reached most often — stays one click away),
+            while the arrow opens the other two. Picking one from the menu
+            promotes it to the label, so the active filter is always visible. */}
+        <div ref={statusMenuRef} className="relative flex items-stretch">
+          <button
+            type="button"
+            onClick={() => setFilter(shownStatus)}
+            className={
+              (groupedActive
+                ? 'border-emerald-600 bg-emerald-600 font-medium text-white'
+                : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800') +
+              ' rounded-l-full border py-1 pl-4 pr-2.5 text-sm'
+            }
+          >
+            {STATUS_LABELS[shownStatus]}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPayMenuOpen(false);
+              setStatusMenuOpen((o) => !o);
+            }}
+            aria-haspopup="menu"
+            aria-expanded={statusMenuOpen}
+            aria-label="Diğer durumlar"
+            className={
+              (groupedActive
+                ? 'border-emerald-600 bg-emerald-600 text-white'
+                : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800') +
+              ' flex items-center rounded-r-full border border-l-0 py-1 pl-1 pr-3 text-sm'
+            }
+          >
+            <svg
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+              className={
+                (statusMenuOpen ? 'rotate-180 ' : '') + 'h-4 w-4 transition-transform'
+              }
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+
+          {statusMenuOpen && (
+            <div
+              role="menu"
+              className="absolute left-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-800"
+            >
+              {GROUPED_STATUSES.map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setFilter(f);
+                    setStatusMenuOpen(false);
+                  }}
+                  className={
+                    (filter === f
+                      ? 'bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-700') +
+                    ' block w-full px-4 py-2 text-left text-sm'
+                  }
+                >
+                  {STATUS_LABELS[f]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Ödeme durumu — icon-only, since these two are occasional lookups
+            rather than everyday filters. Hidden for Teknik Personel: they have
+            no tahsilat access (migration 121), so paidMap is empty for them and
+            every stay would falsely read "Ödeme Alınmadı". */}
+        {!isTeknik && (
+          <div ref={payMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setStatusMenuOpen(false);
+                setPayMenuOpen((o) => !o);
+              }}
+              aria-haspopup="menu"
+              aria-expanded={payMenuOpen}
+              title={payButtonLabel}
+              aria-label={payButtonLabel}
+              className={
+                (payActive
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800') +
+                ' flex items-center gap-1 rounded-full border px-3 py-1 text-sm'
+              }
+            >
+              {/* banknote */}
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="h-4 w-4"
+              >
+                <rect x="2" y="6" width="20" height="12" rx="2" />
+                <circle cx="12" cy="12" r="2.5" />
+                <path d="M6 12h.01M18 12h.01" />
+              </svg>
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+                className={
+                  (payMenuOpen ? 'rotate-180 ' : '') + 'h-4 w-4 transition-transform'
+                }
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+
+            {payMenuOpen && (
+              <div
+                role="menu"
+                className="absolute left-0 z-20 mt-1 min-w-[13rem] overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-800"
+              >
+                {PAYMENT_FILTERS.map((p) => (
+                  <button
+                    key={p.value}
+                    type="button"
+                    role="menuitem"
+                    aria-current={filter === p.value}
+                    onClick={() => {
+                      // Re-picking the active one clears it, so the filter can
+                      // be switched off without hunting for "Tümü".
+                      setFilter(filter === p.value ? 'ALL' : p.value);
+                      setPayMenuOpen(false);
+                    }}
+                    className={
+                      (filter === p.value
+                        ? 'bg-stone-100 dark:bg-stone-700'
+                        : 'hover:bg-stone-100 dark:hover:bg-stone-700') +
+                      ' flex w-full items-center justify-between gap-2 px-3 py-2 text-left'
+                    }
+                  >
+                    {/* Rendered as the actual badge, so the menu entry and the
+                        card it surfaces are visibly the same thing. */}
+                    <span className={PAYMENT_META[p.state].className}>
+                      {PAYMENT_META[p.state].label}
+                    </span>
+                    {filter === p.value && (
+                      <svg
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                        className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.5 7.5a1 1 0 0 1-1.4 0L3.3 9.7a1 1 0 1 1 1.4-1.4l3.8 3.79 6.8-6.79a1 1 0 0 1 1.4 0Z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <input
@@ -254,7 +513,16 @@ export function ReservationsListPage() {
         <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
       )}
 
-      {reservations && filtered.length === 0 && (
+      {reservations && payDataMissing && (
+        <Card>
+          <p className="text-center text-sm text-stone-600 dark:text-stone-300">
+            Ödeme bilgileri yüklenemedi — bu filtre şu an doğru sonuç veremez.
+            Sayfayı yenileyin.
+          </p>
+        </Card>
+      )}
+
+      {reservations && !payDataMissing && filtered.length === 0 && (
         <Card>
           <p className="text-center text-sm text-stone-600 dark:text-stone-300">
             Bu filtreyle eşleşen rezervasyon yok.
@@ -263,6 +531,7 @@ export function ReservationsListPage() {
       )}
 
       {reservations &&
+        !payDataMissing &&
         filtered.length > 0 &&
         (filter === 'ALL' ? (
           <div className="space-y-6">

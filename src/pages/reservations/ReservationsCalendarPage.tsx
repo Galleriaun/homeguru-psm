@@ -10,13 +10,14 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can } from '@/lib/rbac';
+import { can, isTeknikPersonel } from '@/lib/rbac';
 import { listProperties, type Property } from '@/lib/queries/properties';
 import { listAllUnits, type Unit } from '@/lib/queries/units';
 import {
   listReservationsInRange,
   updateReservation,
   cancelReservation,
+  requestReservationCancellation,
   type ReservationWithRefs,
 } from '@/lib/queries/reservations';
 import {
@@ -53,6 +54,8 @@ import { NightlyPriceModal } from './NightlyPriceModal';
 import { MoveReservationModal } from './MoveReservationModal';
 import { DayUseMonthCalendar } from './DayUseMonthCalendar';
 import { cn, formatDate, formatRoomType, istanbulToday } from '@/lib/utils';
+import { loadReservationsWithPayments } from '@/lib/queries/payments';
+import { PAYMENT_LINE, PAYMENT_META, paymentState } from '@/lib/paymentStatus';
 import type { ReservationStatus } from '@/types/database';
 
 // The timeline is ONE freely-scrollable range — no Önceki/Sonraki paging. It
@@ -142,6 +145,32 @@ function monthYearLabel(dateStr: string): string {
 
 export function ReservationsCalendarPage() {
   const { profile } = useAuth();
+  /**
+   * Who may cancel outright instead of filing a request (migration 126).
+   * Deliberately stricter than the DB's auth_can_review_region(), which also
+   * lets a REGION manager cancel inside their own region: matching the
+   * reservation detail page keeps the two screens consistent, and the only
+   * cost to a region manager is filing a request they can then approve
+   * themselves. The real boundary is the BEFORE UPDATE trigger either way.
+   */
+  const isCancelReviewer = profile?.role === 'SUPER_ADMIN';
+  /** reservation_id → collected total, for the payment line under each bar.
+   *  Teknik Personel has no tahsilat access (migration 121), so the query would
+   *  fail and leave this empty — which is indistinguishable from "nobody paid".
+   *  Skip loading AND drawing for them rather than paint every bar red. */
+  const showPaymentLines = !isTeknikPersonel(profile?.role);
+  const [paidMap, setPaidMap] = useState<Map<string, number>>(() => new Map());
+  const [paidLoaded, setPaidLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!showPaymentLines) return;
+    loadReservationsWithPayments()
+      .then((m) => {
+        setPaidMap(m);
+        setPaidLoaded(true);
+      })
+      .catch(() => setPaidLoaded(false));
+  }, [showPaymentLines]);
   const navigate = useNavigate();
 
   // Last calendar year included in the range; "Sene Ekle" bumps it. The range is
@@ -228,6 +257,8 @@ export function ReservationsCalendarPage() {
   const [resvCancelLoading, setResvCancelLoading] = useState(false);
   /** Toast for inline +1/-1 night results — kept lightweight, auto-dismiss. */
   const [actionError, setActionError] = useState<string | null>(null);
+  /** Success counterpart of actionError — e.g. "iptal talebi gönderildi". */
+  const [actionInfo, setActionInfo] = useState<string | null>(null);
 
   // ---- range-select (Task 9) ----
   /** Mobile-friendly toggle — when on, the next two cell taps form a range. */
@@ -592,9 +623,20 @@ export function ReservationsCalendarPage() {
     setResvCancelLoading(true);
     setResvCancelError(null);
     try {
-      await cancelReservation(resvToCancel.id);
+      if (isCancelReviewer) {
+        await cancelReservation(resvToCancel.id);
+        setReservationVersion((v) => v + 1);
+      } else {
+        // Migration 126: everyone else files a request a Yönetici resolves in
+        // Onaylar. The stay is untouched, so there is nothing to reload — the
+        // toast is the only feedback. Idempotent server-side, so a second
+        // attempt on the same reservation reuses the pending request.
+        await requestReservationCancellation(resvToCancel.id);
+        setActionInfo(
+          `${resvToCancel.guest?.full_name ?? 'Rezervasyon'} için iptal talebi gönderildi. Yönetici onayı bekleniyor.`,
+        );
+      }
       setResvToCancel(null);
-      setReservationVersion((v) => v + 1);
     } catch (err) {
       setResvCancelError(err instanceof Error ? err.message : 'İptal başarısız');
     } finally {
@@ -762,6 +804,22 @@ export function ReservationsCalendarPage() {
               </>
             )}
           </p>
+        </Card>
+      )}
+
+      {/* Success toast — currently the "iptal talebi gönderildi" confirmation. */}
+      {actionInfo && (
+        <Card className="border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-emerald-800 dark:text-emerald-300">{actionInfo}</p>
+            <button
+              type="button"
+              onClick={() => setActionInfo(null)}
+              className="text-xs text-emerald-800 underline hover:no-underline dark:text-emerald-300"
+            >
+              kapat
+            </button>
+          </div>
         </Card>
       )}
 
@@ -1101,13 +1159,23 @@ export function ReservationsCalendarPage() {
                               const laneIdx = unitLanes?.lane.get(r.id) ?? 0;
                               const laneH = (ROW_H - BAR_INSET * 2) / laneCount;
                               const laneGap = laneCount > 1 ? 2 : 0;
+                              // Ödeme durumu for the bottom line + tooltip; null
+                              // while the tahsilat data is absent (an empty
+                              // paidMap reads as "nobody paid" — see the load).
+                              const payState =
+                                showPaymentLines && paidLoaded
+                                  ? paymentState(
+                                      paidMap.get(r.id) ?? 0,
+                                      Number(r.total_amount),
+                                    )
+                                  : null;
                               return (
                                 <button
                                   key={r.id}
                                   type="button"
                                   onClick={() => handleReservationBarClick(r)}
                                   title={
-                                    isDayUse
+                                    (isDayUse
                                       ? `${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
                                           r.stay_start,
                                         )} · ${istanbulClock(r.stay_start)}–${istanbulClock(
@@ -1115,7 +1183,8 @@ export function ReservationsCalendarPage() {
                                         )} · Güniçi`
                                       : `${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
                                           r.stay_start,
-                                        )} → ${istanbulDateOf(r.stay_end)} · ${STATUS_LABELS[r.status]}`
+                                        )} → ${istanbulDateOf(r.stay_end)} · ${STATUS_LABELS[r.status]}`) +
+                                    (payState ? ` · ${PAYMENT_META[payState].label}` : '')
                                   }
                                   className={cn(
                                     'absolute z-10 flex items-center overflow-hidden px-1.5 text-xs font-medium text-white shadow-sm transition-colors',
@@ -1142,6 +1211,23 @@ export function ReservationsCalendarPage() {
                                     <span className="truncate">
                                       {r.guest?.full_name ?? '—'}
                                     </span>
+                                  )}
+                                  {/* Ödeme durumu — same states as the Liste
+                                      badges, drawn as a line along the bottom.
+                                      Inset from the bar's edges so it reads as a
+                                      marker rather than part of the bar. The
+                                      label rides on the bar's own tooltip: this
+                                      span is pointer-events-none (clicks belong
+                                      to the bar), so a title here could never
+                                      fire. */}
+                                  {payState && (
+                                    <span
+                                      aria-hidden="true"
+                                      className={cn(
+                                        'pointer-events-none absolute bottom-1 left-2 right-2 h-1 rounded-full',
+                                        PAYMENT_LINE[payState],
+                                      )}
+                                    />
                                   )}
                                 </button>
                               );
@@ -1267,6 +1353,7 @@ export function ReservationsCalendarPage() {
             nights={nights}
             canEdit={Boolean(profile && can(profile.role, 'reservation:update'))}
             canCancel={Boolean(profile && can(profile.role, 'reservation:cancel'))}
+            cancelNeedsApproval={!isCancelReviewer}
             onPick={handleReservationActionPick}
             onClose={() => setPickedReservation(null)}
           />
@@ -1295,7 +1382,9 @@ export function ReservationsCalendarPage() {
 
       <ConfirmDialog
         open={resvToCancel !== null}
-        title="Rezervasyon iptal edilsin mi?"
+        title={
+          isCancelReviewer ? 'Rezervasyon iptal edilsin mi?' : 'İptal talebi gönderilsin mi?'
+        }
         description={
           resvToCancel ? (
             <>
@@ -1305,13 +1394,15 @@ export function ReservationsCalendarPage() {
                 {istanbulDateOf(resvToCancel.stay_end)}
               </p>
               <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
-                İptal edilen rezervasyonlar tekrar aktif edilemez.
+                {isCancelReviewer
+                  ? 'Rezervasyon iptal statüsüne çekilir; kayıt silinmez.'
+                  : 'Rezervasyon şimdilik olduğu gibi kalır. Talep Onaylar ekranına düşer ve iptali yönetici onaylar.'}
               </p>
             </>
           ) : null
         }
-        confirmLabel="İptal Et"
-        destructive
+        confirmLabel={isCancelReviewer ? 'İptal Et' : 'Talep Gönder'}
+        destructive={isCancelReviewer}
         loading={resvCancelLoading}
         error={resvCancelError}
         onConfirm={handleConfirmCancelReservation}

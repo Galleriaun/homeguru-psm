@@ -16,8 +16,11 @@ type Status = 'checking' | 'unsupported' | 'blocked' | 'disabled' | 'enabled';
  * Settings card for enabling/disabling Web Push notifications on this device.
  * Lives in the profile page. Each browser/device subscribes independently;
  * disabling here only affects the current device.
+ *
+ * `bare` renders the content without the outer Card, so it can share a single
+ * card with the notification-preferences section on the Profil page.
  */
-export function PushNotificationsCard() {
+export function PushNotificationsCard({ bare = false }: { bare?: boolean }) {
   const [status, setStatus] = useState<Status>('checking');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +74,8 @@ export function PushNotificationsCard() {
     }
   };
 
-  return (
-    <Card>
+  const content = (
+    <>
       <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
         Bildirimler
       </h2>
@@ -130,6 +133,8 @@ export function PushNotificationsCard() {
           </p>
         )}
       </div>
-    </Card>
+    </>
   );
+
+  return bare ? content : <Card>{content}</Card>;
 }
