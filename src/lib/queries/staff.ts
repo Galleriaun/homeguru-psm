@@ -268,3 +268,44 @@ export function totalAdvancesInCycle(rows: AdvanceRow[], cycle: SalaryCycle): nu
     return d >= cycle.start && d < cycle.end ? acc + Number(r.amount) : acc;
   }, 0);
 }
+
+// ---------------------------------------------------------------------------
+// Outstanding (not-yet-recovered) avans — migration 131.
+// A salary recovers advances PARTIALLY, so "outstanding" is the unrecovered
+// remainder of each row, not a settled/unsettled flag. Anything still
+// outstanding from BEFORE the current cycle started is carried debt — shown on
+// Personel detay as "Önceki avans borcu" and deducted from the next salary.
+// ---------------------------------------------------------------------------
+
+/** Unrecovered remainder of one avans (never negative). */
+export function advanceOutstanding(row: AdvanceRow): number {
+  return Math.max(0, Number(row.amount) - Number(row.settled_amount ?? 0));
+}
+
+/** Total unrecovered avans across the supplied rows. */
+export function totalOutstandingAdvances(rows: AdvanceRow[]): number {
+  return rows.reduce((acc, r) => acc + advanceOutstanding(r), 0);
+}
+
+/**
+ * Split the outstanding total at the cycle boundary. `carried` is debt left over
+ * from earlier cycles ("Önceki avans borcu"); `current` is everything else, i.e.
+ * advances taken during this cycle. The two always sum to
+ * totalOutstandingAdvances(rows), so the screen's figures reconcile with
+ * "Kalan (ödenecek)" — a stray future-dated given_at falls into `current` rather
+ * than vanishing from both.
+ */
+export function splitOutstandingByCycle(
+  rows: AdvanceRow[],
+  cycle: SalaryCycle,
+): { carried: number; current: number } {
+  let carried = 0;
+  let current = 0;
+  for (const r of rows) {
+    const out = advanceOutstanding(r);
+    if (out === 0) continue;
+    if (istanbulDateStr(r.given_at) < cycle.start) carried += out;
+    else current += out;
+  }
+  return { carried, current };
+}

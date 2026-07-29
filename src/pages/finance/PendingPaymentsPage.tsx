@@ -471,6 +471,7 @@ export function PendingPaymentsPage() {
         title={pending ? actionTitle(pending) : ''}
         description={pending ? actionDescription(pending) : null}
         confirmLabel={pending ? actionConfirmLabel(pending) : 'Onayla'}
+        cancelLabel={pending ? actionCancelLabel(pending) : 'İptal'}
         destructive={pending ? isDestructive(pending) : false}
         loading={inFlight}
         error={dialogError}
@@ -854,6 +855,16 @@ function actionConfirmLabel(a: PendingAction): string {
   if (a.type === 'approve-cancellation') return 'İptal Et';
   if (a.type === 'deny-reservation' || a.type === 'deny-cancellation') return 'Reddet';
   return isDestructive(a) ? 'Reddet' : 'Onayla';
+}
+
+/**
+ * The dismiss button's label. Only the cancellation approval needs an override:
+ * its confirm button reads "İptal Et", and a dismiss button also reading "İptal"
+ * would put two İptal buttons side by side on an action that cancels a guest's
+ * reservation. Everywhere else the default reads fine.
+ */
+function actionCancelLabel(a: PendingAction): string {
+  return a.type === 'approve-cancellation' ? 'Vazgeç' : 'İptal';
 }
 
 function isDestructive(a: PendingAction): boolean {

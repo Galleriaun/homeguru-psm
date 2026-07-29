@@ -5,7 +5,7 @@
 -- Everything happens inside ONE transaction that is ROLLED BACK at the end —
 -- no test data survives, so it is safe to run against the live project.
 --
--- Prerequisite: migrations 001–130 applied. The preflight block below names
+-- Prerequisite: migrations 001–132 applied. The preflight block below names
 -- exactly which object is missing if you are behind.
 --
 -- On success the last message is:   ALL TESTS PASSED (rolled back)
@@ -26,6 +26,12 @@
 --   • 127 prune_old_notifications is not callable by app users and prunes >15d
 --   • 123 Deleting a birim orphans its rezervasyonlar (keeps them) and is
 --     refused while a stay is active
+--   • 131 An avans exceeding the maaş is recovered partially; the remainder
+--     carries to the next cycle as borç and is deducted there. Paying the full
+--     maaş deliberately recovers nothing.
+--   • 132 soft_delete_entity enforces per-row RLS again (062 regression): a role
+--     without reservations_delete is refused and leaves no orphan trash row,
+--     while SUPER_ADMIN still deletes into Çöp Kutusu.
 --
 -- Deliberately NOT covered (needs the deployed app / dashboard):
 --   Storage policies, PWA, cron actually firing, Edge Function auth, KBS.
@@ -81,7 +87,22 @@ begin
   ) then
     raise exception 'FAIL: migration 126 not applied (reservations_guard_cancel trigger missing)';
   end if;
-  raise notice 'PREFLIGHT OK: migrations 126–130 present';
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'staff_advances'
+       and column_name = 'settled_amount'
+  ) then
+    raise exception 'FAIL: migration 131 not applied (staff_advances.settled_amount missing)';
+  end if;
+  -- prosecdef = true means SECURITY DEFINER, i.e. still on 062's regression.
+  if exists (
+    select 1 from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = 'soft_delete_entity' and p.prosecdef
+  ) then
+    raise exception 'FAIL: migration 132 not applied (soft_delete_entity is still SECURITY DEFINER — RLS is bypassed)';
+  end if;
+  raise notice 'PREFLIGHT OK: migrations 126–132 present';
 end $$;
 
 do $$
@@ -113,6 +134,10 @@ declare
   v_unitid   uuid;
   n          bigint;
   ok         boolean;
+
+  v_adv        uuid;          -- 131 avans borcu carry-over
+  v_settled    numeric;
+  v_settled_at timestamptz;
 
   warn_count int := 0;
 begin
@@ -560,6 +585,113 @@ begin
   raise notice 'PASS 22: a birim with an active stay refuses deletion';
 
   -- ═══════════════════════════════════════════════════════════════════════
+  -- 23) 131 — an avans bigger than the maaş is recovered PARTIALLY and the
+  --     remainder carries to the next cycle as borç (instead of being written
+  --     off, which is what 082 did). Needs the singleton general kasa.
+  -- ═══════════════════════════════════════════════════════════════════════
+  perform pg_temp.logout();
+  if not exists (select 1 from cash_accounts where property_id is null) then
+    raise notice 'SKIP 23: genel kasa tanımlı değil — migration 131 testi atlandı';
+  else
+    update staff_profiles set salary = 40000, salary_day = 15 where user_id = u_house;
+
+    -- 50.000 avans against a 40.000 maaş → 10.000 must survive as borç.
+    insert into staff_advances (user_id, amount, note, created_by)
+    values (u_house, 50000, 'Smoke avans', u_admin)
+    returning id into v_adv;
+
+    -- Cycle 1: nothing to pay out; the salary recovers one maaş worth.
+    perform pg_temp.login(u_admin);
+    perform pay_staff_salary(u_house, 0, date_trunc('month', now())::date, 'smoke 1');
+    perform pg_temp.logout();
+
+    select settled_amount, settled_at into v_settled, v_settled_at
+      from staff_advances where id = v_adv;
+    if v_settled <> 40000 then
+      raise exception 'FAIL 23: maaş kadarı (40000) tahsil edilmeliydi, oldu: %', v_settled;
+    end if;
+    if v_settled_at is not null then
+      raise exception 'FAIL 23: kısmî tahsilat settled_at damgalamamalı (borç sürüyor)';
+    end if;
+    raise notice 'PASS 23: avansın yalnızca maaş kadarı tahsil edildi, 10.000 borç kaldı';
+
+    -- Cycle 2: the carried 10.000 comes off the maaş → 30.000 paid, borç closed.
+    perform pg_temp.login(u_admin);
+    perform pay_staff_salary(
+      u_house, 30000, (date_trunc('month', now()) + interval '1 month')::date, 'smoke 2');
+    perform pg_temp.logout();
+
+    select settled_amount, settled_at into v_settled, v_settled_at
+      from staff_advances where id = v_adv;
+    if v_settled <> 50000 then
+      raise exception 'FAIL 24: taşınan borç kapanmalıydı (50000), oldu: %', v_settled;
+    end if;
+    if v_settled_at is null then
+      raise exception 'FAIL 24: tamamen tahsil edilince settled_at damgalanmalı';
+    end if;
+    raise notice 'PASS 24: taşınan borç sonraki maaştan düşüldü ve avans kapandı';
+
+    -- Paying the FULL maaş is an explicit "bu ay kesme" — recovers nothing.
+    insert into staff_advances (user_id, amount, note, created_by)
+    values (u_house, 5000, 'Smoke avans 2', u_admin)
+    returning id into v_adv;
+    perform pg_temp.login(u_admin);
+    perform pay_staff_salary(
+      u_house, 40000, (date_trunc('month', now()) + interval '2 months')::date, 'smoke 3');
+    perform pg_temp.logout();
+    select settled_amount into v_settled from staff_advances where id = v_adv;
+    if v_settled <> 0 then
+      raise exception 'FAIL 25: tam maaş ödenince avans tahsil edilmemeliydi, oldu: %', v_settled;
+    end if;
+    raise notice 'PASS 25: tam maaş ödemesi avansı tahsil etmez, borç aynen taşınır';
+  end if;
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- 26) 132 — soft_delete_entity enforces per-row RLS again. Between 062 and
+  --     132 it ran SECURITY DEFINER, so ANY role could trash a reservation /
+  --     kasa row / gider by calling the RPC, walking past 090's deletion-
+  --     approval gate. Both directions are checked: the refusal must leave no
+  --     trace, and a legitimate delete must still work.
+  -- ═══════════════════════════════════════════════════════════════════════
+  perform pg_temp.login(u_house);          -- HOUSEKEEPING: no reservations_delete
+  ok := false;
+  begin
+    perform soft_delete_entity('reservations', r_apart);
+    ok := true;
+  exception when others then null;
+  end;
+  perform pg_temp.logout();
+
+  if ok then
+    raise exception 'FAIL 26: HOUSEKEEPING soft-deleted a reservation — RLS is being bypassed';
+  end if;
+
+  -- The refusal must not leave a half-applied state: the stay survives AND no
+  -- orphan trash row is left claiming it was deleted (the ROW_COUNT=0 rollback).
+  select count(*) into n from reservations where id = r_apart;
+  if n <> 1 then
+    raise exception 'FAIL 26: the reservation vanished despite the refusal';
+  end if;
+  select count(*) into n from trash_entries
+   where entity_type = 'reservations' and entity_id = r_apart;
+  if n <> 0 then
+    raise exception 'FAIL 26: a refused delete left a trash row behind (ROW_COUNT rollback missing)';
+  end if;
+  raise notice 'PASS 26: a role without reservations_delete is refused, cleanly';
+
+  -- Positive control: the fix must not break legitimate deletes.
+  perform pg_temp.login(u_admin);
+  perform soft_delete_entity('reservations', r_apart);
+  perform pg_temp.logout();
+
+  select count(*) into n from reservations where id = r_apart;
+  if n <> 0 then raise exception 'FAIL 27: SUPER_ADMIN could not delete the reservation'; end if;
+  select count(*) into n from trash_entries
+   where entity_type = 'reservations' and entity_id = r_apart;
+  if n <> 1 then raise exception 'FAIL 27: the deleted reservation did not reach Çöp Kutusu'; end if;
+  raise notice 'PASS 27: SUPER_ADMIN still deletes, and it lands in Çöp Kutusu';
+
+  -- ═══════════════════════════════════════════════════════════════════════
   -- SECURITY ASSERTIONS — hardening gaps. These WARN instead of aborting so
   -- the functional suite above always reports in full. Fix them and they go
   -- quiet.
@@ -582,24 +714,6 @@ begin
     raise warning 'SECURITY: authenticated can EXECUTE _send_push_async — migration 130''s shared secret is bypassable from the client. REVOKE it.';
   else
     raise notice 'PASS S1: _send_push_async is not callable by app users';
-  end if;
-
-  -- (b) soft_delete_entity became SECURITY DEFINER in 062 and lost the
-  --     ROW_COUNT=0 rollback, so per-row RLS no longer gates the delete: any
-  --     role can trash reservations / kasa rows / giderler by calling the RPC.
-  perform pg_temp.login(u_house);
-  ok := false;
-  begin
-    perform soft_delete_entity('reservations', r_apart);
-    ok := true;                      -- it went through: RLS was NOT enforced
-  exception when others then null;   -- refused: RLS (or a guard) held
-  end;
-  perform pg_temp.logout();
-  if ok then
-    warn_count := warn_count + 1;
-    raise warning 'SECURITY: HOUSEKEEPING soft-deleted a reservation it cannot even see — soft_delete_entity (062) bypasses RLS. Restore SECURITY INVOKER or add per-type role checks.';
-  else
-    raise notice 'PASS S2: soft_delete_entity still enforces per-row permissions';
   end if;
 
   -- ═══════════════════════════════════════════════════════════════════════

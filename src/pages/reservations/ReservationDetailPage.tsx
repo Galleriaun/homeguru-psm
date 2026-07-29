@@ -669,8 +669,11 @@ export function ReservationDetailPage() {
       <ConfirmDialog
         open={confirmCancel}
         title="Rezervasyon iptal edilsin mi?"
-        description="İptal edilen rezervasyonlar tekrar aktif edilemez."
+        // Not "tekrar aktif edilemez" — migration 126 only guards the move INTO
+        // 'cancelled', so a stay can be reopened afterwards from the düzenle form.
+        description="Rezervasyon iptal statüsüne çekilir; kayıt silinmez."
         confirmLabel="İptal Et"
+        cancelLabel="Vazgeç"
         destructive
         loading={busy}
         onConfirm={handleCancel}

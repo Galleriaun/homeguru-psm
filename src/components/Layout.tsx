@@ -343,9 +343,20 @@ export function Layout() {
         </div>
       </header>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer.
+          h-dvh sits ALONGSIDE inset-0, not instead of it: iOS Safari sizes a
+          fixed inset-0 box to the SMALL viewport (toolbar showing), so once the
+          toolbar retracts the box stops reaching the bottom and the page's light
+          background shows through as an empty strip under the drawer. 100dvh
+          tracks the resizing viewport. inset-0 stays as the fallback — a browser
+          without dvh support drops the height declaration and keeps today's
+          top/bottom sizing rather than collapsing the drawer to nothing. */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+        <div
+          className="fixed inset-0 z-50 h-dvh md:hidden"
+          role="dialog"
+          aria-modal="true"
+        >
           <div
             className="absolute inset-0 bg-black/50"
             onClick={closeMobile}
@@ -475,8 +486,12 @@ export function Layout() {
                     {unreadBadge}
                   </NavLink>
                 )}
-                <ThemeToggle />
               </div>
+              {/* Outside the shortcuts group on purpose: as the row's second
+                  child it gives the wrapper's justify-between something to push
+                  against, so the theme toggle sits at the far right edge
+                  instead of trailing the icons on the left. */}
+              <ThemeToggle />
             </div>
           </aside>
         </div>

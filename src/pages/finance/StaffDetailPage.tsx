@@ -6,6 +6,9 @@ import {
   deleteAdvance,
   getStaff,
   listAdvancesForStaff,
+  currentSalaryCycle,
+  splitOutstandingByCycle,
+  totalOutstandingAdvances,
   type StaffAdvance,
   type StaffProfileWithProperty,
 } from '@/lib/queries/staff';
@@ -145,13 +148,18 @@ export function StaffDetailPage() {
   }
 
   const salary = staff.salary != null ? Number(staff.salary) : null;
-  // Outstanding advances = those not yet recovered from a paid salary
-  // (settled_at IS NULL, migration 082). The next salary pays maaş − outstanding
-  // and settles them, so "Kalan" here equals what the salary will actually pay.
-  const outstandingAdvances = advances.reduce(
-    (sum, a) => (a.settled_at == null ? sum + Number(a.amount) : sum),
-    0,
-  );
+  // Outstanding = the unrecovered remainder of each avans (amount −
+  // settled_amount, migration 131). A salary recovers only what it can afford,
+  // so an avans can be partly recovered — the leftover carries to the next
+  // cycle. "Kalan" is what the next salary will actually pay out.
+  const outstandingAdvances = totalOutstandingAdvances(advances);
+  // Split at the salary-cycle boundary: anything still outstanding from BEFORE
+  // this cycle is carried debt ("Önceki avans borcu"). Without a salary_day
+  // there is no cycle to anchor on, so it all reads as current.
+  const { carried: carriedDebt, current: cycleAdvances } =
+    staff.salary_day != null
+      ? splitOutstandingByCycle(advances, currentSalaryCycle(staff.salary_day))
+      : { carried: 0, current: outstandingAdvances };
   const remaining = salary != null ? salary - outstandingAdvances : null;
 
   // Color the remaining figure: negative = over-advanced (red)
@@ -252,14 +260,23 @@ export function StaffDetailPage() {
                 ? `Otomatik ödeme: ayın ${staff.salary_day}'i`
                 : 'Otomatik ödeme yok — elle ödenir'}
             </p>
+            {/* Avans borcu that a previous cycle's salary could not cover
+                (migration 131). Only shown when there is one. */}
+            {carriedDebt > 0 && (
+              <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                Önceki avans borcu: {formatTRY(carriedDebt)}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-xs text-stone-600 dark:text-stone-300">Verilen avans</p>
             <p className="mt-0.5 text-lg font-semibold text-amber-600 dark:text-amber-400">
-              {formatTRY(outstandingAdvances)}
+              {formatTRY(cycleAdvances)}
             </p>
             <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
-              Maaştan düşülecek
+              {carriedDebt > 0
+                ? `Bu dönem · borçla toplam ${formatTRY(outstandingAdvances)} düşülecek`
+                : 'Maaştan düşülecek'}
             </p>
           </div>
           <div>
@@ -473,8 +490,12 @@ export function StaffDetailPage() {
           staffUserId={staff.user_id}
           staffName={staff.full_name}
           /* Default to the net (maaş − ödenmemiş avans); advances posted to the
-             kasa when given, so paying the net keeps the total at the full maaş. */
-          defaultSalary={remaining}
+             kasa when given, so paying the net keeps the total at the full maaş.
+             Clamped at 0: when the avans borcu exceeds the maaş the net is
+             negative, and paying 0 is the correct move — the RPC records the
+             cycle, recovers one salary's worth of debt and moves no cash, while
+             the remainder carries to the next cycle (migration 131). */
+          defaultSalary={remaining != null ? Math.max(0, remaining) : null}
           onClose={() => setShowPaySalary(false)}
           onPaid={(payment) => {
             setSalaryPayments((prev) => [payment, ...prev]);

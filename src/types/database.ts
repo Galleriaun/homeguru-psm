@@ -945,7 +945,10 @@ export type Database = {
           note: string | null;
           given_at: string;
           created_by: string;
+          /** Set only when the avans is FULLY recovered (migration 131). */
           settled_at: string | null;
+          /** How much a salary has recovered so far; outstanding = amount - this. */
+          settled_amount: number;
         };
         Insert: {
           id?: string;
@@ -955,6 +958,7 @@ export type Database = {
           given_at?: string;
           created_by: string;
           settled_at?: string | null;
+          settled_amount?: number;
         };
         Update: {
           // Append-only by convention; UI doesn't expose update/delete.
@@ -965,6 +969,7 @@ export type Database = {
           given_at?: string;
           created_by?: string;
           settled_at?: string | null;
+          settled_amount?: number;
         };
         Relationships: [];
       };

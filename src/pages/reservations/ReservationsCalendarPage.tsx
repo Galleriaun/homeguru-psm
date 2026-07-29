@@ -1402,6 +1402,10 @@ export function ReservationsCalendarPage() {
           ) : null
         }
         confirmLabel={isCancelReviewer ? 'İptal Et' : 'Talep Gönder'}
+        // "Vazgeç" rather than the default "İptal": beside an "İptal Et" confirm
+        // button, two buttons both reading İptal invite the wrong click on a
+        // destructive action.
+        cancelLabel="Vazgeç"
         destructive={isCancelReviewer}
         loading={resvCancelLoading}
         error={resvCancelError}

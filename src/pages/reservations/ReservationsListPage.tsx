@@ -365,7 +365,12 @@ export function ReservationsListPage() {
           {statusMenuOpen && (
             <div
               role="menu"
-              className="absolute left-0 z-20 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-800"
+              // top-full anchors the menu BELOW the chip. Without it the
+              // absolute box falls back to its static position, and for an
+              // absolutely-positioned child of a FLEX container that is the
+              // container's top-left corner — so the menu opened on top of the
+              // button it belongs to, covering it.
+              className="absolute left-0 top-full z-20 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-800"
             >
               {GROUPED_STATUSES.map((f) => (
                 <button
@@ -447,7 +452,11 @@ export function ReservationsListPage() {
             {payMenuOpen && (
               <div
                 role="menu"
-                className="absolute left-0 z-20 mt-1 min-w-[13rem] overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-800"
+                // Explicit top-full here too. This parent is a block, so the
+                // static position already lands below the button — but stating
+                // it means a future flex/grid tweak can't silently move the menu
+                // on top of its trigger the way it did on the durum chip.
+                className="absolute left-0 top-full z-20 mt-1 min-w-[13rem] overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-800"
               >
                 {PAYMENT_FILTERS.map((p) => (
                   <button
@@ -547,6 +556,7 @@ export function ReservationsListPage() {
                   items={g.items}
                   staffMap={staffMap}
                   paidMap={paidMap}
+                  paidLoaded={paidLoaded}
                   showAmounts={!isTeknik}
                 />
               </section>
@@ -557,6 +567,7 @@ export function ReservationsListPage() {
             items={filtered}
             staffMap={staffMap}
             paidMap={paidMap}
+            paidLoaded={paidLoaded}
             showAmounts={!isTeknik}
           />
         ))}
@@ -569,11 +580,14 @@ function ReservationRows({
   items,
   staffMap,
   paidMap,
+  paidLoaded,
   showAmounts,
 }: {
   items: ReservationWithRefs[];
   staffMap: Map<string, string>;
   paidMap: Map<string, number>;
+  /** Whether paidMap actually arrived — the badge is withheld until it did. */
+  paidLoaded: boolean;
   showAmounts: boolean;
 }) {
   return (
@@ -634,13 +648,19 @@ function ReservationRows({
                   <span className="font-semibold text-stone-900 dark:text-stone-100">
                     {formatTRY(Number(r.total_amount))}
                   </span>
-                  {(() => {
-                    const badge = paymentBadge(
-                      paidMap.get(r.id) ?? 0,
-                      Number(r.total_amount),
-                    );
-                    return <span className={badge.className}>{badge.label}</span>;
-                  })()}
+                  {/* Only once the tahsilat data actually arrived. An empty
+                      paidMap is indistinguishable from "nobody paid", so a
+                      failed load would paint every stay red "Ödeme Alınmadı" —
+                      including fully paid ones. Same reasoning as the payment
+                      filters; showing nothing beats showing a wrong figure. */}
+                  {paidLoaded &&
+                    (() => {
+                      const badge = paymentBadge(
+                        paidMap.get(r.id) ?? 0,
+                        Number(r.total_amount),
+                      );
+                      return <span className={badge.className}>{badge.label}</span>;
+                    })()}
                 </span>
               )}
             </p>
