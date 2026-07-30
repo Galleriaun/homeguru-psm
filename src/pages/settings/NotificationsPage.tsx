@@ -12,6 +12,7 @@ import {
 } from '@/lib/queries/notifications';
 import { Card } from '@/components/ui/Card';
 import { formatDateTime } from '@/lib/utils';
+import { isSafeInAppPath } from '@/lib/safePath';
 
 type Filter = 'all' | NotifCategory;
 
@@ -77,8 +78,9 @@ export function NotificationsPage() {
       );
       markNotificationRead(n.id).catch(() => {});
     }
-    // Navigate to the source only for a safe in-app path.
-    if (n.url && n.url.startsWith('/')) navigate(n.url);
+    // Navigate to the source only for a path that cannot leave this origin —
+    // shared rule, see src/lib/safePath.ts.
+    if (isSafeInAppPath(n.url)) navigate(n.url);
   };
 
   const handleMarkAll = async () => {
@@ -165,7 +167,9 @@ export function NotificationsPage() {
           {filtered.map((n) => {
             const cat = notifCategory(n);
             const unread = n.read_at === null;
-            const clickable = Boolean(n.url && n.url.startsWith('/'));
+            // Must use the same test as openNotification, or a row would look
+            // tappable and then silently do nothing.
+            const clickable = isSafeInAppPath(n.url);
             return (
               <button
                 key={n.id}

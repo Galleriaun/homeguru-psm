@@ -161,14 +161,18 @@ export function ProfilePage() {
 
       <GoogleCalendarCard />
 
+      {/* Plain red text rather than a filled danger button — signing out is a
+          routine action, not a destructive one, and a full-width red slab drew
+          more attention than it deserves. w-full + py-2 keep the tap target the
+          same size on mobile. */}
       <div className="pt-2">
-        <Button
-          variant="danger"
-          className="w-full"
+        <button
+          type="button"
           onClick={() => setConfirmSignOut(true)}
+          className="w-full py-2 text-sm font-medium text-red-600 hover:underline dark:text-red-400"
         >
           Çıkış Yap
-        </Button>
+        </button>
       </div>
 
       <ConfirmDialog

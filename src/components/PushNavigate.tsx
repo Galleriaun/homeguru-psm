@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isSafeInAppPath } from '@/lib/safePath';
 
 /**
  * Handles the PUSH_NAVIGATE message the service worker posts when a push
@@ -20,10 +21,11 @@ export function PushNavigate() {
 
     const onMessage = (event: MessageEvent) => {
       const data = event.data as { type?: string; url?: string } | undefined;
-      if (data?.type !== 'PUSH_NAVIGATE' || !data.url) return;
-      // Same-app paths only — mirrors the guard on the in-app list
-      // (NotificationsPage). "//host" would navigate off-origin.
-      if (!data.url.startsWith('/') || data.url.startsWith('//')) return;
+      if (data?.type !== 'PUSH_NAVIGATE') return;
+      // Same-origin paths only. The rule is shared with the in-app list and the
+      // service worker so the three cannot drift — see src/lib/safePath.ts for
+      // what it rejects ("//host", "/\host", embedded TAB/LF/CR).
+      if (!isSafeInAppPath(data.url)) return;
       navigate(data.url);
     };
 

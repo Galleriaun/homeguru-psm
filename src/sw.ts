@@ -20,6 +20,7 @@
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
 import { NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
+import { isSafeInAppPath } from '@/lib/safePath';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: (string | { url: string; revision: string | null })[];
@@ -122,10 +123,10 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data as { url?: string } | undefined;
   // Router-relative path exactly as the triggers store it ("/reservations/123").
-  // Anything else — absolute, or protocol-relative "//host" which would escape
-  // the origin — falls back to the app root.
+  // Anything that could escape the origin falls back to the app root. Shares the
+  // rule with the page-side handlers so all three agree — see src/lib/safePath.ts.
   const raw = data?.url;
-  const path = raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+  const path = isSafeInAppPath(raw) ? raw : '/';
 
   event.waitUntil(
     (async () => {
