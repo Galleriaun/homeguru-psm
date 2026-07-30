@@ -88,7 +88,6 @@ export function PropertyDetailPage() {
     (isAdmin ||
       baseRole(profile.role) === 'PROPERTY_MANAGER' ||
       baseRole(profile.role) === 'YETKILI');
-  const isApartmentFull = property.type === 'APARTMENT' && units.length >= 1;
 
   const handleDeleteProperty = async () => {
     if (!id) return;
@@ -222,18 +221,12 @@ export function PropertyDetailPage() {
           <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
             Birimler ({units.length})
           </h2>
-          {canManageUnits && !isApartmentFull && (
+          {canManageUnits && (
             <Link to={`/properties/${property.id}/units/new`}>
               <Button size="sm">+ Yeni Birim</Button>
             </Link>
           )}
         </div>
-
-        {isApartmentFull && (
-          <p className="mb-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-            Daire tipi mülkler yalnızca tek birim içerebilir.
-          </p>
-        )}
 
         {units.length === 0 ? (
           <p className="py-4 text-center text-sm text-stone-600 dark:text-stone-300">

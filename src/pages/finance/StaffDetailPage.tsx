@@ -59,6 +59,16 @@ function monthLabel(yearMonth: string): string {
   }).format(d);
 }
 
+/**
+ * Kaynak rozeti — Otomatik (mavi) / Elle (nötr). Shared by the mobile cards and
+ * the tablet table so the two renderings of the same row can't drift apart.
+ */
+function sourceBadgeClass(source: string): string {
+  return source === 'AUTO'
+    ? 'rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+    : 'rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-medium uppercase text-stone-700 dark:bg-stone-700 dark:text-stone-200';
+}
+
 export function StaffDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const { user, profile } = useAuth();
@@ -305,7 +315,46 @@ export function StaffDetailPage() {
             </p>
           </Card>
         ) : (
-          <Card className="p-0">
+          <>
+            {/* Mobile: stacked cards. The table below squeezed four px-6 columns
+                into ~375px, so w-full compressed them instead of scrolling and
+                every heading broke mid-word ("TUTAR" ran one letter per line).
+                Mirrors the Avans Geçmişi treatment right below. */}
+            <div className="space-y-2 sm:hidden">
+              {salaryPayments.map((p) => (
+                <div
+                  key={p.id}
+                  className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
+                        {monthLabel(p.pay_period.slice(0, 7))}
+                      </p>
+                      <p className="mt-0.5 text-xs text-stone-600 dark:text-stone-300">
+                        {formatDate(p.paid_at)} · {formatTime(p.paid_at)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-semibold text-emerald-700 dark:text-emerald-400">
+                      {formatTRY(Number(p.amount))}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className={sourceBadgeClass(p.source)}>
+                      {p.source === 'AUTO' ? 'Otomatik' : 'Elle'}
+                    </span>
+                    {p.note && (
+                      <p className="min-w-0 break-words text-xs text-stone-600 dark:text-stone-400">
+                        {p.note}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tablet+ : table */}
+            <Card className="hidden p-0 sm:block">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="border-b border-stone-300 text-xs uppercase text-stone-600 dark:border-stone-700 dark:text-stone-300">
@@ -329,13 +378,7 @@ export function StaffDetailPage() {
                         </div>
                       </td>
                       <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                        <span
-                          className={
-                            p.source === 'AUTO'
-                              ? 'rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
-                              : 'rounded bg-stone-200 px-1.5 py-0.5 text-[10px] font-medium uppercase text-stone-700 dark:bg-stone-700 dark:text-stone-200'
-                          }
-                        >
+                        <span className={sourceBadgeClass(p.source)}>
                           {p.source === 'AUTO' ? 'Otomatik' : 'Elle'}
                         </span>
                         {p.note && (
@@ -352,7 +395,8 @@ export function StaffDetailPage() {
                 </tbody>
               </table>
             </div>
-          </Card>
+            </Card>
+          </>
         )}
       </section>
 

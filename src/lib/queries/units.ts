@@ -85,13 +85,3 @@ export async function updateUnit(id: string, input: UnitUpdate) {
 export async function deleteUnit(id: string) {
   await softDeleteEntity('units', id);
 }
-
-/** How many units this property has — used to gate adding more for APARTMENT type. */
-export async function countUnitsForProperty(propertyId: string) {
-  const { count, error } = await supabase
-    .from('units')
-    .select('id', { count: 'exact', head: true })
-    .eq('property_id', propertyId);
-  if (error) throw wrapErr(error);
-  return count ?? 0;
-}

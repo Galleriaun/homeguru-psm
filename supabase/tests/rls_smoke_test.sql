@@ -5,7 +5,7 @@
 -- Everything happens inside ONE transaction that is ROLLED BACK at the end —
 -- no test data survives, so it is safe to run against the live project.
 --
--- Prerequisite: migrations 001–132 applied. The preflight block below names
+-- Prerequisite: migrations 001–133 applied. The preflight block below names
 -- exactly which object is missing if you are behind.
 --
 -- On success the last message is:   ALL TESTS PASSED (rolled back)
@@ -32,6 +32,7 @@
 --   • 132 soft_delete_entity enforces per-row RLS again (062 regression): a role
 --     without reservations_delete is refused and leaves no orphan trash row,
 --     while SUPER_ADMIN still deletes into Çöp Kutusu.
+--   • 133 A daire accepts a second birim (002's single-unit trigger is gone).
 --
 -- Deliberately NOT covered (needs the deployed app / dashboard):
 --   Storage policies, PWA, cron actually firing, Edge Function auth, KBS.
@@ -93,6 +94,9 @@ begin
        and column_name = 'settled_amount'
   ) then
     raise exception 'FAIL: migration 131 not applied (staff_advances.settled_amount missing)';
+  end if;
+  if exists (select 1 from pg_trigger where tgname = 'units_apartment_single') then
+    raise exception 'FAIL: migration 133 not applied (units_apartment_single still refuses a second birim on a daire)';
   end if;
   -- prosecdef = true means SECURITY DEFINER, i.e. still on 062's regression.
   if exists (
@@ -690,6 +694,19 @@ begin
    where entity_type = 'reservations' and entity_id = r_apart;
   if n <> 1 then raise exception 'FAIL 27: the deleted reservation did not reach Çöp Kutusu'; end if;
   raise notice 'PASS 27: SUPER_ADMIN still deletes, and it lands in Çöp Kutusu';
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- 28) 133 — a daire may hold more than one birim. Migration 002's
+  --     units_apartment_single trigger refused the second INSERT outright.
+  -- ═══════════════════════════════════════════════════════════════════════
+  insert into units (property_id, name, room_type, capacity, base_price)
+  values (p_apart, 'Smoke Daire 2', '1+1', 2, 1800.00);
+
+  select count(*) into n from units where property_id = p_apart;
+  if n <> 2 then
+    raise exception 'FAIL 28: daireye ikinci birim eklenemedi (birim sayısı %)', n;
+  end if;
+  raise notice 'PASS 28: bir daire birden fazla birim tutabilir';
 
   -- ═══════════════════════════════════════════════════════════════════════
   -- SECURITY ASSERTIONS — hardening gaps. These WARN instead of aborting so

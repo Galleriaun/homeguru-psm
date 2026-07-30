@@ -1,0 +1,32 @@
+-- =============================================================================
+-- HomeGuru PMS — migration 133
+-- A daire (APARTMENT) may hold more than one birim.
+-- =============================================================================
+-- Migration 002 added `units_apartment_single`, a BEFORE INSERT trigger that
+-- refused a second birim on an APARTMENT mülk ("APARTMENT properties may have
+-- only one unit"). That was the MVP assumption — one daire, one rentable unit.
+-- The operator now needs to split a daire into several birimler (e.g. separate
+-- rooms let independently), so the restriction is dropped.
+--
+-- Removing this is safe because the single-unit rule was never load-bearing
+-- anywhere else. Everything that branches on APARTMENT keys off the mülk TYPE,
+-- not off its unit count:
+--   * canCollectPayment() — housekeeper collects in a daire, reception in a bina
+--   * access_scope HOTELS / APARTMENTS — per property type
+--   * Takvim's "Daireler" / "Binalar" grouping — renders each mülk's units, so a
+--     daire with three birimler simply draws three rows
+--   * Temizlik's Bina / Daire filter chips — property-type filters
+-- Nothing reads "the apartment's unit" as a singular, and no schema object
+-- (FK, index, view) depends on the count.
+--
+-- Both the trigger and its function go: leaving an unused SECURITY-less function
+-- behind would just be dead weight, and re-adding the rule later means restoring
+-- both anyway.
+--
+-- Reservations, temizlik and blocks are keyed on unit_id and are untouched — an
+-- existing daire keeps its current birim exactly as it is; this only stops the
+-- database refusing the SECOND one.
+-- =============================================================================
+
+DROP TRIGGER IF EXISTS units_apartment_single ON units;
+DROP FUNCTION IF EXISTS enforce_apartment_single_unit();

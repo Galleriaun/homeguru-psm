@@ -5,7 +5,6 @@ import {
   getUnit,
   createUnit,
   updateUnit,
-  countUnitsForProperty,
   type Unit,
 } from '@/lib/queries/units';
 import type { RoomType } from '@/types/database';
@@ -124,16 +123,6 @@ export function UnitFormPage() {
     setError(null);
     setSaving(true);
     try {
-      // Apartment single-unit guard (client-side; DB trigger is the source of truth)
-      if (!isEdit && property.type === 'APARTMENT') {
-        const count = await countUnitsForProperty(propertyId);
-        if (count >= 1) {
-          setError('Daire tipi mülkler yalnızca tek birim içerebilir.');
-          setSaving(false);
-          return;
-        }
-      }
-
       // Capacity is now entered manually for both bina and daire — the old
       // implied-from-room-type mapping was only valid for SINGLE/DOUBLE etc.
       const finalCapacity = capacity;
