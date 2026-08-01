@@ -165,59 +165,47 @@ After the first deploy, manually run `Supabase keepalive` once from the Actions 
 
 ## 10. Database backup & restore
 
-The free tier has **no automated backups**. The `Database backup` workflow
-(`.github/workflows/backup.yml`) fills the gap: a daily encrypted `pg_dump`
-kept as a 30-day GitHub artifact. This stays a launch-blocker until the project
-moves to Supabase Pro (managed daily backups).
+The free tier has **no automated backups**. This stays a launch-blocker until
+the project moves to Supabase Pro (managed daily backups).
 
-### Required secrets
+The backup job does **not** live in this repo. It lives inside the private repo
+**`Galleriaun/homeguru-backups`** and commits a nightly plain-SQL `pg_dump`
+(`backup.sql`) into itself — the same arrangement PilotGarage uses. A repo's own
+workflow can push to itself with the built-in `GITHUB_TOKEN`, so there is no
+personal access token to create or renew.
 
-Add under **Settings → Secrets and variables → Actions**:
+**Setup, the workflow file to paste, failure messages and the restore
+procedure all live in [BACKUP.md](BACKUP.md).** In short: create the private
+repo, add one `SUPABASE_DB_URL` secret *to that repo*, paste the workflow, run
+it once.
 
-| Name | Value |
-|---|---|
-| `SUPABASE_DB_URL` | The **Session pooler** connection URI (see below) |
-| `BACKUP_GPG_PASSPHRASE` | A long random passphrase (e.g. `openssl rand -base64 32`) — keep it in your password manager, never in the repo |
+> **The privacy of `homeguru-backups` is the entire security boundary.** The
+> dump is plaintext and holds guest PII, so it may never land in this public
+> repo. If that repo is ever made public, treat it as a KVKK breach and make it
+> private again before the next nightly run.
+>
+> The workflow refuses to commit a dump under 10 000 bytes or one missing
+> pg_dump's completion marker, so a half-finished dump can never overwrite the
+> last good backup.
 
-**Getting `SUPABASE_DB_URL`:** Dashboard → **Project Settings → Database →
-Connection string → Session pooler** (URI tab). It looks like
-`postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
-Use the **Session pooler (port 5432)** — GitHub runners are IPv4-only while the
-direct connection is IPv6-only, and the Transaction pooler (6543) can't run
-`pg_dump`. Substitute your real database password for `<password>`.
+### Leftovers from the old system
 
-> The encrypted artifact is the security boundary. Because this repo is public,
-> treat the artifact as semi-public: the AES-256 passphrase is the only thing
-> protecting the guest PII inside. Use a strong, unique passphrase — if you lose
-> it, the backups are unrecoverable.
+This repo used to run its own `.github/workflows/backup.yml` (daily
+GPG-encrypted `pg_dump` kept as a 30-day Actions artifact). **It has been
+deleted** — the backup job now lives only in the backup repo.
 
-### Verify it works
+Two secrets remain here under **Settings → Secrets and variables → Actions**
+and are no longer read by anything:
 
-Run **Database backup** manually from the Actions tab. It should finish in
-under a minute and produce a `db-backup-<timestamp>` artifact. Download it once
-and confirm you can decrypt it (below).
+- `BACKUP_GPG_PASSPHRASE` — keep it for **30 days** from the last old run: it is
+  the only way to open the artifacts still sitting under Actions. Then delete.
+- `SUPABASE_DB_URL` — safe to delete once the new backup job is running (it
+  needs its own copy of this secret, in the backup repo).
 
-### Restore
-
-1. Download the `db-backup-<timestamp>` artifact and unzip it → `backup.dump.gpg`.
-2. Decrypt:
-   ```bash
-   gpg --batch --pinentry-mode loopback --passphrase 'YOUR_PASSPHRASE' \
-     -o backup.dump -d backup.dump.gpg
-   ```
-3. Restore the business data (`public` schema) into the target project, pointing
-   `PGCONN` at the **Session pooler URI of that project**. Docker is used so no
-   local Postgres client is needed:
-   ```bash
-   docker run --rm -i -e PGCONN="postgresql://postgres.<ref>:<pw>@...:5432/postgres" \
-     postgres:17-alpine \
-     sh -c 'pg_restore --clean --if-exists --no-owner --schema=public -d "$PGCONN"' \
-     < backup.dump
-   ```
-   `--clean --if-exists` drops the existing `public` objects first, so only run
-   it against the project you mean to overwrite. Staff logins live in the
-   Supabase-managed `auth` schema (not in this dump) — after restoring to a fresh
-   project, recreate the 4 staff accounts manually.
+> Backups made **before** this change are GPG-encrypted `.dump` artifacts under
+> Actions. Keep `BACKUP_GPG_PASSPHRASE` in your password manager until the last
+> of them expires (30 days), then delete the secret. Those restore with
+> `gpg -d` + `pg_restore`, not `psql`.
 
 ---
 

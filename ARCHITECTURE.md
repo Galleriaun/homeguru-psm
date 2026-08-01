@@ -747,7 +747,7 @@ Deployed via Supabase CLI from a separate workflow when Edge Function code chang
 - [ ] **VERBİS registration** complete (if required by data volume)
 - [ ] **All RLS policies tested** with a tenancy fuzz test suite
 - [ ] **KBS submission tested** against real KBS endpoint, not mock
-- [ ] **Backup strategy** — free tier has NO automated backups; the `Database backup` GitHub Action (encrypted daily `pg_dump`) covers the gap until Supabase Pro. Test the restore procedure (SETUP.md §10) before launch
+- [ ] **Backup strategy** — free tier has NO automated backups; a nightly `pg_dump` committed as `backup.sql` by a workflow living inside the **private** `homeguru-backups` repo covers the gap until Supabase Pro (this repo no longer runs a backup workflow of its own). Confirm that repo is private, confirm a recent `backup.sql` exists, then test the restore procedure (BACKUP.md) before launch
 - [ ] **Audit log working** — try every sensitive action, confirm log entry created
 - [ ] **Encryption verified** — TC/passport unreadable in raw SQL without decryption function
 - [ ] **3 weeks of fake-data testing** with real users (staff dry-run)

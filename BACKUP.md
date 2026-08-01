@@ -2,28 +2,132 @@
 
 A plain-language reference for the database backup. Keep it; future-you will thank you.
 
+Same setup as PilotGarage: the backup job lives **inside a private backup repo** and writes a `backup.sql` into itself every night.
+
 ---
 
 ## What it is
 
-- A GitHub Action (`.github/workflows/backup.yml`) backs up the whole database **automatically every day** (02:30 UTC).
-- Each backup is **encrypted** (AES-256) and stored as a GitHub **artifact** for **30 days**.
-- You don't have to do anything for it to run. It just works in the background.
+- A GitHub Action inside the private repo **`Galleriaun/homeguru-backups`** dumps the whole database **every night** (02:30 UTC = 05:30 Istanbul).
+- The backup is a **plain `backup.sql` file** — readable in any text editor.
+- The file is **overwritten each night**, and **git history keeps every past night**. Nothing expires.
+- No personal access token is involved: a repo's own workflow commits to itself with the built-in `GITHUB_TOKEN`, so there is nothing to renew.
 
-**Where to see backups:** GitHub repo → **Actions** tab → **Database backup** → open any run → **Artifacts** → `db-backup-<date>`.
+**Where to see backups:** the `homeguru-backups` repo → `backup.sql`. Click **History** for any earlier night.
 
-**Run one manually anytime:** Actions → Database backup → **Run workflow**.
+**Run one manually anytime:** that repo → Actions → Database backup → **Run workflow**.
+
+> **Why a private repo?** The dump holds guest names, phones, emails and addresses in plaintext. The code repo (`homeguru-psm`) is **public** — the dump can never live there. `homeguru-backups` staying private is now the entire security boundary; if it is ever switched to public, treat it as a KVKK breach and switch it back at once.
 
 ---
 
-## The two secrets (set once, in GitHub → Settings → Secrets and variables → Actions)
+## First-time setup (once, ~5 minutes)
 
-| Secret | What it is |
-|---|---|
-| `SUPABASE_DB_URL` | Supabase **Session pooler** connection URI (port 5432) with the DB password in it |
-| `BACKUP_GPG_PASSPHRASE` | The password that encrypts/decrypts every backup |
+1. **Create the repo.** GitHub → New repository → name `homeguru-backups`, visibility **Private**. A README is optional — the workflow handles a completely empty repo.
 
-> ⚠️ **Save `BACKUP_GPG_PASSPHRASE` in your password manager.** Without it the backups can never be decrypted. (Different from the KVKK/pgcrypto encryption key — don't confuse them.)
+2. **Add one secret** in *that* repo → Settings → Secrets and variables → Actions → New repository secret:
+
+   | Secret | Value |
+   |---|---|
+   | `SUPABASE_DB_URL` | Supabase **Session pooler** URI (port 5432) with the DB password |
+
+   Get it from: Supabase dashboard → Project Settings → Database → Connection string → **Session pooler** (URI tab). It looks like `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`. Replace `<password>` with the real one; URL-encode any `@ : / ?` characters in it.
+   **Must be the Session pooler (5432)** — GitHub runners are IPv4-only while the direct connection is IPv6-only, and the Transaction pooler (6543) cannot run `pg_dump`.
+
+3. **Add the workflow.** In `homeguru-backups` → Add file → Create new file → path `.github/workflows/backup.yml` → paste the file from [the section below](#the-workflow-file) → Commit.
+
+4. **Run it once** (Actions → Database backup → Run workflow) and confirm `backup.sql` appears in the repo.
+
+5. **Old system (already removed).** The `backup.yml` that used to run in `homeguru-psm` has been deleted:
+   - nothing runs there anymore;
+   - keep the `BACKUP_GPG_PASSPHRASE` secret for **30 more days** — it is the only way to open the old artifacts — then delete it too.
+
+---
+
+## The workflow file
+
+Paste this into `homeguru-backups` as `.github/workflows/backup.yml`:
+
+```yaml
+name: Database backup
+
+# Nightly logical backup of the HomeGuru PMS Supabase database.
+#
+# This workflow lives INSIDE the private backup repo and commits the dump to
+# itself, so the built-in GITHUB_TOKEN is enough — no personal access token to
+# create, and nothing that expires and silently stops the backups.
+#
+# The dump is PLAINTEXT and contains guest PII (names, phones, emails,
+# addresses) plus the encrypted TC/passport columns. THIS REPO MUST STAY
+# PRIVATE — that is the entire security boundary. If it is ever made public,
+# treat it as a KVKK breach and make it private again immediately.
+
+on:
+  schedule:
+    - cron: '30 2 * * *'   # daily at 02:30 UTC (05:30 Istanbul, low activity)
+  workflow_dispatch:
+
+permissions:
+  contents: write          # commit backup.sql back into this repo
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dump database (plain SQL)
+        run: |
+          docker run --rm \
+            -e PGCONN="$SUPABASE_DB_URL" \
+            postgres:17-alpine \
+            sh -c 'pg_dump "$PGCONN" --format=plain --no-owner --no-privileges' > backup.sql
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      # A truncated or empty dump must never overwrite the last good one. Both
+      # checks earn their keep: pg_dump can exit 0 having written only part of
+      # the file if the connection drops, and the trailer line is written last.
+      - name: Verify the dump is complete
+        run: |
+          bytes=$(wc -c < backup.sql)
+          echo "dump size: $bytes bytes"
+          if [ "$bytes" -lt 10000 ]; then
+            echo "::error::dump is only $bytes bytes — refusing to overwrite the last good backup"
+            exit 1
+          fi
+          if ! grep -q 'PostgreSQL database dump complete' backup.sql; then
+            echo "::error::dump has no completion marker — it is truncated"
+            exit 1
+          fi
+
+      - name: Commit tonight's backup
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backup.sql
+          # Byte-identical dump (a completely quiet day) is a success, not a failure.
+          if git diff --cached --quiet; then
+            echo "no changes since the last backup"
+            exit 0
+          fi
+          git commit -m "HomeGuru backup $(date -u +'%Y-%m-%d %H:%M UTC')"
+          # Anything committed to this repo while the dump was running makes this push
+          # stale — editing this very workflow in the web UI does exactly that. Rebase
+          # onto whatever landed and retry instead of failing the backup. "-X theirs"
+          # keeps THIS run's dump if the other side also touched backup.sql: during a
+          # rebase the commit being replayed (ours) is the "theirs" side.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push rejected — rebasing onto origin/main and retrying"
+            git pull --rebase -X theirs origin main
+          done
+          echo "::error::could not push after 3 attempts"
+          exit 1
+```
 
 ---
 
@@ -31,62 +135,52 @@ A plain-language reference for the database backup. Keep it; future-you will tha
 
 Open the failed step and match the message:
 
-- **"empty connection string" / socket error** → `SUPABASE_DB_URL` secret is missing/misnamed.
+- **"empty connection string" / socket error** → `SUPABASE_DB_URL` is missing or misnamed **in the backups repo** (secrets are per-repo; the one in `homeguru-psm` does not carry over).
 - **host/timeout error** → wrong connection: must be **Session pooler, port 5432** (not Direct, not Transaction pooler 6543).
-- **"password authentication failed"** → DB password wrong, or a special char in it needs URL-encoding.
-- **"Invalid passphrase"** → `BACKUP_GPG_PASSPHRASE` secret is empty/missing.
+- **"password authentication failed"** → DB password wrong, or a special character needs URL-encoding.
+- **"dump is only N bytes" / "no completion marker"** → the dump came out incomplete and was **refused on purpose**; the previous good backup is untouched. Re-run.
+- **403 on push** → the workflow is missing `permissions: contents: write`.
 
-Fix the secret, then re-run the workflow.
+Fix, then re-run the workflow.
 
 ---
 
-## How to restore a backup (disaster recovery)
+## How to read or restore a backup
 
-You only do this if you actually lose data. Steps are for **Windows + PowerShell + Docker** (no extra installs).
+### Just look at it
+Open `backup.sql` in `homeguru-backups`. It is ordinary SQL text. For an older night: **History** → pick a commit → **View file**.
 
-### 1. Download & unzip the backup
-GitHub → Actions → a successful Database backup run → Artifacts → download `db-backup-<date>` (a `.zip`).
-Then in PowerShell:
+### Restore into a database
+Download the `backup.sql` you want, then (Windows + PowerShell + Docker):
+
 ```powershell
 cd "$env:USERPROFILE\Downloads"
-Get-ChildItem db-backup*                                   # find the exact zip name
-Expand-Archive ".\db-backup-<date>.zip" -DestinationPath ".\backup-test" -Force
-cd ".\backup-test"
-Get-ChildItem                                              # you should see backup.dump.gpg
+docker run --rm -i -e PGCONN="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres" -v ${PWD}:/work -w /work postgres:17-alpine sh -c 'psql "$PGCONN" -v ON_ERROR_STOP=1 -f backup.sql'
 ```
 
-### 2. Decrypt it (turns .gpg into a usable .dump)
-Replace `YOUR_PASSPHRASE` with your `BACKUP_GPG_PASSPHRASE` value:
-```powershell
-docker run --rm -e PASS='YOUR_PASSPHRASE' -v ${PWD}:/work -w /work alpine sh -c 'apk add --no-cache gnupg >/dev/null 2>&1 && gpg --batch --pinentry-mode loopback --passphrase "$PASS" -o backup.dump -d backup.dump.gpg'
-```
-Result: a `backup.dump` file (this is the real database backup — binary, don't open in an editor).
+> ⚠️ Restore onto a **fresh/empty project**, not your live one. The dump recreates objects that already exist, so against a populated database it errors out partway.
 
-### 3. Check the backup is valid (lists tables, changes nothing)
-```powershell
-docker run --rm -v ${PWD}:/work -w /work postgres:17-alpine pg_restore -l backup.dump
-```
-You should see your tables: `reservations`, `guests`, `expenses`, `ledger_entries`, etc.
+Staff logins live in Supabase's `auth` schema (not in this dump) — recreate the staff accounts manually after restoring to a fresh project.
 
-### 4. Restore into a database
-Point `PGCONN` at the **Session pooler URI of the target project** and run:
-```powershell
-docker run --rm -i -e PGCONN="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres" -v ${PWD}:/work -w /work postgres:17-alpine sh -c 'pg_restore --clean --if-exists --no-owner --schema=public -d "$PGCONN" backup.dump'
-```
-> ⚠️ `--clean --if-exists` **wipes the existing `public` schema first**. Only run it against the project you intend to overwrite (ideally a fresh/empty project). Never test-restore onto your live database.
-
-Staff logins live in Supabase's `auth` schema (not in this dump) — recreate the staff accounts manually after a restore to a fresh project.
+### Old backups (before this change)
+Backups made before the switch are GPG-encrypted `.dump` artifacts under `homeguru-psm` → Actions → Database backup → Artifacts (30-day life). Those need `gpg -d` and `pg_restore`, not `psql`, and the `BACKUP_GPG_PASSPHRASE` value.
 
 ---
 
-## The easy alternative (if you ever stop wanting to manage this)
+## Keeping the backup repo small
 
-Upgrade to **Supabase Pro (~$25/mo)** → managed daily backups, restore from the dashboard with one click, no GitHub Action, no gpg. Then you can delete `backup.yml` entirely.
+Each night commits only the *difference* from the previous night, so growth is slow. If after a few years it feels large, delete the repo and let a fresh one take over — you lose old history, not the current backup.
+
+---
+
+## The easy alternative
+
+Upgrade to **Supabase Pro (~$25/mo)** → managed daily backups and one-click restore from the dashboard. Then delete the backup repo entirely.
 
 ---
 
 ## Quick reminders
 
-- Backups run automatically — no daily effort needed.
-- Keep `BACKUP_GPG_PASSPHRASE` safe; it's the only key to your backups.
-- Test a restore (steps above) **once before going live** — a backup you've never decrypted is a risk.
+- Backups run automatically — no daily effort, and nothing to renew.
+- **`homeguru-backups` must stay private.** That is the whole security boundary.
+- Test a restore **once before going live** — a backup you have never restored is a guess.
