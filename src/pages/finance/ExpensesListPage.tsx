@@ -46,7 +46,29 @@ type DisplayExpense = ExpenseWithProperty & {
   __projected?: boolean;
   /** On a projected row, the real template id to act on (id is overwritten). */
   __templateId?: string;
+  /**
+   * Projected row whose template is NOT approved, so the cron will never
+   * generate it. Rendered as "Onay bekliyor" rather than "Beklenen" — see
+   * `isBlockedTemplate`.
+   */
+  __blocked?: boolean;
 };
+
+/**
+ * True when a düzenli TEMPLATE will never be materialised by the cron.
+ *
+ * Since migration 125 `generate_recurring_expenses` selects only
+ * `approval_status = 'approved'`; a pending or rejected template is skipped
+ * every month, silently. 125 added that gate WITHOUT backfilling existing rows,
+ * so any template that was sitting 'pending' when it was applied simply stopped
+ * generating — it had worked fine before, because the pre-125 generator ignored
+ * approval entirely.
+ *
+ * The UI has to surface this: projecting such a template as "Beklenen" promises
+ * a gider that will never post, which is how this went unnoticed.
+ */
+const isBlockedTemplate = (t: ExpenseWithProperty) =>
+  t.approval_status !== 'approved';
 
 /**
  * True for a düzenli TEMPLATE *and* for a month the cron generated from one.
@@ -228,6 +250,9 @@ export function ExpensesListPage() {
           expense_date: `${y}-${mm}-${String(day).padStart(2, '0')}`,
           __projected: true,
           __templateId: t.id,
+          // Still projected (so a stuck düzenli stays visible and can be acted
+          // on) but flagged, because the cron will not post it.
+          __blocked: isBlockedTemplate(t),
         };
       });
   }, [templates, expenses, month, expenseType, propertyId, category]);
@@ -538,11 +563,19 @@ function ExpenseSection({
                       Düzenli
                     </span>
                   )}
-                  {e.__projected && (
-                    <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                      Beklenen
-                    </span>
-                  )}
+                  {e.__projected &&
+                    (e.__blocked ? (
+                      <span
+                        title="Onaylanmadığı için otomatik oluşturulmuyor. Onaylar ekranından onaylayın."
+                        className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                      >
+                        Onay bekliyor
+                      </span>
+                    ) : (
+                      <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        Beklenen
+                      </span>
+                    ))}
                   <span className="text-xs text-stone-600 dark:text-stone-300">
                     {formatDate(e.expense_date)}
                   </span>
@@ -645,14 +678,22 @@ function ExpenseSection({
                           Düzenli
                         </span>
                       )}
-                      {e.__projected && (
-                        <span
-                          title="Bu ay henüz işlenmedi — beklenen"
-                          className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                        >
-                          Beklenen
-                        </span>
-                      )}
+                      {e.__projected &&
+                        (e.__blocked ? (
+                          <span
+                            title="Onaylanmadığı için otomatik oluşturulmuyor. Onaylar ekranından onaylayın."
+                            className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                          >
+                            Onay bekliyor
+                          </span>
+                        ) : (
+                          <span
+                            title="Bu ay henüz işlenmedi — beklenen"
+                            className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                          >
+                            Beklenen
+                          </span>
+                        ))}
                     </span>
                   </td>
                   <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
