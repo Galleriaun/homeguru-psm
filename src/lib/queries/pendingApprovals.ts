@@ -22,7 +22,7 @@ export interface PendingExpense extends ExpenseRow {
 /**
  * Pending one-off expenses awaiting review.
  *
- * Düzenli gider TEMPLATES are excluded deliberately (migration 134/135): a
+ * Düzenli gider TEMPLATES are excluded deliberately (migration 135/136): a
  * recurring expense never needs an onay — it posts to the kasa on its own day
  * and the cron approves it there. Between creation and that day the template
  * sits at 'pending' with no kasa movement, and without this filter it would
@@ -94,7 +94,11 @@ export async function countPendingApprovals(
     supabase
       .from('expenses')
       .select('id', { count: 'exact', head: true })
-      .eq('approval_status', 'pending'),
+      .eq('approval_status', 'pending')
+      // Must mirror listPendingExpenses exactly. A düzenli template waiting for
+      // its day is 'pending' but is NOT reviewable, so counting it would badge
+      // the Onaylar tab with a number that has no matching row in the list.
+      .eq('is_recurring', false),
     supabase
       .from('cash_transactions')
       .select('id', { count: 'exact', head: true })

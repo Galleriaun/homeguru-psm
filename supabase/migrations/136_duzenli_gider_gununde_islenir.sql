@@ -1,5 +1,5 @@
 -- =============================================================================
--- HomeGuru PMS — migration 135
+-- HomeGuru PMS — migration 136
 -- Düzenli gider KENDİ GÜNÜNDE kasaya işlenir, oluşturma anında değil.
 -- =============================================================================
 -- Owner raporu (2026-08-16): "16 Ağustos'ta, her ayın 17'si için bir düzenli
@@ -37,7 +37,7 @@
 -- cash_transactions'ta (ref_type='expense', ref_id=şablon.id) satır YOKSA
 -- yazılır. Cron yarım saatte bir koşar; ikinci koşu hiçbir şey yapmaz.
 --
--- 134 ile birlikte uygulanmalıdır (önce 134, sonra 135).
+-- 135 ile birlikte uygulanmalıdır (önce 135, sonra 136).
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -79,7 +79,7 @@ BEGIN
     _eff_region := COALESCE(NULLIF(btrim(COALESCE(_region, '')), ''), auth_region());
   END IF;
 
-  -- DEĞİŞİKLİK 1 (135): düzenli gider yalnızca GÜNÜ GELDİYSE anında kasaya
+  -- DEĞİŞİKLİK 1 (136): düzenli gider yalnızca GÜNÜ GELDİYSE anında kasaya
   -- işlenir. Günü gelmemiş şablon 'pending' kalır ve kasaya dokunulmaz;
   -- kasa OUT'unu generate_recurring_expenses o gün yazar. 125'te bu tarih
   -- koşulu yoktu, bu yüzden 17'si için kurulan gider 16'sında ödeniyordu.
@@ -87,7 +87,7 @@ BEGIN
            AND auth_can_review_region(_eff_region)
            AND _expense_date <= _today;
 
-  -- DEĞİŞİKLİK 2 (135): "Onay bekleyen gider" push'u düzenli gider için ASLA
+  -- DEĞİŞİKLİK 2 (136): "Onay bekleyen gider" push'u düzenli gider için ASLA
   -- üretilmez. 125'te bayrak yalnızca _auto iken kuruluyordu; artık günü
   -- gelmemiş şablon 'pending' doğduğu için bayrak kurulmasaydı owner'a
   -- onaylayacak bir şey yokken bildirim giderdi. Düzenli gider onay
@@ -154,13 +154,13 @@ BEGIN
     WHERE is_recurring = true
       AND recurring_source_id IS NULL
       AND recurring_day IS NOT NULL
-      -- 134: onay ARANMAZ; yalnızca açıkça reddedilmiş şablon dışlanır.
+      -- 135: onay ARANMAZ; yalnızca açıkça reddedilmiş şablon dışlanır.
       AND approval_status <> 'rejected'
   LOOP
     -- =======================================================================
-    -- 135 — ŞABLONUN KENDİ AYI.
+    -- 136 — ŞABLONUN KENDİ AYI.
     -- =======================================================================
-    -- Şablon satırı aynı zamanda kendi ayının gideridir. 135 öncesi kasa OUT'u
+    -- Şablon satırı aynı zamanda kendi ayının gideridir. 136 öncesi kasa OUT'u
     -- oluşturma anında yazılıyordu (17'si için kurulan gider 16'sında
     -- ödeniyordu). Artık günü gelene kadar 'pending' bekler ve kasa OUT'u
     -- BURADA, gerçek gününde yazılır.
@@ -252,10 +252,10 @@ $$;
 REVOKE EXECUTE ON FUNCTION generate_recurring_expenses() FROM PUBLIC, anon, authenticated;
 
 -- -----------------------------------------------------------------------------
--- 3. Teşhis view'i — 134'teki hâli 135'ten sonra YANILTICI kalıyor.
+-- 3. Teşhis view'i — 135'teki hâli 136'dan sonra YANILTICI kalıyor.
 -- -----------------------------------------------------------------------------
--- 134'te şablonun kendi ayı için tek bir dal vardı ("KENDI AYI — ilk uretim
--- gelecek ay"). 135 ile şablonun kendi ayı da kasaya işleniyor, üstelik
+-- 135'te şablonun kendi ayı için tek bir dal vardı ("KENDI AYI — ilk uretim
+-- gelecek ay"). 136 ile şablonun kendi ayı da kasaya işleniyor, üstelik
 -- gününde; dolayısıyla "günü gelmemiş, bekliyor" ile "günü geçmiş, ilk cron
 -- koşusunda işlenecek" hâllerinin ayrı görünmesi gerekiyor — yoksa view
 -- bekleyen bir tahsilatı "gelecek ay" diye raporlar.
@@ -273,11 +273,11 @@ SELECT
     WHEN e.recurring_day IS NULL THEN 'TEKRAR GUNU YOK'
     WHEN e.approval_status = 'rejected'
       THEN 'REDDEDILMIS — kasaya islenmez'
-    -- 135: şablon kendi gününü bekliyor, kasa henüz oynamadı.
+    -- 136: şablon kendi gününü bekliyor, kasa henüz oynamadı.
     WHEN e.approval_status = 'pending'
          AND e.expense_date > (now() AT TIME ZONE 'Europe/Istanbul')::date
       THEN 'BEKLENEN — ' || to_char(e.expense_date, 'DD.MM.YYYY') || ' tarihinde islenecek'
-    -- 135: günü geçmiş ama henüz işlenmemiş — ilk cron koşusunda kasaya girer.
+    -- 136: günü geçmiş ama henüz işlenmemiş — ilk cron koşusunda kasaya girer.
     WHEN e.approval_status = 'pending'
       THEN 'GUNU GECTI — ilk cron kosusunda kasaya islenecek'
     WHEN date_trunc('month', e.expense_date)::date

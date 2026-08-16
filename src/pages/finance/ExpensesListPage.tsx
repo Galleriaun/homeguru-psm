@@ -62,7 +62,7 @@ const isRecurringRow = (e: ExpenseWithProperty) =>
  * A düzenli TEMPLATE whose own month has not been charged yet — it is a
  * schedule, not a payment.
  *
- * Since migration 135 a recurring expense set up for a day that has not
+ * Since migration 136 a recurring expense set up for a day that has not
  * arrived stays 'pending' with NO kasa movement; the cron approves it and
  * writes the kasa OUT on its actual day. Before 135 the kasa OUT was written
  * the instant you pressed save, so a gider set up on the 16th for the 17th was
@@ -74,7 +74,7 @@ const isRecurringRow = (e: ExpenseWithProperty) =>
  *
  * Matches 'pending' EXACTLY, not `!== 'approved'`: a REJECTED template also
  * fails that looser test, and labelling it "Beklenen" would promise a gider the
- * generator will never post (migration 134) — the same lie this fix removes.
+ * generator will never post (migration 135) — the same lie this fix removes.
  */
 const isScheduledTemplate = (e: DisplayExpense) =>
   !e.__projected && e.is_recurring && e.approval_status === 'pending';
@@ -239,7 +239,7 @@ export function ExpensesListPage() {
       // skips it (migration 124), so never promise a "Beklenen" before then.
       .filter((t) => t.expense_date.slice(0, 7) <= month)
       // A REJECTED template never posts again — the generator excludes it
-      // (migration 134). Projecting it would promise a gider that can never
+      // (migration 135). Projecting it would promise a gider that can never
       // arrive, which is the same lie the "Beklenen" badge told before.
       .filter((t) => t.approval_status !== 'rejected')
       .filter((t) => {

@@ -1,9 +1,15 @@
 -- =============================================================================
--- HomeGuru PMS — migration 134
+-- HomeGuru PMS — migration 135
 -- Düzenli gider onay gerektirmez; yalnızca REDDEDİLEN şablon engellenir.
 -- =============================================================================
 -- Owner kararı (2026-08-16): "Düzenli gider onaya gerek kalmadan kasaya
 -- işlenmeli." Bu migration onay kapısını düzenli giderlerden kaldırır.
+--
+-- 134'ÜN ÜZERİNE YAZAR (134 SİLİNMEZ). 134 tam TERS yönde bir düzeltmeydi —
+-- "Kasaya işle"yi cron'un o günkü kapısına (yalnızca 'approved') hizalıyordu.
+-- Owner o davranışı istemedi. 134 yayınlandığı ve uygulanmış olabileceği için
+-- düzenlenmez; bu migration onun post_recurring_instance_now sürümünün üzerine
+-- yazar. 134 uygulandıysa da uygulanmadıysa da sonuç aynıdır.
 --
 -- ARKA PLAN — bu bir gerileme değil, 125'in fazla dar kalan kapısının
 -- kalibrasyonu:
