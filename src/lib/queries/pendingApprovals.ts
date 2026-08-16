@@ -19,11 +19,23 @@ export interface PendingExpense extends ExpenseRow {
   property: { name: string; type: string } | null;
 }
 
+/**
+ * Pending one-off expenses awaiting review.
+ *
+ * Düzenli gider TEMPLATES are excluded deliberately (migration 134/135): a
+ * recurring expense never needs an onay — it posts to the kasa on its own day
+ * and the cron approves it there. Between creation and that day the template
+ * sits at 'pending' with no kasa movement, and without this filter it would
+ * appear here as something to approve, which is exactly what it must not do.
+ * Instances generated from a template are born 'approved', so they never match
+ * this query anyway.
+ */
 export async function listPendingExpenses(): Promise<PendingExpense[]> {
   const { data, error } = await supabase
     .from('expenses')
     .select('*, property:properties(name, type)')
     .eq('approval_status', 'pending')
+    .eq('is_recurring', false)
     .order('created_at', { ascending: false });
   if (error) throw wrapErr(error);
   return (data as unknown as PendingExpense[]) ?? [];

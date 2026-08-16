@@ -58,6 +58,31 @@ type DisplayExpense = ExpenseWithProperty & {
 const isRecurringRow = (e: ExpenseWithProperty) =>
   e.is_recurring || e.recurring_source_id != null;
 
+/**
+ * A düzenli TEMPLATE whose own month has not been charged yet — it is a
+ * schedule, not a payment.
+ *
+ * Since migration 135 a recurring expense set up for a day that has not
+ * arrived stays 'pending' with NO kasa movement; the cron approves it and
+ * writes the kasa OUT on its actual day. Before 135 the kasa OUT was written
+ * the instant you pressed save, so a gider set up on the 16th for the 17th was
+ * paid on the 16th.
+ *
+ * Such a row is real (it lives in `expenses`), so the projection never covers
+ * it — projections only fill months with no real row. Without this it rendered
+ * as an ordinary already-paid gider, which is why no "Beklenen" appeared.
+ *
+ * Matches 'pending' EXACTLY, not `!== 'approved'`: a REJECTED template also
+ * fails that looser test, and labelling it "Beklenen" would promise a gider the
+ * generator will never post (migration 134) — the same lie this fix removes.
+ */
+const isScheduledTemplate = (e: DisplayExpense) =>
+  !e.__projected && e.is_recurring && e.approval_status === 'pending';
+
+/** Both cases the user reads as "Beklenen": a future month's projection, and a
+ *  template whose own day has not come yet. */
+const isPendingRow = (e: DisplayExpense) => Boolean(e.__projected) || isScheduledTemplate(e);
+
 /** True when this expense belonged to a now-deleted mülk ("bağı kopar"):
  *  property_id was nulled but the snapshotted name remains. */
 function isOrphanedExpense(e: DisplayExpense): boolean {
@@ -213,6 +238,10 @@ export function ExpensesListPage() {
       // A template dated in a LATER month hasn't started yet — the generator
       // skips it (migration 124), so never promise a "Beklenen" before then.
       .filter((t) => t.expense_date.slice(0, 7) <= month)
+      // A REJECTED template never posts again — the generator excludes it
+      // (migration 134). Projecting it would promise a gider that can never
+      // arrive, which is the same lie the "Beklenen" badge told before.
+      .filter((t) => t.approval_status !== 'rejected')
       .filter((t) => {
         if (expenseType === 'GENEL') return t.property_id === null;
         if (expenseType === 'MULK')
@@ -538,7 +567,7 @@ function ExpenseSection({
                       Düzenli
                     </span>
                   )}
-                  {e.__projected && (
+                  {isPendingRow(e) && (
                     <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                       Beklenen
                     </span>
@@ -645,7 +674,7 @@ function ExpenseSection({
                           Düzenli
                         </span>
                       )}
-                      {e.__projected && (
+                      {isPendingRow(e) && (
                         <span
                           title="Bu ay henüz işlenmedi — beklenen"
                           className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"

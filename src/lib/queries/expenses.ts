@@ -57,7 +57,7 @@ export async function listExpenses(
   let q = supabase
     .from('expenses')
     .select(
-      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, deleted_property_name, property:properties(name, type), unit:units(name)',
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, approval_status, created_by, created_at, deleted_property_name, property:properties(name, type), unit:units(name)',
     )
     .order('expense_date', { ascending: false })
     .order('created_at', { ascending: false });
@@ -99,7 +99,7 @@ export async function listRecurringTemplates(): Promise<ExpenseWithProperty[]> {
   const { data, error } = await supabase
     .from('expenses')
     .select(
-      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, created_by, created_at, deleted_property_name, property:properties(name, type), unit:units(name)',
+      'id, property_id, category, amount, description, expense_date, is_recurring, paid_from_kasa, recurring_source_id, recurring_day, approval_status, created_by, created_at, deleted_property_name, property:properties(name, type), unit:units(name)',
     )
     .eq('is_recurring', true)
     .is('recurring_source_id', null);
