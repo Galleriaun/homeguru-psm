@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can, isTeknikPersonel } from '@/lib/rbac';
+import { can } from '@/lib/rbac';
 import { countUnreadNotifications } from '@/lib/queries/notifications';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PullToRefresh } from '@/components/PullToRefresh';
@@ -247,7 +247,7 @@ export function Layout() {
                 Temizlik
               </NavLink>
             )}
-            {profile && !isTeknikPersonel(profile.role) && (
+            {profile && (
               <>
                 <NavLink to="/guests" className={navLinkClasses}>
                   {navIcon('guests', 16)}
@@ -352,19 +352,9 @@ export function Layout() {
           without dvh support drops the height declaration and keeps today's
           top/bottom sizing rather than collapsing the drawer to nothing. */}
       {mobileOpen && (
-        <div
-          className="fixed inset-0 z-50 h-dvh md:hidden"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={closeMobile}
-            aria-hidden="true"
-          />
-          <aside
-            className="absolute right-0 top-0 flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-xl dark:bg-stone-900"
-          >
+        <div className="fixed inset-0 z-50 h-dvh md:hidden" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/50" onClick={closeMobile} aria-hidden="true" />
+          <aside className="absolute right-0 top-0 flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-xl dark:bg-stone-900">
             {/* Drawer header: user (tap → profile) + close */}
             <div className="flex items-start justify-between gap-3 border-b border-stone-200 px-4 py-3 dark:border-stone-700">
               <NavLink
@@ -385,12 +375,7 @@ export function Layout() {
                 aria-label="Menüyü kapat"
                 className="rounded p-1 text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
               >
-                <svg
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  aria-hidden="true"
-                >
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <path
                     d="M5 5l10 10M15 5L5 15"
                     stroke="currentColor"
@@ -407,25 +392,17 @@ export function Layout() {
                 {navIcon('dashboard', 20)}
                 Panel
               </NavLink>
-              <NavLink
-                to="/reservations"
-                className={drawerLinkClasses}
-                onClick={closeMobile}
-              >
+              <NavLink to="/reservations" className={drawerLinkClasses} onClick={closeMobile}>
                 {navIcon('reservations', 20)}
                 Rezervasyonlar
               </NavLink>
               {profile && can(profile.role, 'housekeeping:read') && (
-                <NavLink
-                  to="/housekeeping"
-                  className={drawerLinkClasses}
-                  onClick={closeMobile}
-                >
+                <NavLink to="/housekeeping" className={drawerLinkClasses} onClick={closeMobile}>
                   {navIcon('housekeeping', 20)}
                   Temizlik
                 </NavLink>
               )}
-              {profile && !isTeknikPersonel(profile.role) && (
+              {profile && (
                 <>
                   <NavLink to="/guests" className={drawerLinkClasses} onClick={closeMobile}>
                     {navIcon('guests', 20)}
@@ -438,11 +415,7 @@ export function Layout() {
                 </>
               )}
               {profile && can(profile.role, 'finance:read') && (
-                <NavLink
-                  to="/finance/cash"
-                  className={drawerLinkClasses}
-                  onClick={closeMobile}
-                >
+                <NavLink to="/finance/cash" className={drawerLinkClasses} onClick={closeMobile}>
                   {navIcon('finance', 20)}
                   Finans
                 </NavLink>

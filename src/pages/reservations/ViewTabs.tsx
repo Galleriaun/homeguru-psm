@@ -1,6 +1,4 @@
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { isTeknikPersonel } from '@/lib/rbac';
 import { cn } from '@/lib/utils';
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
@@ -16,15 +14,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 function CalendarIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <rect
-        x="3"
-        y="4"
-        width="14"
-        height="13"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
+      <rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.5" />
       <path
         d="M3 8h14M7 2.5v3M13 2.5v3"
         stroke="currentColor"
@@ -39,35 +29,25 @@ function SearchIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <circle cx="9" cy="9" r="5" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M13 13l4 4"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
+      <path d="M13 13l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
 
 export function ReservationsViewTabs() {
-  const { profile } = useAuth();
-  // Teknik Personel gets the read-only Liste only — no availability/calendar
-  // tools (the routes are also guarded server-of-router-side in App.tsx).
-  const restricted = isTeknikPersonel(profile?.role);
+  // Every role that can reach this component gets all three tabs. Teknik
+  // Personel used to be restricted to Liste; migration 139 made it a full
+  // Personel, so there is nothing left to hide here.
   return (
     <div className="flex flex-wrap gap-2">
-      {!restricted && (
-        <>
-          <NavLink to="/reservations/availability" className={tabClass}>
-            <SearchIcon />
-            Müsaitlik
-          </NavLink>
-          <NavLink to="/reservations/calendar" className={tabClass}>
-            <CalendarIcon />
-            Takvim
-          </NavLink>
-        </>
-      )}
+      <NavLink to="/reservations/availability" className={tabClass}>
+        <SearchIcon />
+        Müsaitlik
+      </NavLink>
+      <NavLink to="/reservations/calendar" className={tabClass}>
+        <CalendarIcon />
+        Takvim
+      </NavLink>
       <NavLink to="/reservations" end className={tabClass}>
         Liste
       </NavLink>

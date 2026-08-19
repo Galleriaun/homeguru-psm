@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can, canCollectPayment, isTeknikPersonel } from '@/lib/rbac';
+import { can, canCollectPayment } from '@/lib/rbac';
 import {
   cancelReservation,
   deleteReservation,
@@ -22,10 +22,7 @@ import {
   deleteLedgerEntry,
   type LedgerEntry,
 } from '@/lib/queries/ledger';
-import {
-  deletePaymentCollection,
-  countActivePaymentsForReservation,
-} from '@/lib/queries/payments';
+import { deletePaymentCollection, countActivePaymentsForReservation } from '@/lib/queries/payments';
 import { supabase } from '@/lib/supabase';
 import type { Database, ReservationStatus, PaymentMethod } from '@/types/database';
 import { Button } from '@/components/ui/Button';
@@ -68,8 +65,7 @@ export function ReservationDetailPage() {
   // notification link…) rather than always dumping them on the list.
   // location.key === 'default' means they landed here directly (deep link /
   // refresh) with no in-app history → fall back to the reservations list.
-  const goBack = () =>
-    location.key === 'default' ? navigate('/reservations') : navigate(-1);
+  const goBack = () => (location.key === 'default' ? navigate('/reservations') : navigate(-1));
 
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [property, setProperty] = useState<Property | null>(null);
@@ -226,12 +222,8 @@ export function ReservationDetailPage() {
   const isSuperAdmin = profile?.role === 'SUPER_ADMIN';
   /** Can flip the persistent guest warning flag. */
   const canEditGuest = Boolean(profile && can(profile.role, 'guest:update'));
-  // Teknik Personel has no finance access — hide reservation pricing (tutar/kapora).
-  const isTeknik = isTeknikPersonel(profile?.role);
   // Ödeme Topla — type-conditional: HOTEL=reception, APARTMENT=housekeeping; manager+admin everywhere.
-  const canCollect = Boolean(
-    profile && property && canCollectPayment(profile.role, property.type),
-  );
+  const canCollect = Boolean(profile && property && canCollectPayment(profile.role, property.type));
   const isCancelled = reservation.status === 'cancelled';
   // Cari hesap lock — only Yönetici (SUPER_ADMIN) can toggle it.
   const isBlocked = reservation.cari_blocked;
@@ -442,11 +434,7 @@ export function ReservationDetailPage() {
             </Button>
           )}
           {canEdit && !isCancelled && reservation.stay_type !== 'DAYUSE' && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowLateCheckout(true)}
-            >
+            <Button variant="secondary" size="sm" onClick={() => setShowLateCheckout(true)}>
               Geç Çıkış: {checkoutTimeLabel(reservation.late_checkout_hours)}
             </Button>
           )}
@@ -524,18 +512,10 @@ export function ReservationDetailPage() {
                 </Button>
               </a>
             )}
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowCompanions(true)}
-            >
+            <Button variant="secondary" size="sm" onClick={() => setShowCompanions(true)}>
               Ek Misafir
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowWhatsApp(true)}
-            >
+            <Button variant="secondary" size="sm" onClick={() => setShowWhatsApp(true)}>
               <WhatsAppIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
               WhatsApp
             </Button>
@@ -558,16 +538,9 @@ export function ReservationDetailPage() {
                 : formatDate(reservation.stay_end)
             }
           />
-          {!isTeknik && (
-            <>
-              <Field label="Toplam Tutar" value={formatTRY(Number(reservation.total_amount))} />
-              <Field label="Kapora" value={formatTRY(Number(reservation.deposit))} />
-            </>
-          )}
-          <Field
-            label="Otomatik Borçlandır"
-            value={reservation.auto_debit ? 'Evet' : 'Hayır'}
-          />
+          <Field label="Toplam Tutar" value={formatTRY(Number(reservation.total_amount))} />
+          <Field label="Kapora" value={formatTRY(Number(reservation.deposit))} />
+          <Field label="Otomatik Borçlandır" value={reservation.auto_debit ? 'Evet' : 'Hayır'} />
           <Field label="Durum" value={STATUS_LABELS[reservation.status]} />
         </dl>
         {reservation.note && (
@@ -649,9 +622,7 @@ export function ReservationDetailPage() {
           current={reservation.late_checkout_hours ?? 0}
           onClose={() => setShowLateCheckout(false)}
           onUpdated={(next) => {
-            setReservation((prev) =>
-              prev ? { ...prev, late_checkout_hours: next } : prev,
-            );
+            setReservation((prev) => (prev ? { ...prev, late_checkout_hours: next } : prev));
             setShowLateCheckout(false);
           }}
         />
@@ -687,7 +658,8 @@ export function ReservationDetailPage() {
           <>
             <p>Rezervasyon Çöp Kutusu'na taşınır ve oradan geri yüklenebilir.</p>
             <p className="mt-2">
-              Rezervasyonu iptal statüsünde tutmak istiyorsanız bunun yerine “İptal Et” seçeneğini kullanın.
+              Rezervasyonu iptal statüsünde tutmak istiyorsanız bunun yerine “İptal Et” seçeneğini
+              kullanın.
             </p>
           </>
         }
@@ -757,14 +729,14 @@ export function ReservationDetailPage() {
                 </strong>
                 {entryToDelete.note ? ` — ${tPaymentMethods(entryToDelete.note)}` : ''}
               </p>
-              <p className="mt-2">Kayıt Çöp Kutusu'na taşınır ve oradan geri yüklenebilir. Bakiye yeniden hesaplanır.</p>
+              <p className="mt-2">
+                Kayıt Çöp Kutusu'na taşınır ve oradan geri yüklenebilir. Bakiye yeniden hesaplanır.
+              </p>
               {entryToDelete.payment_collection_id && (
                 <div className="mt-3 rounded border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-700 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-200">
                   <p>
-                    <strong>Not:</strong> Bu kayıt bir tahsilatla bağlantılı.
-                    Silindiğinde bağlı{' '}
-                    <strong>tahsilat kaydı ve kasa hareketi</strong> de
-                    otomatik olarak silinir.
+                    <strong>Not:</strong> Bu kayıt bir tahsilatla bağlantılı. Silindiğinde bağlı{' '}
+                    <strong>tahsilat kaydı ve kasa hareketi</strong> de otomatik olarak silinir.
                   </p>
                 </div>
               )}
@@ -832,10 +804,7 @@ function LedgerSection({
   const entries = ledger ?? [];
   // Split the two totals so the user can verify the math by sight,
   // instead of trusting a single signed number.
-  const totalDebt = entries.reduce(
-    (s, e) => (e.type === 'DEBT' ? s + Number(e.amount) : s),
-    0,
-  );
+  const totalDebt = entries.reduce((s, e) => (e.type === 'DEBT' ? s + Number(e.amount) : s), 0);
   const totalPayment = entries.reduce(
     (s, e) => (e.type === 'PAYMENT' ? s + Number(e.amount) : s),
     0,
@@ -863,9 +832,7 @@ function LedgerSection({
     <section className="space-y-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">
-            Cari Hesap
-          </h2>
+          <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Cari Hesap</h2>
           {isBlocked && (
             <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">
               Kilitli
@@ -930,8 +897,8 @@ function LedgerSection({
       </div>
       {isBlocked && (
         <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-          Bu cari hesap kilitli — yeni ödeme toplanamaz veya ekstra ücret eklenemez.
-          Kilidi yalnızca yönetici açabilir.
+          Bu cari hesap kilitli — yeni ödeme toplanamaz veya ekstra ücret eklenemez. Kilidi yalnızca
+          yönetici açabilir.
         </p>
       )}
       {blockError && (
@@ -955,17 +922,13 @@ function LedgerSection({
           <Card>
             <div className="space-y-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-sm text-stone-600 dark:text-stone-300">
-                  Toplam Ücret
-                </span>
+                <span className="text-sm text-stone-600 dark:text-stone-300">Toplam Ücret</span>
                 <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">
                   {formatTRY(totalDebt)}
                 </span>
               </div>
               <div className="flex items-baseline justify-between">
-                <span className="text-sm text-stone-600 dark:text-stone-300">
-                  Toplam Ödeme
-                </span>
+                <span className="text-sm text-stone-600 dark:text-stone-300">Toplam Ödeme</span>
                 <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                   {formatTRY(totalPayment)}
                 </span>
@@ -987,36 +950,37 @@ function LedgerSection({
                     <span className={`block text-sm font-medium ${balanceColor}`}>
                       {balanceLabel}
                     </span>
-                    {balance < 0 && (() => {
-                      // Distinct payment methods used on this reservation —
-                      // shown below "Misafirden Alındı" so the operator sees
-                      // HOW the money came in without digging into the rows.
-                      const METHOD_TR: Record<PaymentMethod, string> = {
-                        CASH: 'Nakit',
-                        TRANSFER: 'Havale/EFT',
-                        CARD: 'Kart',
-                      };
-                      const methods = Array.from(
-                        new Set(
-                          ledger
-                            .filter((e) => e.type === 'PAYMENT' && e.payment_collection?.method)
-                            .map((e) => e.payment_collection!.method),
-                        ),
-                      );
-                      if (methods.length === 0) return null;
-                      return (
-                        <div className="mt-1 flex flex-wrap justify-end gap-1">
-                          {methods.map((m) => (
-                            <span
-                              key={m}
-                              className="rounded bg-stone-200 px-1.5 py-0.5 text-[11px] font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200"
-                            >
-                              {METHOD_TR[m]}
-                            </span>
-                          ))}
-                        </div>
-                      );
-                    })()}
+                    {balance < 0 &&
+                      (() => {
+                        // Distinct payment methods used on this reservation —
+                        // shown below "Misafirden Alındı" so the operator sees
+                        // HOW the money came in without digging into the rows.
+                        const METHOD_TR: Record<PaymentMethod, string> = {
+                          CASH: 'Nakit',
+                          TRANSFER: 'Havale/EFT',
+                          CARD: 'Kart',
+                        };
+                        const methods = Array.from(
+                          new Set(
+                            ledger
+                              .filter((e) => e.type === 'PAYMENT' && e.payment_collection?.method)
+                              .map((e) => e.payment_collection!.method),
+                          ),
+                        );
+                        if (methods.length === 0) return null;
+                        return (
+                          <div className="mt-1 flex flex-wrap justify-end gap-1">
+                            {methods.map((m) => (
+                              <span
+                                key={m}
+                                className="rounded bg-stone-200 px-1.5 py-0.5 text-[11px] font-medium text-stone-700 dark:bg-stone-700 dark:text-stone-200"
+                              >
+                                {METHOD_TR[m]}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                   </div>
                 </div>
               </div>

@@ -95,11 +95,15 @@ const BASE: Record<Role, Permission[]> = {
   // Region personel — a Personel scoped to the Bornova region (region scoping is
   // enforced server-side via auth_region()). Same permission set as YETKILI.
   PERSONEL_BORNOVA: PERSONEL_PERMS,
-  // Technical staff — deliberately narrow: read-only reservation Liste + issue
-  // reporting only, across ALL regions. No cleaning-status write, no finance /
-  // guest-PII / property / staff. Server: auth_role() → HOUSEKEEPING with an
-  // all-property bypass in auth_sees_property. Migrations 114 + 117.
-  TEKNIK_PERSONEL: ['housekeeping:read', 'issue:write', 'reservation:read'],
+  // Technical staff. As of migration 139 this is a FULL Personel — identical
+  // permissions to YETKILI. It was deliberately narrow before (read-only Liste +
+  // issue reporting); the owner widened it on 2026-08-19.
+  //
+  // Two things that are NOT permissions still make it special, and both are
+  // enforced server-side on the RAW role, so they survive this:
+  //   * it sees every property in EVERY region (auth_sees_property bypass, 117)
+  //   * its maaş/avans come out of the Bornova kasa (staff_region, 120)
+  TEKNIK_PERSONEL: PERSONEL_PERMS,
 };
 
 /**
@@ -111,6 +115,11 @@ const BASE: Record<Role, Permission[]> = {
 export function baseRole(role: Role | undefined): Role | undefined {
   if (role === 'YONETICI_BORNOVA') return 'PROPERTY_MANAGER';
   if (role === 'PERSONEL_BORNOVA') return 'YETKILI';
+  // Mirrors auth_role() in migration 139 exactly. Teknik is not region-scoped —
+  // it sees every region — but for permission purposes it acts as a Personel.
+  // Keeping this in step with the server matters: if the two ever disagree, the
+  // UI offers actions RLS then refuses, or hides ones the user is entitled to.
+  if (role === 'TEKNIK_PERSONEL') return 'YETKILI';
   return role;
 }
 
@@ -119,15 +128,11 @@ export function can(role: Role, permission: Permission): boolean {
   return BASE[role].includes(permission);
 }
 
-/**
- * Teknik Personel is a deliberately narrow role (read-only reservation Liste +
- * issue reporting, across all regions). This flags it so the few UI surfaces it
- * must NOT see — guest/property nav, availability/calendar tools, the Kirli
- * Daireler tile — can hide them without each re-listing the role literal.
- */
-export function isTeknikPersonel(role: Role | undefined): boolean {
-  return role === 'TEKNIK_PERSONEL';
-}
+// isTeknikPersonel() was removed in migration 139. It existed to hide the UI
+// surfaces the narrow technical role must not see — guest/property nav,
+// availability/calendar tools, payment amounts, the cleaning-status chips. Teknik
+// is a full Personel now, so there is nothing left to hide and every call site's
+// condition was vacuous. Gate on a permission via can(), never on a role literal.
 
 /**
  * Property-type-conditional permissions.

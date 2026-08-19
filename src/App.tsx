@@ -41,18 +41,11 @@ const FINANCE_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER'] as const;
 // Roles that can submit a new gider. YETKILI's submission goes through the
 // onay queue (migration 055 + 064) instead of posting straight to the kasa.
 const EXPENSE_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
-const HOUSEKEEPING_ACCESS = [
-  'SUPER_ADMIN',
-  'PROPERTY_MANAGER',
-  'HOUSEKEEPING',
-  'YETKILI',
-  'TEKNIK_PERSONEL',
-] as const;
+// TEKNIK_PERSONEL is absent on purpose: ProtectedRoute matches allowedRoles
+// against baseRole(), which maps it to YETKILI (mirroring auth_role() in
+// migration 139). Listing it here as well would be dead weight.
+const HOUSEKEEPING_ACCESS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'HOUSEKEEPING', 'YETKILI'] as const;
 const UNIT_WRITERS = ['SUPER_ADMIN', 'PROPERTY_MANAGER', 'YETKILI'] as const;
-// Narrow technical role — blocked from otherwise-open pages (guests, properties,
-// reservation calendar/availability). Its server access is HOUSEKEEPING-level,
-// so the router must hide what the UI shouldn't expose.
-const TEKNIK_BLOCKED = ['TEKNIK_PERSONEL'] as const;
 
 export default function App() {
   return (
@@ -85,7 +78,7 @@ export default function App() {
           <Route
             path="/properties"
             element={
-              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+              <ProtectedRoute>
                 <PropertiesListPage />
               </ProtectedRoute>
             }
@@ -101,7 +94,7 @@ export default function App() {
           <Route
             path="/properties/:id"
             element={
-              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+              <ProtectedRoute>
                 <PropertyDetailPage />
               </ProtectedRoute>
             }
@@ -135,7 +128,7 @@ export default function App() {
           <Route
             path="/guests"
             element={
-              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+              <ProtectedRoute>
                 <GuestsListPage />
               </ProtectedRoute>
             }
@@ -151,7 +144,7 @@ export default function App() {
           <Route
             path="/guests/:id"
             element={
-              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+              <ProtectedRoute>
                 <GuestDetailPage />
               </ProtectedRoute>
             }
@@ -170,7 +163,7 @@ export default function App() {
           <Route
             path="/reservations/calendar"
             element={
-              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+              <ProtectedRoute>
                 <ReservationsCalendarPage />
               </ProtectedRoute>
             }
@@ -178,7 +171,7 @@ export default function App() {
           <Route
             path="/reservations/availability"
             element={
-              <ProtectedRoute deniedRoles={[...TEKNIK_BLOCKED]}>
+              <ProtectedRoute>
                 <ReservationsAvailabilityPage />
               </ProtectedRoute>
             }
@@ -318,7 +311,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />

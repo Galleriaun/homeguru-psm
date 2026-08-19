@@ -1,12 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can, isTeknikPersonel } from '@/lib/rbac';
-import {
-  listProperties,
-  sortHotelsFirst,
-  type Property,
-} from '@/lib/queries/properties';
+import { can } from '@/lib/rbac';
+import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/properties';
 import { listAllUnits, type Unit } from '@/lib/queries/units';
 import {
   listAllTasks,
@@ -72,9 +68,7 @@ export function HousekeepingPage() {
   const [savingUnitId, setSavingUnitId] = useState<string | null>(null);
 
   // Open-issues count per unit (for the alert badge on each card)
-  const [openIssueCounts, setOpenIssueCounts] = useState<Map<string, number>>(
-    () => new Map(),
-  );
+  const [openIssueCounts, setOpenIssueCounts] = useState<Map<string, number>>(() => new Map());
   const [issueModalUnit, setIssueModalUnit] = useState<Unit | null>(null);
   /** user_id → staff name, for the "Son Değiştiren" line on each card. */
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map());
@@ -84,18 +78,11 @@ export function HousekeepingPage() {
   // a read-only role (Teknik Personel) can file/resolve issues without being
   // able to change Kirli/Temizleniyor/Temiz status.
   const canWriteIssue = Boolean(profile && can(profile.role, 'issue:write'));
-  // Teknik Personel only reports issues — hide the cleaning-status filter chips.
-  const teknik = isTeknikPersonel(profile?.role);
   const canDelete = profile?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      listProperties(),
-      listAllUnits(),
-      listAllTasks(),
-      listOpenIssueCountsByUnit(),
-    ])
+    Promise.all([listProperties(), listAllUnits(), listAllTasks(), listOpenIssueCountsByUnit()])
       .then(([p, u, t, ic]) => {
         setProperties(p);
         setUnits(u);
@@ -108,7 +95,9 @@ export function HousekeepingPage() {
 
   // Best-effort: resolves updated_by → staff name for the "Son Değiştiren" line.
   useEffect(() => {
-    loadStaffDirectory().then(setStaffMap).catch(() => {});
+    loadStaffDirectory()
+      .then(setStaffMap)
+      .catch(() => {});
   }, []);
 
   // Called by IssuesModal after a create or resolve so the badge updates
@@ -154,10 +143,7 @@ export function HousekeepingPage() {
     return status === filter;
   };
 
-  const handleChangeStatus = async (
-    unit: Unit,
-    newStatus: HousekeepingStatus,
-  ) => {
+  const handleChangeStatus = async (unit: Unit, newStatus: HousekeepingStatus) => {
     if (!canWrite) return;
     const current = currentByUnit.get(unit.id)?.status ?? DEFAULT_STATUS;
     if (current === newStatus) return; // no-op
@@ -195,9 +181,7 @@ export function HousekeepingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">
-          Temizlik
-        </h1>
+        <h1 className="text-2xl font-semibold text-stone-900 dark:text-stone-100">Temizlik</h1>
         <p className="mt-1 text-sm text-stone-600 dark:text-stone-300">
           Mülk bazında oda / daire temizlik durumu
         </p>
@@ -208,9 +192,7 @@ export function HousekeepingPage() {
         {(['ALL', 'HOTEL', 'APARTMENT'] as const).map((t) => {
           const isActive = typeFilter === t;
           const count =
-            t === 'ALL'
-              ? properties.length
-              : properties.filter((p) => p.type === t).length;
+            t === 'ALL' ? properties.length : properties.filter((p) => p.type === t).length;
           const label = t === 'ALL' ? 'Tüm Mülkler' : t === 'HOTEL' ? 'Binalar' : 'Daireler';
           return (
             <button
@@ -231,9 +213,7 @@ export function HousekeepingPage() {
         })}
       </div>
 
-      {/* Status filter chips with counts — hidden for Teknik Personel, whose
-          page is issue-reporting only (no cleaning-status filtering). */}
-      {!teknik && (
+      {/* Status filter chips with counts. */}
       <div className="flex flex-wrap gap-2">
         {(['ALL', 'DIRTY', 'IN_PROGRESS', 'CLEAN', 'ISSUES'] as const).map((f) => {
           const count =
@@ -265,13 +245,11 @@ export function HousekeepingPage() {
                       : 'border-stone-300 text-stone-700 hover:bg-stone-100 dark:border-stone-600 dark:text-stone-300 dark:hover:bg-stone-800',
               )}
             >
-              {FILTER_LABELS[f]}{' '}
-              <span className="ml-1 text-xs opacity-70">({count})</span>
+              {FILTER_LABELS[f]} <span className="ml-1 text-xs opacity-70">({count})</span>
             </button>
           );
         })}
       </div>
-      )}
 
       {error && (
         <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
@@ -279,9 +257,7 @@ export function HousekeepingPage() {
         </Card>
       )}
 
-      {loading && (
-        <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
-      )}
+      {loading && <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>}
 
       {!loading && !error && totalCount === 0 && (
         <Card>
@@ -345,27 +321,23 @@ export function HousekeepingPage() {
                                   <p className="text-xs text-stone-600 dark:text-stone-300">
                                     {formatRoomType(unit.room_type)}
                                   </p>
-                                  {/* Cleaning-status metadata — irrelevant to the
-                                      issue-only Teknik Personel role, so hidden. */}
-                                  {!teknik && (
-                                    <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                                      {latest
-                                        ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
-                                        : 'Henüz kayıt yok'}
-                                    </p>
-                                  )}
-                                  {!teknik &&
-                                    (() => {
-                                      const changer = latest?.updated_by
-                                        ? staffMap.get(latest.updated_by)
-                                        : undefined;
-                                      if (!changer) return null;
-                                      return (
-                                        <p className="text-xs text-stone-500 dark:text-stone-400">
-                                          Son Değiştiren: {changer}
-                                        </p>
-                                      );
-                                    })()}
+                                  {/* Cleaning-status metadata. */}
+                                  <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                                    {latest
+                                      ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
+                                      : 'Henüz kayıt yok'}
+                                  </p>
+                                  {(() => {
+                                    const changer = latest?.updated_by
+                                      ? staffMap.get(latest.updated_by)
+                                      : undefined;
+                                    if (!changer) return null;
+                                    return (
+                                      <p className="text-xs text-stone-500 dark:text-stone-400">
+                                        Son Değiştiren: {changer}
+                                      </p>
+                                    );
+                                  })()}
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {isSaving && (

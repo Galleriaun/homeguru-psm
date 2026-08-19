@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can, isTeknikPersonel } from '@/lib/rbac';
+import { can } from '@/lib/rbac';
 import { listProperties, type Property } from '@/lib/queries/properties';
 import { listAllUnits, type Unit } from '@/lib/queries/units';
 import {
@@ -20,33 +20,16 @@ import {
   requestReservationCancellation,
   type ReservationWithRefs,
 } from '@/lib/queries/reservations';
-import {
-  listBlocksInRange,
-  deleteBlock,
-  type PropertyBlock,
-} from '@/lib/queries/property_blocks';
-import {
-  listNotesInRange,
-  type PropertyDateNote,
-} from '@/lib/queries/property_date_notes';
-import {
-  listPricesInRange,
-  type NightlyPrice,
-} from '@/lib/queries/property_nightly_prices';
+import { listBlocksInRange, deleteBlock, type PropertyBlock } from '@/lib/queries/property_blocks';
+import { listNotesInRange, type PropertyDateNote } from '@/lib/queries/property_date_notes';
+import { listPricesInRange, type NightlyPrice } from '@/lib/queries/property_nightly_prices';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ReservationsViewTabs } from './ViewTabs';
-import {
-  ArrowsLeftRightIcon,
-  NoEntryIcon,
-  XMarkIcon,
-} from '@/components/icons/ActionIcons';
+import { ArrowsLeftRightIcon, NoEntryIcon, XMarkIcon } from '@/components/icons/ActionIcons';
 import { CellActionSheet, type CellAction } from './CellActionSheet';
-import {
-  ReservationActionSheet,
-  type ReservationAction,
-} from './ReservationActionSheet';
+import { ReservationActionSheet, type ReservationAction } from './ReservationActionSheet';
 import { RangeActionSheet, type RangeAction } from './RangeActionSheet';
 import { BlockDatesModal } from './BlockDatesModal';
 import { DateNoteModal } from './DateNoteModal';
@@ -119,16 +102,12 @@ function dayIndex(fromStr: string, toStr: string): number {
 // 1-night stay looked like 2. Shifting +3h first yields the true Istanbul day.
 // Istanbul is fixed UTC+3, no DST (see CLAUDE.md).
 function istanbulDateOf(iso: string): string {
-  return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 // Istanbul wall-clock "HH:MM" from a stored UTC timestamp (fixed +3h). Used to
 // label güniçi (day-use) bars, which carry a meaningful giriş/çıkış time.
 function istanbulClock(iso: string): string {
-  return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(11, 16);
+  return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000).toISOString().slice(11, 16);
 }
 
 const weekdayFmt = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
@@ -155,32 +134,29 @@ export function ReservationsCalendarPage() {
    */
   const isCancelReviewer = profile?.role === 'SUPER_ADMIN';
   /** reservation_id → collected total, for the payment line under each bar.
-   *  Teknik Personel has no tahsilat access (migration 121), so the query would
-   *  fail and leave this empty — which is indistinguishable from "nobody paid".
-   *  Skip loading AND drawing for them rather than paint every bar red. */
-  const showPaymentLines = !isTeknikPersonel(profile?.role);
+   *  Every role that reaches this page can read tahsilat since migration 139
+   *  lifted the Teknik Personel restriction, so there is no longer a role that
+   *  must skip the load. `paidLoaded` still gates drawing: an empty paidMap is
+   *  indistinguishable from "nobody paid", so a failed load must not paint every
+   *  bar red. */
   const [paidMap, setPaidMap] = useState<Map<string, number>>(() => new Map());
   const [paidLoaded, setPaidLoaded] = useState(false);
 
   useEffect(() => {
-    if (!showPaymentLines) return;
     loadReservationsWithPayments()
       .then((m) => {
         setPaidMap(m);
         setPaidLoaded(true);
       })
       .catch(() => setPaidLoaded(false));
-  }, [showPaymentLines]);
+  }, []);
   const navigate = useNavigate();
 
   // Last calendar year included in the range; "Sene Ekle" bumps it. The range is
   // always RANGE_START → 31 Dec endYear, rendered as [RANGE_START, endYear+1-01-01).
   const [endYear, setEndYear] = useState(BASE_END_YEAR);
   const rangeEndExclusive = `${endYear + 1}-01-01`;
-  const windowDays = useMemo(
-    () => dayIndex(RANGE_START, rangeEndExclusive),
-    [rangeEndExclusive],
-  );
+  const windowDays = useMemo(() => dayIndex(RANGE_START, rangeEndExclusive), [rangeEndExclusive]);
   const lastDay = addDaysStr(RANGE_START, windowDays - 1);
   /** Shown when the user has scrolled to the right end — offers to add a year. */
   const [showAddYear, setShowAddYear] = useState(false);
@@ -246,9 +222,7 @@ export function ReservationsCalendarPage() {
 
   // ---- existing-reservation action sheet (Task 9) ----
   /** Reservation tapped on the calendar — drives ReservationActionSheet. */
-  const [pickedReservation, setPickedReservation] = useState<ReservationWithRefs | null>(
-    null,
-  );
+  const [pickedReservation, setPickedReservation] = useState<ReservationWithRefs | null>(null);
   /** Whether the move-reservation modal is open after picking "Taşı". */
   const [showMoveModal, setShowMoveModal] = useState(false);
   /** Reservation pending an "İptal Et" confirmation. */
@@ -301,9 +275,7 @@ export function ReservationsCalendarPage() {
 
   // Width of the sticky unit-name column — collapses on phones (see consts).
   const [labelW, setLabelW] = useState(() =>
-    typeof window !== 'undefined' && window.innerWidth < 640
-      ? LABEL_W_MOBILE
-      : LABEL_W_DESKTOP,
+    typeof window !== 'undefined' && window.innerWidth < 640 ? LABEL_W_MOBILE : LABEL_W_DESKTOP,
   );
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 640px)');
@@ -315,8 +287,7 @@ export function ReservationsCalendarPage() {
 
   const today = istanbulToday();
   const canCreate = Boolean(profile && can(profile.role, 'reservation:create'));
-  const seesAllRegions =
-    profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
+  const seesAllRegions = profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
 
   // Properties + units load once
   useEffect(() => {
@@ -407,10 +378,7 @@ export function ReservationsCalendarPage() {
   // a fraction of it ONLY where it actually overlaps another (localCount), so a
   // standalone booking stays full height even if the unit overlaps elsewhere.
   const lanesByUnit = useMemo(() => {
-    const map = new Map<
-      string,
-      { lane: Map<string, number>; localCount: Map<string, number> }
-    >();
+    const map = new Map<string, { lane: Map<string, number>; localCount: Map<string, number> }>();
     for (const [unitId, list] of reservationsByUnit) {
       // Every rendered stay takes a lane so overlaps stack. Day-use (giriş =
       // çıkış) collapses to one day → give it a 1-day span so it stacks with any
@@ -419,9 +387,7 @@ export function ReservationsCalendarPage() {
         .map((r) => {
           const s = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
           const e =
-            r.stay_type === 'DAYUSE'
-              ? s + 1
-              : dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
+            r.stay_type === 'DAYUSE' ? s + 1 : dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
           return { id: r.id, s, e };
         })
         .filter((x) => x.e > x.s)
@@ -574,9 +540,7 @@ export function ReservationsCalendarPage() {
   const shiftStayEnd = async (r: ReservationWithRefs, deltaDays: number) => {
     setActionError(null);
     try {
-      const newEnd = new Date(
-        new Date(r.stay_end).getTime() + deltaDays * DAY_MS,
-      ).toISOString();
+      const newEnd = new Date(new Date(r.stay_end).getTime() + deltaDays * DAY_MS).toISOString();
       await updateReservation(r.id, { stay_end: newEnd });
       setReservationVersion((v) => v + 1);
     } catch (err) {
@@ -799,8 +763,8 @@ export function ReservationsCalendarPage() {
               </>
             ) : (
               <>
-                Aralık modu açık — başlangıç hücresine tıkla, ardından bitişe.
-                Tek tıklamayla normal moda dönmek için yukarıdan kapat.
+                Aralık modu açık — başlangıç hücresine tıkla, ardından bitişe. Tek tıklamayla normal
+                moda dönmek için yukarıdan kapat.
               </>
             )}
           </p>
@@ -910,29 +874,29 @@ export function ReservationsCalendarPage() {
                         >
                           <span className="truncate">{p.name}</span>
                         </div>
-                    {propUnits.length === 0 && (
-                      <div
-                        className="flex items-center border-b border-stone-200 px-3 text-xs italic text-stone-400 dark:border-stone-700 dark:text-stone-500"
-                        style={{ height: ROW_H }}
-                      >
-                        birim yok
-                      </div>
-                    )}
-                    {propUnits.map((u) => (
-                      <div
-                        key={u.id}
-                        className="flex items-center gap-1.5 border-b border-stone-200 px-3 text-sm text-stone-800 dark:border-stone-700 dark:text-stone-200"
-                        style={{ height: ROW_H }}
-                      >
-                        <span className="truncate">{u.name}</span>
-                        <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
-                          {formatRoomType(u.room_type)}
-                        </span>
-                      </div>
-                    ))}
-                  </Fragment>
-                );
-              })}
+                        {propUnits.length === 0 && (
+                          <div
+                            className="flex items-center border-b border-stone-200 px-3 text-xs italic text-stone-400 dark:border-stone-700 dark:text-stone-500"
+                            style={{ height: ROW_H }}
+                          >
+                            birim yok
+                          </div>
+                        )}
+                        {propUnits.map((u) => (
+                          <div
+                            key={u.id}
+                            className="flex items-center gap-1.5 border-b border-stone-200 px-3 text-sm text-stone-800 dark:border-stone-700 dark:text-stone-200"
+                            style={{ height: ROW_H }}
+                          >
+                            <span className="truncate">{u.name}</span>
+                            <span className="shrink-0 rounded bg-stone-200 px-1 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-stone-700 dark:text-stone-300">
+                              {formatRoomType(u.room_type)}
+                            </span>
+                          </div>
+                        ))}
+                      </Fragment>
+                    );
+                  })}
                 </Fragment>
               ))}
             </div>
@@ -944,275 +908,273 @@ export function ReservationsCalendarPage() {
               className="min-w-0 flex-1 overflow-x-auto"
             >
               <div style={{ width: trackWidth }}>
-              {/* Day header */}
-              <div
-                className="flex border-b border-stone-300 dark:border-stone-600"
-                style={{ height: HEADER_H }}
-              >
-                {days.map((d) => (
-                  <div
-                    key={d.dateStr}
-                    className={cn(
-                      'flex shrink-0 flex-col items-center justify-center border-l border-stone-200 dark:border-stone-700',
-                      d.isWeekend && 'bg-stone-100/70 dark:bg-stone-800/50',
-                      d.isToday && 'bg-emerald-50 dark:bg-emerald-950/40',
-                    )}
-                    style={{ width: DAY_W }}
-                  >
-                    <div className="text-[10px] uppercase leading-tight text-stone-500 dark:text-stone-400">
-                      {d.showMonth ? d.month : d.weekday}
-                    </div>
+                {/* Day header */}
+                <div
+                  className="flex border-b border-stone-300 dark:border-stone-600"
+                  style={{ height: HEADER_H }}
+                >
+                  {days.map((d) => (
                     <div
+                      key={d.dateStr}
                       className={cn(
-                        'text-sm leading-tight',
-                        d.isToday
-                          ? 'font-bold text-emerald-700 dark:text-emerald-400'
-                          : 'text-stone-700 dark:text-stone-300',
+                        'flex shrink-0 flex-col items-center justify-center border-l border-stone-200 dark:border-stone-700',
+                        d.isWeekend && 'bg-stone-100/70 dark:bg-stone-800/50',
+                        d.isToday && 'bg-emerald-50 dark:bg-emerald-950/40',
                       )}
+                      style={{ width: DAY_W }}
                     >
-                      {d.dayNum}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Body: properties → units, grouped into Daireler / Binalar */}
-              {groups.map((g) => (
-                <Fragment key={`g-${g.key}`}>
-                  <div
-                    className="border-b border-stone-300 bg-stone-100 dark:border-stone-600 dark:bg-stone-800"
-                    style={{ height: GROUP_H }}
-                  />
-                  {g.items.map((p) => {
-                    const propUnits = unitsByProperty.get(p.id) ?? [];
-                    return (
-                      <Fragment key={p.id}>
-                        <div
-                          className="border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40"
-                          style={{ height: PROP_H }}
-                        />
-
-                    {propUnits.length === 0 && (
+                      <div className="text-[10px] uppercase leading-tight text-stone-500 dark:text-stone-400">
+                        {d.showMonth ? d.month : d.weekday}
+                      </div>
                       <div
-                        className="border-b border-stone-200 dark:border-stone-700"
-                        style={{ height: ROW_H }}
-                      />
-                    )}
+                        className={cn(
+                          'text-sm leading-tight',
+                          d.isToday
+                            ? 'font-bold text-emerald-700 dark:text-emerald-400'
+                            : 'text-stone-700 dark:text-stone-300',
+                        )}
+                      >
+                        {d.dayNum}
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-                    {propUnits.map((u) => {
-                      const unitRes = reservationsByUnit.get(u.id) ?? [];
-                      const unitBlocks = blocksByUnit.get(u.id) ?? [];
-                      const unitLanes = lanesByUnit.get(u.id);
+                {/* Body: properties → units, grouped into Daireler / Binalar */}
+                {groups.map((g) => (
+                  <Fragment key={`g-${g.key}`}>
+                    <div
+                      className="border-b border-stone-300 bg-stone-100 dark:border-stone-600 dark:bg-stone-800"
+                      style={{ height: GROUP_H }}
+                    />
+                    {g.items.map((p) => {
+                      const propUnits = unitsByProperty.get(p.id) ?? [];
                       return (
-                        <div
-                          key={u.id}
-                          className="relative border-b border-stone-200 dark:border-stone-700"
-                          style={{ height: ROW_H }}
-                        >
-                            {/* Clickable day-cell background. Shift-click (or
+                        <Fragment key={p.id}>
+                          <div
+                            className="border-b border-stone-200 bg-stone-50 dark:border-stone-700 dark:bg-stone-800/40"
+                            style={{ height: PROP_H }}
+                          />
+
+                          {propUnits.length === 0 && (
+                            <div
+                              className="border-b border-stone-200 dark:border-stone-700"
+                              style={{ height: ROW_H }}
+                            />
+                          )}
+
+                          {propUnits.map((u) => {
+                            const unitRes = reservationsByUnit.get(u.id) ?? [];
+                            const unitBlocks = blocksByUnit.get(u.id) ?? [];
+                            const unitLanes = lanesByUnit.get(u.id);
+                            return (
+                              <div
+                                key={u.id}
+                                className="relative border-b border-stone-200 dark:border-stone-700"
+                                style={{ height: ROW_H }}
+                              >
+                                {/* Clickable day-cell background. Shift-click (or
                                 "Aralık modu" on) routes through the same
                                 handler — see handleCellClick. */}
-                            <div className="absolute inset-0 flex">
-                              {days.map((d) => {
-                                const isAnchor =
-                                  rangeAnchor !== null &&
-                                  rangeAnchor.unitId === u.id &&
-                                  rangeAnchor.dateStr === d.dateStr;
-                                return (
-                                  <button
-                                    key={d.dateStr}
-                                    type="button"
-                                    disabled={!canCreate}
-                                    onClick={(e) =>
-                                      handleCellClick(p.id, u.id, u.name, d.dateStr, e)
-                                    }
-                                    aria-label={`${u.name} ${d.dateStr} işlemler`}
-                                    className={cn(
-                                      'shrink-0 border-l border-stone-200 dark:border-stone-700',
-                                      d.isWeekend && 'bg-stone-100/60 dark:bg-stone-800/30',
-                                      d.isToday && 'bg-emerald-50/70 dark:bg-emerald-950/30',
-                                      isAnchor && 'bg-sky-100 ring-2 ring-inset ring-sky-500 dark:bg-sky-900/50',
-                                      canCreate && !isAnchor &&
-                                        'hover:bg-emerald-100/60 dark:hover:bg-emerald-900/30',
-                                      !canCreate && 'cursor-default',
-                                    )}
-                                    style={{ width: DAY_W }}
-                                  />
-                                );
-                              })}
-                            </div>
+                                <div className="absolute inset-0 flex">
+                                  {days.map((d) => {
+                                    const isAnchor =
+                                      rangeAnchor !== null &&
+                                      rangeAnchor.unitId === u.id &&
+                                      rangeAnchor.dateStr === d.dateStr;
+                                    return (
+                                      <button
+                                        key={d.dateStr}
+                                        type="button"
+                                        disabled={!canCreate}
+                                        onClick={(e) =>
+                                          handleCellClick(p.id, u.id, u.name, d.dateStr, e)
+                                        }
+                                        aria-label={`${u.name} ${d.dateStr} işlemler`}
+                                        className={cn(
+                                          'shrink-0 border-l border-stone-200 dark:border-stone-700',
+                                          d.isWeekend && 'bg-stone-100/60 dark:bg-stone-800/30',
+                                          d.isToday && 'bg-emerald-50/70 dark:bg-emerald-950/30',
+                                          isAnchor &&
+                                            'bg-sky-100 ring-2 ring-inset ring-sky-500 dark:bg-sky-900/50',
+                                          canCreate &&
+                                            !isAnchor &&
+                                            'hover:bg-emerald-100/60 dark:hover:bg-emerald-900/30',
+                                          !canCreate && 'cursor-default',
+                                        )}
+                                        style={{ width: DAY_W }}
+                                      />
+                                    );
+                                  })}
+                                </div>
 
-                            {/* Date-block bars — render below reservations
+                                {/* Date-block bars — render below reservations
                                 (z-5) so a paying stay overlays cleanly if a
                                 block somehow exists (shouldn't, per triggers). */}
-                            {unitBlocks.map((b) => {
-                              const sIdx = dayIndex(RANGE_START, istanbulDateOf(b.block_start));
-                              const eIdx = dayIndex(RANGE_START, istanbulDateOf(b.block_end));
-                              const left = Math.max(sIdx, 0);
-                              const right = Math.min(eIdx, windowDays);
-                              if (right <= left) return null;
-                              const clippedLeft = sIdx < 0;
-                              const clippedRight = eIdx > windowDays;
-                              const padLeft = clippedLeft ? 0 : 2;
-                              const padRight = clippedRight ? 0 : 2;
-                              return (
-                                <button
-                                  key={b.id}
-                                  type="button"
-                                  onClick={() => handleBlockClick(b)}
-                                  title={
-                                    b.reason
-                                      ? `Bloklu — ${b.reason}`
-                                      : 'Bloklu (sebep belirtilmemiş)'
-                                  }
-                                  aria-label="Tarih bloğu"
-                                  className={cn(
-                                    'absolute z-[5] flex items-center justify-center overflow-hidden text-xs font-semibold text-stone-700 transition-opacity hover:opacity-80 dark:text-stone-200',
-                                    clippedLeft ? '' : 'rounded-l',
-                                    clippedRight ? '' : 'rounded-r',
-                                  )}
-                                  style={{
-                                    left: left * DAY_W + padLeft,
-                                    width: (right - left) * DAY_W - padLeft - padRight,
-                                    top: BAR_INSET,
-                                    height: ROW_H - BAR_INSET * 2,
-                                    backgroundColor: 'rgba(120, 113, 108, 0.25)',
-                                    backgroundImage:
-                                      'repeating-linear-gradient(45deg, rgba(120,113,108,0.35) 0 6px, transparent 6px 12px)',
-                                    border: '1px solid rgba(120, 113, 108, 0.5)',
-                                  }}
-                                >
-                                  <span className="flex items-center justify-center gap-1 truncate px-1.5">
-                                    <NoEntryIcon className="h-3 w-3 shrink-0" />
-                                    <span className="truncate">Bloklu</span>
-                                  </span>
-                                </button>
-                              );
-                            })}
+                                {unitBlocks.map((b) => {
+                                  const sIdx = dayIndex(RANGE_START, istanbulDateOf(b.block_start));
+                                  const eIdx = dayIndex(RANGE_START, istanbulDateOf(b.block_end));
+                                  const left = Math.max(sIdx, 0);
+                                  const right = Math.min(eIdx, windowDays);
+                                  if (right <= left) return null;
+                                  const clippedLeft = sIdx < 0;
+                                  const clippedRight = eIdx > windowDays;
+                                  const padLeft = clippedLeft ? 0 : 2;
+                                  const padRight = clippedRight ? 0 : 2;
+                                  return (
+                                    <button
+                                      key={b.id}
+                                      type="button"
+                                      onClick={() => handleBlockClick(b)}
+                                      title={
+                                        b.reason
+                                          ? `Bloklu — ${b.reason}`
+                                          : 'Bloklu (sebep belirtilmemiş)'
+                                      }
+                                      aria-label="Tarih bloğu"
+                                      className={cn(
+                                        'absolute z-[5] flex items-center justify-center overflow-hidden text-xs font-semibold text-stone-700 transition-opacity hover:opacity-80 dark:text-stone-200',
+                                        clippedLeft ? '' : 'rounded-l',
+                                        clippedRight ? '' : 'rounded-r',
+                                      )}
+                                      style={{
+                                        left: left * DAY_W + padLeft,
+                                        width: (right - left) * DAY_W - padLeft - padRight,
+                                        top: BAR_INSET,
+                                        height: ROW_H - BAR_INSET * 2,
+                                        backgroundColor: 'rgba(120, 113, 108, 0.25)',
+                                        backgroundImage:
+                                          'repeating-linear-gradient(45deg, rgba(120,113,108,0.35) 0 6px, transparent 6px 12px)',
+                                        border: '1px solid rgba(120, 113, 108, 0.5)',
+                                      }}
+                                    >
+                                      <span className="flex items-center justify-center gap-1 truncate px-1.5">
+                                        <NoEntryIcon className="h-3 w-3 shrink-0" />
+                                        <span className="truncate">Bloklu</span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
 
-                            {/* Per-date note dots — small amber circle in
+                                {/* Per-date note dots — small amber circle in
                                 the top-right of any cell with a note. Sits
                                 above bars (z-20) so it's still visible when
                                 a reservation covers the date. */}
-                            {days.map((d, di) => {
-                              const noteRow = notesByCell.get(`${u.id}|${d.dateStr}`);
-                              if (!noteRow) return null;
-                              return (
-                                <span
-                                  key={`note-${d.dateStr}`}
-                                  className="pointer-events-none absolute z-20 h-2 w-2 rounded-full bg-amber-500 shadow ring-1 ring-white dark:ring-stone-900"
-                                  style={{ left: (di + 1) * DAY_W - 8, top: 4 }}
-                                  title={noteRow.note}
-                                />
-                              );
-                            })}
+                                {days.map((d, di) => {
+                                  const noteRow = notesByCell.get(`${u.id}|${d.dateStr}`);
+                                  if (!noteRow) return null;
+                                  return (
+                                    <span
+                                      key={`note-${d.dateStr}`}
+                                      className="pointer-events-none absolute z-20 h-2 w-2 rounded-full bg-amber-500 shadow ring-1 ring-white dark:ring-stone-900"
+                                      style={{ left: (di + 1) * DAY_W - 8, top: 4 }}
+                                      title={noteRow.note}
+                                    />
+                                  );
+                                })}
 
-                            {/* Per-date price overrides — tiny ₺ label at the
+                                {/* Per-date price overrides — tiny ₺ label at the
                                 bottom of any cell with a custom price. Hidden
                                 when a reservation/block bar covers the cell
                                 (the bar's z-10 sits above this z-0 label). */}
-                            {days.map((d, di) => {
-                              const priceRow = pricesByCell.get(`${u.id}|${d.dateStr}`);
-                              if (!priceRow) return null;
-                              return (
-                                <span
-                                  key={`price-${d.dateStr}`}
-                                  className="pointer-events-none absolute z-[1] truncate text-center text-[10px] font-semibold leading-tight text-emerald-700 dark:text-emerald-400"
-                                  style={{
-                                    left: di * DAY_W,
-                                    width: DAY_W,
-                                    bottom: 2,
-                                  }}
-                                  title={`Özel fiyat: ${priceRow.price} ₺`}
-                                >
-                                  ₺{Number(priceRow.price).toLocaleString('tr-TR')}
-                                </span>
-                              );
-                            })}
+                                {days.map((d, di) => {
+                                  const priceRow = pricesByCell.get(`${u.id}|${d.dateStr}`);
+                                  if (!priceRow) return null;
+                                  return (
+                                    <span
+                                      key={`price-${d.dateStr}`}
+                                      className="pointer-events-none absolute z-[1] truncate text-center text-[10px] font-semibold leading-tight text-emerald-700 dark:text-emerald-400"
+                                      style={{
+                                        left: di * DAY_W,
+                                        width: DAY_W,
+                                        bottom: 2,
+                                      }}
+                                      title={`Özel fiyat: ${priceRow.price} ₺`}
+                                    >
+                                      ₺{Number(priceRow.price).toLocaleString('tr-TR')}
+                                    </span>
+                                  );
+                                })}
 
-                            {/* Reservation bars — overnight span multiple days;
+                                {/* Reservation bars — overnight span multiple days;
                                 güniçi (day-use) render one cell wide in amber with
                                 the çıkış saati (they leave once the çıkış passes). */}
-                            {unitRes.map((r) => {
-                              const isDayUse = r.stay_type === 'DAYUSE';
-                              const sIdx = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
-                              // Day-use collapses to one day (giriş = çıkış) → render
-                              // a single-cell bar so it's actually visible.
-                              const eIdx = isDayUse
-                                ? sIdx + 1
-                                : dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
-                              const left = Math.max(sIdx, 0);
-                              const right = Math.min(eIdx, windowDays);
-                              if (right <= left) return null;
-                              const clippedLeft = sIdx < 0;
-                              const clippedRight = eIdx > windowDays;
-                              const padLeft = clippedLeft ? 0 : 2;
-                              const padRight = clippedRight ? 0 : 2;
-                              // Long stays (≥10 days) get the name repeated at the
-                              // right end so it stays visible when the wide bar is
-                              // scrolled away from its start.
-                              const isLong = eIdx - sIdx >= 10;
-                              // Every row is one uniform height; overlapping stays
-                              // SPLIT that fixed height into stacked half-height
-                              // (or thirds…) lanes instead of growing the row.
-                              const laneCount = unitLanes?.localCount.get(r.id) ?? 1;
-                              const laneIdx = unitLanes?.lane.get(r.id) ?? 0;
-                              const laneH = (ROW_H - BAR_INSET * 2) / laneCount;
-                              const laneGap = laneCount > 1 ? 2 : 0;
-                              // Ödeme durumu for the bottom line + tooltip; null
-                              // while the tahsilat data is absent (an empty
-                              // paidMap reads as "nobody paid" — see the load).
-                              const payState =
-                                showPaymentLines && paidLoaded
-                                  ? paymentState(
-                                      paidMap.get(r.id) ?? 0,
-                                      Number(r.total_amount),
-                                    )
-                                  : null;
-                              return (
-                                <button
-                                  key={r.id}
-                                  type="button"
-                                  onClick={() => handleReservationBarClick(r)}
-                                  title={
-                                    (isDayUse
-                                      ? `${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
-                                          r.stay_start,
-                                        )} · ${istanbulClock(r.stay_start)}–${istanbulClock(
-                                          r.stay_end,
-                                        )} · Güniçi`
-                                      : `${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
-                                          r.stay_start,
-                                        )} → ${istanbulDateOf(r.stay_end)} · ${STATUS_LABELS[r.status]}`) +
-                                    (payState ? ` · ${PAYMENT_META[payState].label}` : '')
-                                  }
-                                  className={cn(
-                                    'absolute z-10 flex items-center overflow-hidden px-1.5 text-xs font-medium text-white shadow-sm transition-colors',
-                                    isLong && 'justify-between gap-2',
-                                    isDayUse
-                                      ? 'bg-amber-500 hover:bg-amber-600'
-                                      : STATUS_BAR[r.status],
-                                    clippedLeft ? '' : 'rounded-l',
-                                    clippedRight ? '' : 'rounded-r',
-                                  )}
-                                  style={{
-                                    left: left * DAY_W + padLeft,
-                                    width: (right - left) * DAY_W - padLeft - padRight,
-                                    top: BAR_INSET + laneIdx * laneH,
-                                    height: laneH - laneGap,
-                                  }}
-                                >
-                                  <span className="truncate">
-                                    {isDayUse
-                                      ? istanbulClock(r.stay_end)
-                                      : (r.guest?.full_name ?? '—')}
-                                  </span>
-                                  {isLong && !isDayUse && (
-                                    <span className="truncate">
-                                      {r.guest?.full_name ?? '—'}
-                                    </span>
-                                  )}
-                                  {/* Ödeme durumu — same states as the Liste
+                                {unitRes.map((r) => {
+                                  const isDayUse = r.stay_type === 'DAYUSE';
+                                  const sIdx = dayIndex(RANGE_START, istanbulDateOf(r.stay_start));
+                                  // Day-use collapses to one day (giriş = çıkış) → render
+                                  // a single-cell bar so it's actually visible.
+                                  const eIdx = isDayUse
+                                    ? sIdx + 1
+                                    : dayIndex(RANGE_START, istanbulDateOf(r.stay_end));
+                                  const left = Math.max(sIdx, 0);
+                                  const right = Math.min(eIdx, windowDays);
+                                  if (right <= left) return null;
+                                  const clippedLeft = sIdx < 0;
+                                  const clippedRight = eIdx > windowDays;
+                                  const padLeft = clippedLeft ? 0 : 2;
+                                  const padRight = clippedRight ? 0 : 2;
+                                  // Long stays (≥10 days) get the name repeated at the
+                                  // right end so it stays visible when the wide bar is
+                                  // scrolled away from its start.
+                                  const isLong = eIdx - sIdx >= 10;
+                                  // Every row is one uniform height; overlapping stays
+                                  // SPLIT that fixed height into stacked half-height
+                                  // (or thirds…) lanes instead of growing the row.
+                                  const laneCount = unitLanes?.localCount.get(r.id) ?? 1;
+                                  const laneIdx = unitLanes?.lane.get(r.id) ?? 0;
+                                  const laneH = (ROW_H - BAR_INSET * 2) / laneCount;
+                                  const laneGap = laneCount > 1 ? 2 : 0;
+                                  // Ödeme durumu for the bottom line + tooltip; null
+                                  // while the tahsilat data is absent (an empty
+                                  // paidMap reads as "nobody paid" — see the load).
+                                  const payState = paidLoaded
+                                    ? paymentState(paidMap.get(r.id) ?? 0, Number(r.total_amount))
+                                    : null;
+                                  return (
+                                    <button
+                                      key={r.id}
+                                      type="button"
+                                      onClick={() => handleReservationBarClick(r)}
+                                      title={
+                                        (isDayUse
+                                          ? `${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
+                                              r.stay_start,
+                                            )} · ${istanbulClock(r.stay_start)}–${istanbulClock(
+                                              r.stay_end,
+                                            )} · Güniçi`
+                                          : `${r.guest?.full_name ?? '—'} · ${istanbulDateOf(
+                                              r.stay_start,
+                                            )} → ${istanbulDateOf(r.stay_end)} · ${STATUS_LABELS[r.status]}`) +
+                                        (payState ? ` · ${PAYMENT_META[payState].label}` : '')
+                                      }
+                                      className={cn(
+                                        'absolute z-10 flex items-center overflow-hidden px-1.5 text-xs font-medium text-white shadow-sm transition-colors',
+                                        isLong && 'justify-between gap-2',
+                                        isDayUse
+                                          ? 'bg-amber-500 hover:bg-amber-600'
+                                          : STATUS_BAR[r.status],
+                                        clippedLeft ? '' : 'rounded-l',
+                                        clippedRight ? '' : 'rounded-r',
+                                      )}
+                                      style={{
+                                        left: left * DAY_W + padLeft,
+                                        width: (right - left) * DAY_W - padLeft - padRight,
+                                        top: BAR_INSET + laneIdx * laneH,
+                                        height: laneH - laneGap,
+                                      }}
+                                    >
+                                      <span className="truncate">
+                                        {isDayUse
+                                          ? istanbulClock(r.stay_end)
+                                          : (r.guest?.full_name ?? '—')}
+                                      </span>
+                                      {isLong && !isDayUse && (
+                                        <span className="truncate">
+                                          {r.guest?.full_name ?? '—'}
+                                        </span>
+                                      )}
+                                      {/* Ödeme durumu — same states as the Liste
                                       badges, drawn as a line along the bottom.
                                       Inset from the bar's edges so it reads as a
                                       marker rather than part of the bar. The
@@ -1220,26 +1182,26 @@ export function ReservationsCalendarPage() {
                                       span is pointer-events-none (clicks belong
                                       to the bar), so a title here could never
                                       fire. */}
-                                  {payState && (
-                                    <span
-                                      aria-hidden="true"
-                                      className={cn(
-                                        'pointer-events-none absolute bottom-1 left-2 right-2 h-1 rounded-full',
-                                        PAYMENT_LINE[payState],
+                                      {payState && (
+                                        <span
+                                          aria-hidden="true"
+                                          className={cn(
+                                            'pointer-events-none absolute bottom-1 left-2 right-2 h-1 rounded-full',
+                                            PAYMENT_LINE[payState],
+                                          )}
+                                        />
                                       )}
-                                    />
-                                  )}
-                                </button>
-                              );
-                            })}
-                        </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </Fragment>
                       );
                     })}
                   </Fragment>
-                );
-              })}
-                </Fragment>
-              ))}
+                ))}
               </div>
             </div>
           </div>
@@ -1258,15 +1220,11 @@ export function ReservationsCalendarPage() {
       {!error && (
         <DayUseMonthCalendar
           refreshKey={reservationVersion}
-          allowedPropertyIds={
-            seesAllRegions ? new Set(visibleProperties.map((p) => p.id)) : null
-          }
+          allowedPropertyIds={seesAllRegions ? new Set(visibleProperties.map((p) => p.id)) : null}
         />
       )}
 
-      {loading && (
-        <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
-      )}
+      {loading && <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>}
 
       {/* Cell action sheet — pops on any empty-cell click. All four actions
           are now live (block / note / price + the original new-reservation). */}
@@ -1315,9 +1273,7 @@ export function ReservationsCalendarPage() {
               // Upsert by id: replace if present, otherwise append. n=null
               // means the note was deleted — drop it from the local cache.
               const key = `${pickedCell.unitId}|${pickedCell.dateStr}`;
-              const existing = prev.find(
-                (x) => `${x.unit_id}|${x.note_date}` === key,
-              );
+              const existing = prev.find((x) => `${x.unit_id}|${x.note_date}` === key);
               if (n === null) {
                 return existing ? prev.filter((x) => x.id !== existing.id) : prev;
               }
@@ -1333,32 +1289,33 @@ export function ReservationsCalendarPage() {
       )}
 
       {/* ===== Existing-reservation action sheet (Task 9) ===== */}
-      {pickedReservation && !showMoveModal && (() => {
-        const r = pickedReservation;
-        // Nights = days between stay_start and stay_end. Day-use stays
-        // collapse to ≤1 which is fine (Uzat/Kısalt are hidden for them).
-        const nights = Math.max(
-          1,
-          Math.round(
-            (new Date(r.stay_end).getTime() - new Date(r.stay_start).getTime()) /
-              DAY_MS,
-          ),
-        );
-        return (
-          <ReservationActionSheet
-            guestName={r.guest?.full_name ?? '—'}
-            unitName={r.unit?.name ?? '—'}
-            status={r.status}
-            stayType={r.stay_type}
-            nights={nights}
-            canEdit={Boolean(profile && can(profile.role, 'reservation:update'))}
-            canCancel={Boolean(profile && can(profile.role, 'reservation:cancel'))}
-            cancelNeedsApproval={!isCancelReviewer}
-            onPick={handleReservationActionPick}
-            onClose={() => setPickedReservation(null)}
-          />
-        );
-      })()}
+      {pickedReservation &&
+        !showMoveModal &&
+        (() => {
+          const r = pickedReservation;
+          // Nights = days between stay_start and stay_end. Day-use stays
+          // collapse to ≤1 which is fine (Uzat/Kısalt are hidden for them).
+          const nights = Math.max(
+            1,
+            Math.round(
+              (new Date(r.stay_end).getTime() - new Date(r.stay_start).getTime()) / DAY_MS,
+            ),
+          );
+          return (
+            <ReservationActionSheet
+              guestName={r.guest?.full_name ?? '—'}
+              unitName={r.unit?.name ?? '—'}
+              status={r.status}
+              stayType={r.stay_type}
+              nights={nights}
+              canEdit={Boolean(profile && can(profile.role, 'reservation:update'))}
+              canCancel={Boolean(profile && can(profile.role, 'reservation:cancel'))}
+              cancelNeedsApproval={!isCancelReviewer}
+              onPick={handleReservationActionPick}
+              onClose={() => setPickedReservation(null)}
+            />
+          );
+        })()}
 
       {showMoveModal && pickedReservation && (
         <MoveReservationModal
@@ -1382,16 +1339,13 @@ export function ReservationsCalendarPage() {
 
       <ConfirmDialog
         open={resvToCancel !== null}
-        title={
-          isCancelReviewer ? 'Rezervasyon iptal edilsin mi?' : 'İptal talebi gönderilsin mi?'
-        }
+        title={isCancelReviewer ? 'Rezervasyon iptal edilsin mi?' : 'İptal talebi gönderilsin mi?'}
         description={
           resvToCancel ? (
             <>
               <p>
                 <strong>{resvToCancel.guest?.full_name ?? '—'}</strong> —{' '}
-                {istanbulDateOf(resvToCancel.stay_start)} →{' '}
-                {istanbulDateOf(resvToCancel.stay_end)}
+                {istanbulDateOf(resvToCancel.stay_start)} → {istanbulDateOf(resvToCancel.stay_end)}
               </p>
               <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
                 {isCancelReviewer
@@ -1417,26 +1371,27 @@ export function ReservationsCalendarPage() {
       />
 
       {/* ===== Range-select action sheet + range-flavored modals (Task 9) ===== */}
-      {rangePick && (() => {
-        const nights = Math.max(
-          1,
-          Math.round(
-            (new Date(rangePick.endDate + 'T00:00:00Z').getTime() -
-              new Date(rangePick.startDate + 'T00:00:00Z').getTime()) /
-              DAY_MS,
-          ) + 1,
-        );
-        return (
-          <RangeActionSheet
-            unitName={rangePick.unitName}
-            startDate={rangePick.startDate}
-            endDate={rangePick.endDate}
-            nights={nights}
-            onPick={handleRangeActionPick}
-            onClose={() => setRangePick(null)}
-          />
-        );
-      })()}
+      {rangePick &&
+        (() => {
+          const nights = Math.max(
+            1,
+            Math.round(
+              (new Date(rangePick.endDate + 'T00:00:00Z').getTime() -
+                new Date(rangePick.startDate + 'T00:00:00Z').getTime()) /
+                DAY_MS,
+            ) + 1,
+          );
+          return (
+            <RangeActionSheet
+              unitName={rangePick.unitName}
+              startDate={rangePick.startDate}
+              endDate={rangePick.endDate}
+              nights={nights}
+              onPick={handleRangeActionPick}
+              onClose={() => setRangePick(null)}
+            />
+          );
+        })()}
 
       {rangeBlockPick && (
         <BlockDatesModal
@@ -1456,54 +1411,57 @@ export function ReservationsCalendarPage() {
         />
       )}
 
-      {rangePricePick && (() => {
-        const unit = units.find((u) => u.id === rangePricePick.unitId);
-        return (
-          <NightlyPriceModal
-            propertyId={rangePricePick.propertyId}
-            unitId={rangePricePick.unitId}
-            unitName={rangePricePick.unitName}
-            dateStr={rangePricePick.startDate}
-            dateEnd={rangePricePick.endDate}
-            existingId={null}
-            existingPrice={null}
-            unitBasePrice={unit ? Number(unit.base_price) : 0}
-            onClose={() => setRangePricePick(null)}
-            onSaved={() => {
-              setRangePricePick(null);
-              setPriceVersion((v) => v + 1);
-            }}
-          />
-        );
-      })()}
+      {rangePricePick &&
+        (() => {
+          const unit = units.find((u) => u.id === rangePricePick.unitId);
+          return (
+            <NightlyPriceModal
+              propertyId={rangePricePick.propertyId}
+              unitId={rangePricePick.unitId}
+              unitName={rangePricePick.unitName}
+              dateStr={rangePricePick.startDate}
+              dateEnd={rangePricePick.endDate}
+              existingId={null}
+              existingPrice={null}
+              unitBasePrice={unit ? Number(unit.base_price) : 0}
+              onClose={() => setRangePricePick(null)}
+              onSaved={() => {
+                setRangePricePick(null);
+                setPriceVersion((v) => v + 1);
+              }}
+            />
+          );
+        })()}
 
       {/* Gecelik Fiyat modal — single-day or range price override. The bulk
           RPC returns just a count, so we bump priceVersion to re-fetch. */}
-      {showPriceModal && pickedCell && (() => {
-        const key = `${pickedCell.unitId}|${pickedCell.dateStr}`;
-        const existing = pricesByCell.get(key) ?? null;
-        const unit = units.find((u) => u.id === pickedCell.unitId);
-        return (
-          <NightlyPriceModal
-            propertyId={pickedCell.propertyId}
-            unitId={pickedCell.unitId}
-            unitName={pickedCell.unitName}
-            dateStr={pickedCell.dateStr}
-            existingId={existing?.id ?? null}
-            existingPrice={existing ? Number(existing.price) : null}
-            unitBasePrice={unit ? Number(unit.base_price) : 0}
-            onClose={() => {
-              setShowPriceModal(false);
-              setPickedCell(null);
-            }}
-            onSaved={() => {
-              setShowPriceModal(false);
-              setPickedCell(null);
-              setPriceVersion((v) => v + 1);
-            }}
-          />
-        );
-      })()}
+      {showPriceModal &&
+        pickedCell &&
+        (() => {
+          const key = `${pickedCell.unitId}|${pickedCell.dateStr}`;
+          const existing = pricesByCell.get(key) ?? null;
+          const unit = units.find((u) => u.id === pickedCell.unitId);
+          return (
+            <NightlyPriceModal
+              propertyId={pickedCell.propertyId}
+              unitId={pickedCell.unitId}
+              unitName={pickedCell.unitName}
+              dateStr={pickedCell.dateStr}
+              existingId={existing?.id ?? null}
+              existingPrice={existing ? Number(existing.price) : null}
+              unitBasePrice={unit ? Number(unit.base_price) : 0}
+              onClose={() => {
+                setShowPriceModal(false);
+                setPickedCell(null);
+              }}
+              onSaved={() => {
+                setShowPriceModal(false);
+                setPickedCell(null);
+                setPriceVersion((v) => v + 1);
+              }}
+            />
+          );
+        })()}
 
       {/* Delete a block by clicking its bar. */}
       <ConfirmDialog
@@ -1514,7 +1472,8 @@ export function ReservationsCalendarPage() {
             <>
               <p>
                 <strong>
-                  {istanbulDateOf(blockToDelete.block_start)} → {istanbulDateOf(blockToDelete.block_end)}
+                  {istanbulDateOf(blockToDelete.block_start)} →{' '}
+                  {istanbulDateOf(blockToDelete.block_end)}
                 </strong>
                 {blockToDelete.reason ? ` — ${blockToDelete.reason}` : ''}
               </p>
