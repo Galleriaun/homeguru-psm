@@ -5,8 +5,9 @@
 -- Everything happens inside ONE transaction that is ROLLED BACK at the end —
 -- no test data survives, so it is safe to run against the live project.
 --
--- Prerequisite: migrations 001–133 applied. The preflight block below names
--- exactly which object is missing if you are behind.
+-- Prerequisite: migrations 001–133 plus 140–142 applied. The preflight block
+-- below names exactly which object is missing if you are behind.
+-- (134–139 are not exercised here.)
 --
 -- On success the last message is:   ALL TESTS PASSED (rolled back)
 -- On the first failed check it stops with:  FAIL: <what broke>
@@ -33,6 +34,26 @@
 --     without reservations_delete is refused and leaves no orphan trash row,
 --     while SUPER_ADMIN still deletes into Çöp Kutusu.
 --   • 133 A daire accepts a second birim (002's single-unit trigger is gone).
+--   • 140 The same TC kimlik cannot be used twice — including when written with
+--     spaces/dashes — while guests with no TC stay unlimited. A plain UNIQUE on
+--     tc_kimlik_encrypted would be inert here (pgp_sym_encrypt is randomised),
+--     so the keyed fingerprint column is the thing under test.
+--   • 141 The same passport cannot be used twice, case- and punctuation-
+--     insensitively; a passport with no letters/digits ('---') is deliberately
+--     outside the rule and must still be accepted.
+--   • 140/141 The edit path is closed too — otherwise the rule is bypassed in
+--     one move (create blank, then edit the number in).
+--   • 140/141 Pre-existing duplicate rows were left in place on purpose, so a
+--     record may KEEP its already-duplicated TC when saved, while moving onto
+--     someone else's is still refused. Without that distinction none of the
+--     existing duplicate records could be edited at all.
+--   • 142 The fingerprint columns cannot be written directly (which would hide
+--     a row from the pre-check), while the backfill-shaped write stays legal so
+--     140/141 remain re-runnable.
+--
+-- Note: 143 (the DB-level UNIQUE index) is OPTIONAL and may not be applied —
+-- it needs the duplicate rows cleaned up first. The tests never assume it; the
+-- one test that cannot exist alongside it skips itself.
 --
 -- Deliberately NOT covered (needs the deployed app / dashboard):
 --   Storage policies, PWA, cron actually firing, Edge Function auth, KBS.
@@ -106,7 +127,36 @@ begin
   ) then
     raise exception 'FAIL: migration 132 not applied (soft_delete_entity is still SECURITY DEFINER — RLS is bypassed)';
   end if;
-  raise notice 'PREFLIGHT OK: migrations 126–132 present';
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'guests'
+       and column_name = 'tc_kimlik_hash'
+  ) then
+    raise exception 'FAIL: migration 140 not applied (guests.tc_kimlik_hash missing)';
+  end if;
+  -- Deliberately NOT asserting a unique index here: 143 (the DB-level lock) is
+  -- optional and may not be applied, because the existing duplicate rows were
+  -- left in place on purpose. Uniqueness for NEW guests is enforced by the RPC
+  -- pre-check, which is what the tests below actually exercise.
+  if to_regproc('public.tc_fingerprint') is null then
+    raise exception 'FAIL: migration 140 not applied (tc_fingerprint missing)';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public' and table_name = 'guests'
+       and column_name = 'passport_hash'
+  ) then
+    raise exception 'FAIL: migration 141 not applied (guests.passport_hash missing)';
+  end if;
+  if to_regproc('public.passport_fingerprint') is null then
+    raise exception 'FAIL: migration 141 not applied (passport_fingerprint missing)';
+  end if;
+  if not exists (
+    select 1 from pg_trigger where tgname = 'guests_fingerprint_guard'
+  ) then
+    raise exception 'FAIL: migration 142 not applied (guests_fingerprint_guard trigger missing)';
+  end if;
+  raise notice 'PREFLIGHT OK: migrations 126–132 + 140–142 present';
 end $$;
 
 do $$
@@ -142,6 +192,20 @@ declare
   v_adv        uuid;          -- 131 avans borcu carry-over
   v_settled    numeric;
   v_settled_at timestamptz;
+
+  -- 140/141/142 misafir kimlik tekilliği. TC/pasaport değerleri RASTGELE
+  -- üretilir: sabit bir değer canlı bir misafirinkiyle çakışırsa test
+  -- sahte şekilde patlardı (her şey rollback edilse bile okuma çakışır).
+  v_tc_a     text;
+  v_tc_b     text;
+  v_tc_c     text;
+  v_pp_a     text;
+  g_a        uuid;   -- TC'li misafir
+  g_b        uuid;   -- farklı TC'li misafir
+  g_none     uuid;   -- TC'siz misafir
+  g_pp       uuid;   -- pasaportlu misafir
+  g_dash     uuid;   -- pasaportu '---' (harf/rakam yok) olan misafir
+  g_legacy   uuid;   -- eski (140 oncesi) cift kayit simulasyonu
 
   warn_count int := 0;
 begin
@@ -709,6 +773,225 @@ begin
   raise notice 'PASS 28: bir daire birden fazla birim tutabilir';
 
   -- ═══════════════════════════════════════════════════════════════════════
+  -- 29) 140 — aynı TC kimlik ile ikinci misafir açılamaz.
+  --     tc_kimlik_encrypted üzerinde UNIQUE index İŞE YARAMAZ (pgp_sym_encrypt
+  --     her çağrıda farklı bytea üretir), o yüzden asıl sınır anahtarlı parmak
+  --     izi kolonundaki kısmi UNIQUE index'tir. Burada RPC ön kontrolü,
+  --     normalizasyon ve TC'siz misafirlerin serbest kalması sınanır.
+  -- ═══════════════════════════════════════════════════════════════════════
+  v_tc_a := '9' || lpad((floor(random() * 10000000000))::bigint::text, 10, '0');
+  v_tc_b := '8' || lpad((floor(random() * 10000000000))::bigint::text, 10, '0');
+  v_tc_c := '7' || lpad((floor(random() * 10000000000))::bigint::text, 10, '0');
+  v_pp_a := 'SMOKE' || lpad((floor(random() * 100000))::bigint::text, 5, '0');
+
+  perform pg_temp.login(u_admin);
+
+  select g.id into g_a from create_guest('Smoke TC Bir', v_tc_a) g;
+  select count(*) into n from guests
+   where id = g_a and tc_kimlik_hash is not null and tc_kimlik_encrypted is not null;
+  if n <> 1 then
+    raise exception 'FAIL 29: misafir açıldı ama TC parmak izi yazılmadı';
+  end if;
+
+  ok := false;
+  begin
+    perform create_guest('Smoke TC Iki', v_tc_a);
+    ok := true;
+  exception when others then null;
+  end;
+  if ok then
+    raise exception 'FAIL 29: aynı TC ile ikinci misafir oluşturulabildi';
+  end if;
+
+  -- Normalizasyon: boşluk/tire ile yazılmış AYNI TC de engellenmeli, yoksa
+  -- kural tek bir boşlukla delinir.
+  ok := false;
+  begin
+    perform create_guest('Smoke TC Uc',
+      substr(v_tc_a, 1, 3) || ' ' || substr(v_tc_a, 4, 4) || '-' || substr(v_tc_a, 8, 4));
+    ok := true;
+  exception when others then null;
+  end;
+  if ok then
+    raise exception 'FAIL 29: boşluk/tire ile yazılan aynı TC kabul edildi (normalizasyon yok)';
+  end if;
+
+  -- Pozitif kontrol: kural fazla geniş olmamalı.
+  select g.id into g_b from create_guest('Smoke TC Dort', v_tc_b) g;
+  if g_b is null then
+    raise exception 'FAIL 29: farklı TC ile misafir açılamadı';
+  end if;
+
+  -- TC'siz misafirler sınırsız olmalı (kısmi index yalnızca NOT NULL'ı kapsar).
+  select g.id into g_none from create_guest('Smoke TCsiz Bir') g;
+  perform create_guest('Smoke TCsiz Iki');
+  select count(*) into n from guests
+   where id = g_none and tc_kimlik_hash is null;
+  if n <> 1 then
+    raise exception 'FAIL 29: TC girilmeyen misafire parmak izi yazılmış';
+  end if;
+  raise notice 'PASS 29: aynı TC engellendi (boşluk/tire dâhil), TC''siz misafirler serbest';
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- 30) 141 — aynı pasaport ile ikinci misafir açılamaz; büyük/küçük harf ve
+  --     noktalama farkı kuralı delmemeli. Harf/rakam içermeyen bir pasaport
+  --     ('---') ise BİLEREK kapsam dışıdır: şifreli metin "yazıldığı gibi"
+  --     saklanır, parmak izi ise stripleyerek üretilir, dolayısıyla NULL kalır.
+  -- ═══════════════════════════════════════════════════════════════════════
+  select g.id into g_pp from create_guest('Smoke PP Bir', null, v_pp_a) g;
+  select count(*) into n from guests where id = g_pp and passport_hash is not null;
+  if n <> 1 then
+    raise exception 'FAIL 30: pasaport yazıldı ama parmak izi üretilmedi';
+  end if;
+
+  ok := false;
+  begin
+    perform create_guest('Smoke PP Iki', null, '  ' || lower(v_pp_a) || ' ');
+    ok := true;
+  exception when others then null;
+  end;
+  if ok then
+    raise exception 'FAIL 30: aynı pasaport küçük harf + boşlukla kabul edildi';
+  end if;
+
+  -- '---' meşru bir "boş" giriştir: reddedilmemeli ve tekilliğe girmemeli.
+  select g.id into g_dash from create_guest('Smoke PP Tire', null, '---') g;
+  select count(*) into n from guests
+   where id = g_dash and passport_encrypted is not null and passport_hash is null;
+  if n <> 1 then
+    raise exception 'FAIL 30: harf/rakam içermeyen pasaport beklenmeyen şekilde işlendi';
+  end if;
+  perform create_guest('Smoke PP Tire Iki', null, '---');
+  raise notice 'PASS 30: aynı pasaport engellendi; ''---'' tekillik kapsamı dışında kaldı';
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- 31) 140/141 — düzenleme yolu da kapalı. Yalnızca create korunsaydı kural
+  --     tek hamlede delinirdi: boş TC ile aç, sonra düzenleyip yaz.
+  -- ═══════════════════════════════════════════════════════════════════════
+  ok := false;
+  begin
+    perform update_guest(g_b, 'Smoke TC Dort', v_tc_a);
+    ok := true;
+  exception when others then null;
+  end;
+  if ok then
+    raise exception 'FAIL 31: düzenleme yoluyla aynı TC iki misafire yazılabildi';
+  end if;
+
+  -- Kendi TC'sini yeniden göndermek engellenmemeli (kendi satırı hariç tutulur).
+  perform update_guest(g_b, 'Smoke TC Dort', v_tc_b);
+
+  -- _tc_kimlik NULL = "dokunma": parmak izi silinmemeli.
+  perform update_guest(g_b, 'Smoke TC Dort Yeni Ad');
+  select count(*) into n from guests where id = g_b and tc_kimlik_hash is not null;
+  if n <> 1 then
+    raise exception 'FAIL 31: TC''ye dokunmayan bir güncelleme parmak izini sildi';
+  end if;
+  perform pg_temp.logout();
+  raise notice 'PASS 31: düzenleme yoluyla çakışma engellendi, kendi TC''si ve dokunmama korundu';
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- 32) 142 — parmak izi kolonları doğrudan yazmaya kapalı. guests_update
+  --     (028) dört role DOĞRUDAN UPDATE veriyor ve kolon bazlı grant yok; bu
+  --     olmadan elle hazırlanmış tek bir PostgREST çağrısı hash'i NULL yapıp
+  --     satırı kısmi index'in kapsamından çıkarabilirdi.
+  --     Trigger rolden bağımsızdır; burada TABLO SAHİBİ olarak sınanır, yani
+  --     en yetkili yol bile kapalıysa istemci evleviyetle kapalıdır.
+  -- ═══════════════════════════════════════════════════════════════════════
+  ok := false;
+  begin
+    update guests set tc_kimlik_hash = null where id = g_a;
+    ok := true;
+  exception when others then null;
+  end;
+  if ok then
+    raise exception 'FAIL 32: tc_kimlik_hash doğrudan silinebildi — kısmi index atlatılabilir';
+  end if;
+
+  ok := false;
+  begin
+    update guests set passport_hash = null where id = g_pp;
+    ok := true;
+  exception when others then null;
+  end;
+  if ok then
+    raise exception 'FAIL 32: passport_hash doğrudan silinebildi';
+  end if;
+
+  -- Guard fazla geniş olmamalı: ilgisiz kolonlar hâlâ güncellenebilmeli.
+  update guests set phone = '5551112233' where id = g_a;
+
+  -- Başka misafirin şifreli TC'sini parmak izsiz kopyalamak = index'e görünmeyen
+  -- ikinci bir TC. INSERT kuralı bunu keser.
+  ok := false;
+  begin
+    insert into guests (full_name, tc_kimlik_encrypted)
+    select 'Smoke Kopya', tc_kimlik_encrypted from guests where id = g_a;
+    ok := true;
+  exception when others then null;
+  end;
+  if ok then
+    raise exception 'FAIL 32: şifreli TC parmak izi olmadan kopyalanabildi';
+  end if;
+
+  -- Backfill şekli (hash NULL iken yazmak) SERBEST kalmalı — 140/141'in
+  -- yeniden çalıştırılabilirliği tam olarak buna bağlıdır.
+  update guests set tc_kimlik_hash = tc_fingerprint(v_tc_c) where id = g_none;
+  select count(*) into n from guests where id = g_none and tc_kimlik_hash is not null;
+  if n <> 1 then
+    raise exception 'FAIL 32: guard, backfill biçimindeki yazmayı da engelliyor (140/141 tekrar çalıştırılamaz)';
+  end if;
+  raise notice 'PASS 32: parmak izi kolonları doğrudan yazmaya kapalı, backfill yolu açık';
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- 33) 140/141 — ESKI cift kayitlar duzenlenebilir KALMALI. Owner karari
+  --     geregi mevcut cift TC'ler yerinde birakildi (2026-08-22: 100 grup /
+  --     225 kayit). update_guest'in kontrolu sadece "bu TC baskasinda var mi"
+  --     deseydi o kayitlarin HICBIRI kaydedilemezdi: duzenleme formu kendi
+  --     TC'sini geri gonderir, kontrol de esini bulup hata verirdi. Kural bu
+  --     yuzden "TC GERCEKTEN DEGISIYORSA kontrol et" seklinde.
+  --
+  --     143 (UNIQUE index) uygulanmissa bu durum veritabaninda zaten imkansiz
+  --     oldugu icin fixture kurulamaz ve test atlanir.
+  -- ═══════════════════════════════════════════════════════════════════════
+  if exists (
+    select 1 from pg_index i join pg_class c on c.oid = i.indexrelid
+     where c.relname = 'guests_tc_kimlik_unique' and i.indisunique
+  ) then
+    raise notice 'SKIP 33: 143 uygulanmis, eski cift kayit senaryosu artik olusamaz';
+  else
+    -- g_a ile AYNI TC'yi tasiyan ikinci satir: tablo sahibi olarak dogrudan
+    -- yaziliyor, yani 140 oncesi dunyadan kalma bir kaydin taklidi.
+    insert into guests (full_name, tc_kimlik_encrypted, tc_kimlik_hash)
+    values ('Smoke Eski Cift', encrypt_sensitive(v_tc_a), tc_fingerprint(v_tc_a))
+    returning id into g_legacy;
+
+    perform pg_temp.login(u_admin);
+
+    -- Kendi (zaten cift olan) TC'sini koruyarak kaydetmek SERBEST olmali.
+    perform update_guest(g_legacy, 'Smoke Eski Cift Yeni Ad', v_tc_a);
+    select count(*) into n from guests
+     where id = g_legacy and full_name = 'Smoke Eski Cift Yeni Ad';
+    if n <> 1 then
+      raise exception 'FAIL 33: eski cift kayit duzenlenemedi — mevcut 225 kayit kilitlenmis olurdu';
+    end if;
+
+    -- Ama BASKASININ TC sine gecmek yine yasak olmali.
+    ok := false;
+    begin
+      perform update_guest(g_legacy, 'Smoke Eski Cift Yeni Ad', v_tc_b);
+      ok := true;
+    exception when others then null;
+    end;
+    if ok then
+      raise exception 'FAIL 33: eski cift kayit baskasinin TC sine tasinabildi';
+    end if;
+
+    perform pg_temp.logout();
+    raise notice 'PASS 33: eski cift kayitlar duzenlenebilir, baskasinin TC sine tasinamaz';
+  end if;
+
+  -- ═══════════════════════════════════════════════════════════════════════
   -- SECURITY ASSERTIONS — hardening gaps. These WARN instead of aborting so
   -- the functional suite above always reports in full. Fix them and they go
   -- quiet.
@@ -731,6 +1014,31 @@ begin
     raise warning 'SECURITY: authenticated can EXECUTE _send_push_async — migration 130''s shared secret is bypassable from the client. REVOKE it.';
   else
     raise notice 'PASS S1: _send_push_async is not callable by app users';
+  end if;
+
+  -- (b) tc_fingerprint / passport_fingerprint are SECURITY DEFINER and read the
+  --     Vault key. If either is callable by app users it becomes an oracle: any
+  --     logged-in user could fingerprint an arbitrary TC / passport and match it
+  --     against guests, i.e. ask "is this person in the system?" without limit.
+  --     Postgres grants EXECUTE on new functions to PUBLIC, and `authenticated`
+  --     is a member of PUBLIC — so revoking from anon+authenticated alone does
+  --     nothing; the REVOKE must include public (migrations 140/141 do).
+  if to_regprocedure('public.tc_fingerprint(text)') is null then
+    raise warning 'SECURITY: tc_fingerprint(text) not found — check S2 skipped.';
+  elsif has_function_privilege('authenticated', 'public.tc_fingerprint(text)', 'EXECUTE') then
+    warn_count := warn_count + 1;
+    raise warning 'SECURITY: authenticated can EXECUTE tc_fingerprint — TC existence oracle. REVOKE it FROM public.';
+  else
+    raise notice 'PASS S2: tc_fingerprint is not callable by app users';
+  end if;
+
+  if to_regprocedure('public.passport_fingerprint(text)') is null then
+    raise warning 'SECURITY: passport_fingerprint(text) not found — check S3 skipped.';
+  elsif has_function_privilege('authenticated', 'public.passport_fingerprint(text)', 'EXECUTE') then
+    warn_count := warn_count + 1;
+    raise warning 'SECURITY: authenticated can EXECUTE passport_fingerprint — passport existence oracle. REVOKE it FROM public.';
+  else
+    raise notice 'PASS S3: passport_fingerprint is not callable by app users';
   end if;
 
   -- ═══════════════════════════════════════════════════════════════════════

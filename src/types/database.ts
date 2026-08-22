@@ -391,7 +391,12 @@ export type Database = {
           id: string;
           full_name: string;
           tc_kimlik_encrypted: string | null;
+          // Keyed HMAC fingerprint of the TC (migration 140) — powers the
+          // "same TC twice" block. Not reversible, never shown in the UI.
+          tc_kimlik_hash: string | null;
           passport_encrypted: string | null;
+          // Same idea for the passport (migration 141) — keyed, not reversible.
+          passport_hash: string | null;
           phone: string | null;
           email: string | null;
           address: string | null;
@@ -403,9 +408,12 @@ export type Database = {
           created_at: string;
           created_by: string | null;
         };
-        // NOTE: tc_kimlik_encrypted and passport_encrypted are intentionally
-        // omitted from Insert/Update — use the create_guest / update_guest RPCs
-        // which handle encryption server-side.
+        // NOTE: the encrypted fields and their *_hash fingerprints are
+        // intentionally omitted from Insert/Update — use the create_guest /
+        // update_guest RPCs, which handle encryption and both fingerprints
+        // server-side. The hashes cannot be produced client-side anyway: they
+        // need the Vault key, and tc_fingerprint() / passport_fingerprint()
+        // are revoked from authenticated.
         Insert: {
           id?: string;
           full_name: string;

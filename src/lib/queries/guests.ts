@@ -2,6 +2,32 @@ import { supabase } from '@/lib/supabase';
 import { softDeleteEntity } from '@/lib/queries/trash';
 import type { GuestRow, DecryptedGuest } from '@/types/database';
 
+/**
+ * SQLSTATEs that only ever arrive on a message we wrote ourselves, in Turkish,
+ * for the user to read:
+ *   P0001  a plain `RAISE EXCEPTION` — e.g. the duplicate-TC / duplicate-passport
+ *          blocks in migrations 140/141
+ *   42501  insufficient_privilege — e.g. "Bu misafire erişim yetkiniz yok"
+ *          (get_guest_decrypted) and the fingerprint guard in migration 142
+ * For those, appending "(P0001)" is noise: the sentence already says everything
+ * the user can act on.
+ *
+ * Every OTHER code is deliberately kept. On a genuine database failure (23503
+ * foreign key, 23505 unique, …) the code is the useful half of a bug report.
+ */
+const AUTHORED_CODES = new Set(['P0001', '42501']);
+
+/**
+ * Formats a Supabase error for display. Same shape as the `wrapErr` in the
+ * sibling query modules, minus the code for the authored errors above.
+ */
+const wrapErr = (e: { message: string; details?: string; hint?: string; code?: string }) =>
+  new Error(
+    `${e.message}${e.details ? ` — ${e.details}` : ''}${e.hint ? ` [${e.hint}]` : ''}${
+      e.code && !AUTHORED_CODES.has(e.code) ? ` (${e.code})` : ''
+    }`,
+  );
+
 /** Lightweight guest summary for list pages (no encrypted fields, no decryption). */
 export interface GuestSummary {
   id: string;
@@ -37,7 +63,7 @@ export async function listGuests(): Promise<GuestSummary[]> {
     .from('guests')
     .select('id, full_name, phone, email, nationality, is_problematic, created_at, created_by')
     .order('full_name');
-  if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  if (error) throw wrapErr(error);
   return data ?? [];
 }
 
@@ -53,7 +79,7 @@ export async function listBornovaGuestIds(): Promise<Set<string>> {
     .from('properties')
     .select('id')
     .eq('region', 'bornova');
-  if (pe) throw new Error(`${pe.message}${pe.code ? ` (${pe.code})` : ''}`);
+  if (pe) throw wrapErr(pe);
   const ids = (props ?? []).map((p) => p.id);
   if (ids.length === 0) return new Set();
 
@@ -63,7 +89,7 @@ export async function listBornovaGuestIds(): Promise<Set<string>> {
     .from('reservations')
     .select('guest_id')
     .in('property_id', ids);
-  if (error) throw new Error(`${error.message}${error.code ? ` (${error.code})` : ''}`);
+  if (error) throw wrapErr(error);
   return new Set((data ?? []).map((r) => (r as { guest_id: string }).guest_id));
 }
 
@@ -73,7 +99,7 @@ export async function listBornovaGuestIds(): Promise<Set<string>> {
  */
 export async function getGuestDecrypted(id: string): Promise<DecryptedGuest | null> {
   const { data, error } = await supabase.rpc('get_guest_decrypted', { _id: id });
-  if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  if (error) throw wrapErr(error);
   return data?.[0] ?? null;
 }
 
@@ -90,7 +116,7 @@ export async function createGuest(input: GuestInput): Promise<GuestRow> {
     _is_problematic: input.is_problematic ?? false,
     _problematic_note: input.problematic_note ?? null,
   });
-  if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  if (error) throw wrapErr(error);
   return data;
 }
 
@@ -108,7 +134,7 @@ export async function updateGuest(id: string, input: GuestInput): Promise<GuestR
     _is_problematic: input.is_problematic ?? false,
     _problematic_note: input.problematic_note ?? null,
   });
-  if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  if (error) throw wrapErr(error);
   return data;
 }
 
@@ -127,7 +153,7 @@ export async function setGuestProblematic(
     _is_problematic: isProblematic,
     _note: note,
   });
-  if (error) throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  if (error) throw wrapErr(error);
   return data;
 }
 
@@ -179,7 +205,7 @@ export async function deleteGuest(id: string): Promise<void> {
     );
   }
 
-  throw new Error(`${error.message}${error.details ? ` — ${error.details}` : ''}${error.hint ? ` [${error.hint}]` : ''}${error.code ? ` (${error.code})` : ''}`);
+  throw wrapErr(error);
 }
 
 /**
