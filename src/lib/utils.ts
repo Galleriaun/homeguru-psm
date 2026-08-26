@@ -202,3 +202,36 @@ export function whatsAppUrl(phone: string, text: string): string {
 export function whatsAppShareUrl(text: string): string {
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
+
+/**
+ * Supabase auth errors come back in English. Map the ones a staff member can
+ * realistically hit to Turkish; fall back to the raw message for the rest.
+ * Shared by LoginPage (sign in / sign up / şifremi unuttum) and
+ * ResetPasswordPage (yeni şifre) — the same error strings surface from
+ * signInWithPassword, signUp, resetPasswordForEmail and updateUser.
+ */
+export function translateAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials')) return 'E-posta veya şifre hatalı.';
+  if (m.includes('email not confirmed'))
+    return 'E-posta adresiniz henüz doğrulanmadı. Gelen kutunuzdaki doğrulama linkine tıklayın.';
+  if (m.includes('user already registered') || m.includes('already been registered'))
+    return 'Bu e-posta adresi zaten kayıtlı.';
+  if (m.includes('password should be at least'))
+    return 'Şifre en az 6 karakter olmalıdır.';
+  if (m.includes('unable to validate email address') || m.includes('invalid email'))
+    return 'Geçersiz e-posta adresi.';
+  if (m.includes('signups not allowed') || m.includes('signup is disabled'))
+    return 'Yeni kayıt şu anda kapalı.';
+  if (m.includes('email rate limit') || m.includes('over_email_send_rate_limit'))
+    return 'Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.';
+  // 'Auth session missing!' is the exact client-side message (auth-js
+  // errors.js) thrown by updateUser() etc. when called with no session —
+  // e.g. a stale/reused password-reset tab. Server-side messages (like a
+  // same-as-old-password rejection) aren't reproduced here since their
+  // exact wording isn't verifiable from the client library; they fall
+  // through to the raw-message default below, which is still readable.
+  if (m.includes('auth session missing'))
+    return 'Oturum bulunamadı. Şifre sıfırlama bağlantısının süresi dolmuş olabilir.';
+  return message;
+}

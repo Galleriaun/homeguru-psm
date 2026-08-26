@@ -5,6 +5,7 @@ import { Layout } from '@/components/Layout';
 import { PwaUpdatePrompt } from '@/components/PwaUpdatePrompt';
 import { PushNavigate } from '@/components/PushNavigate';
 import { LoginPage } from '@/pages/LoginPage';
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { PropertiesListPage } from '@/pages/properties/PropertiesListPage';
@@ -54,6 +55,14 @@ export default function App() {
       <PushNavigate />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+
+        {/* Password reset landing page — outside ProtectedRoute on purpose.
+            It needs to render for the emailed-link's recovery session (a
+            real but short-lived session established before this component
+            even mounts, see the file's own header comment), which is not
+            the same thing ProtectedRoute checks for. It does its own gating
+            internally instead. */}
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* Public unit gallery — no auth, used by guests via {katalog_link} */}
         <Route path="/g/u/:unitId" element={<UnitGalleryPage />} />

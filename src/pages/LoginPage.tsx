@@ -2,31 +2,20 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { translateAuthError } from '@/lib/utils';
 
-type Mode = 'signin' | 'signup';
-
-// Supabase auth errors come back in English. Map the ones a staff member can
-// realistically hit to Turkish; fall back to the raw message for the rest.
-function translateAuthError(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes('invalid login credentials')) return 'E-posta veya şifre hatalı.';
-  if (m.includes('email not confirmed'))
-    return 'E-posta adresiniz henüz doğrulanmadı. Gelen kutunuzdaki doğrulama linkine tıklayın.';
-  if (m.includes('user already registered') || m.includes('already been registered'))
-    return 'Bu e-posta adresi zaten kayıtlı.';
-  if (m.includes('password should be at least'))
-    return 'Şifre en az 6 karakter olmalıdır.';
-  if (m.includes('unable to validate email address') || m.includes('invalid email'))
-    return 'Geçersiz e-posta adresi.';
-  if (m.includes('signups not allowed') || m.includes('signup is disabled'))
-    return 'Yeni kayıt şu anda kapalı.';
-  if (m.includes('email rate limit') || m.includes('over_email_send_rate_limit'))
-    return 'Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin.';
-  return message;
-}
+type Mode = 'signin' | 'signup' | 'forgot';
 
 export function LoginPage() {
-  const [mode, setMode] = useState<Mode>('signin');
+  const { signIn, user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const navState = location.state as { from?: { pathname: string }; mode?: Mode } | null;
+
+  // ResetPasswordPage sends { mode: 'forgot' } when it lands with no session
+  // (expired/already-used link) — one click there gets the user straight back
+  // to requesting a new one instead of hunting for "Şifremi unuttum?" again.
+  const [mode, setMode] = useState<Mode>(navState?.mode ?? 'signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -34,12 +23,7 @@ export function LoginPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const { signIn, user } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const from =
-    (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard';
+  const from = navState?.from?.pathname ?? '/dashboard';
 
   if (user) {
     navigate(from, { replace: true });
@@ -65,6 +49,30 @@ export function LoginPage() {
       } else {
         navigate(from, { replace: true });
       }
+      return;
+    }
+
+    if (mode === 'forgot') {
+      // resetPasswordForEmail never errors for an unknown address (Supabase
+      // deliberately doesn't reveal whether an account exists) — so the
+      // confirmation message below is shown the same way regardless, and
+      // stays non-leaking. Real failures here are rate-limiting or a
+      // malformed email, both already covered by translateAuthError.
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        // import.meta.env.BASE_URL always starts+ends with '/' (Vite guarantee),
+        // so this resolves to e.g. https://<host>/homeguru-psm/reset-password —
+        // must be present in Supabase Auth → URL Configuration → Redirect URLs,
+        // or the link silently falls back to the project's Site URL instead.
+        redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}reset-password`,
+      });
+      setSubmitting(false);
+      if (resetError) {
+        setError(translateAuthError(resetError.message));
+        return;
+      }
+      setInfo(
+        'Bu e-posta adresi kayıtlıysa, şifre sıfırlama bağlantısı gönderildi. Gelen kutunuzu (ve spam klasörünü) kontrol edin.',
+      );
       return;
     }
 
@@ -99,6 +107,7 @@ export function LoginPage() {
   };
 
   const isSignup = mode === 'signup';
+  const isForgot = mode === 'forgot';
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4 dark:bg-stone-950">
@@ -111,7 +120,7 @@ export function LoginPage() {
           HomeGuru
         </h1>
         <p className="mb-6 text-sm text-stone-600 dark:text-stone-300">
-          {isSignup ? 'Yeni personel hesabı' : 'Personel girişi'}
+          {isSignup ? 'Yeni personel hesabı' : isForgot ? 'Şifre sıfırlama' : 'Personel girişi'}
         </p>
 
         {isSignup && (
@@ -147,23 +156,37 @@ export function LoginPage() {
           />
         </label>
 
-        <label className="mt-4 block text-sm font-medium text-stone-700 dark:text-stone-300">
-          Şifre
-          <input
-            type="password"
-            autoComplete={isSignup ? 'new-password' : 'current-password'}
-            required
-            minLength={isSignup ? 6 : undefined}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-stone-900 placeholder-stone-400 focus:border-emerald-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
-          />
-          {isSignup && (
-            <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">
-              En az 6 karakter.
-            </span>
-          )}
-        </label>
+        {!isForgot && (
+          <label className="mt-4 block text-sm font-medium text-stone-700 dark:text-stone-300">
+            Şifre
+            <input
+              type="password"
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
+              required
+              minLength={isSignup ? 6 : undefined}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-stone-900 placeholder-stone-400 focus:border-emerald-500 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100 dark:placeholder-stone-500"
+            />
+            {isSignup && (
+              <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">
+                En az 6 karakter.
+              </span>
+            )}
+          </label>
+        )}
+
+        {mode === 'signin' && (
+          <p className="mt-2 text-right">
+            <button
+              type="button"
+              onClick={() => switchMode('forgot')}
+              className="text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              Şifremi unuttum?
+            </button>
+          </p>
+        )}
 
         {error && (
           <p className="mt-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-400">
@@ -185,9 +208,13 @@ export function LoginPage() {
             ? submitting
               ? 'Hesap oluşturuluyor…'
               : 'Hesap Oluştur'
-            : submitting
-              ? 'Giriş yapılıyor…'
-              : 'Giriş Yap'}
+            : isForgot
+              ? submitting
+                ? 'Gönderiliyor…'
+                : 'Sıfırlama Bağlantısı Gönder'
+              : submitting
+                ? 'Giriş yapılıyor…'
+                : 'Giriş Yap'}
         </button>
 
         {isSignup && (
@@ -209,6 +236,14 @@ export function LoginPage() {
                 Giriş yapın
               </button>
             </>
+          ) : isForgot ? (
+            <button
+              type="button"
+              onClick={() => switchMode('signin')}
+              className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              ← Giriş ekranına dön
+            </button>
           ) : (
             <>
               Hesabınız yok mu?{' '}
