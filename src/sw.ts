@@ -19,7 +19,7 @@
 
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { NetworkFirst, StaleWhileRevalidate } from 'workbox-strategies';
+import { NetworkOnly, StaleWhileRevalidate } from 'workbox-strategies';
 import { isSafeInAppPath } from '@/lib/safePath';
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -30,11 +30,26 @@ declare const self: ServiceWorkerGlobalScope & {
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
-// Runtime caching for Supabase — mirrors the old workbox.runtimeCaching config.
+// Supabase REST (PostgREST) — deliberately NOT cached. This used to be
+// NetworkFirst({ networkTimeoutSeconds: 5 }): on a slow/weak connection the
+// network race would time out and Workbox would silently serve whatever was
+// cached from the LAST time that exact query ran — for wide, mostly-stable
+// queries (e.g. the reservations calendar's whole-range fetch) that can be
+// an old snapshot. The page has no way to know it got stale data, and a
+// normal reload does NOT bypass this — the SW intercepts the fetch either
+// way. Root-caused 2026-08-28: a reservation created minutes earlier under
+// weak LTE was invisible on the calendar because the calendar's one big
+// reservations query kept re-serving a pre-creation cached response.
+// CLAUDE.md already states "no cached finance data" for this project —
+// this rule was violated by accident (the pattern matches ALL /rest/ calls,
+// not just finance ones), so NetworkOnly here is the correct, intended
+// behavior, not a regression. Do not put caching back on this route without
+// re-reading this comment. /storage/ below (photos) is unaffected and stays
+// StaleWhileRevalidate — that data is low-stakes and safe to serve stale.
 registerRoute(
   ({ url }) =>
     url.host.endsWith('supabase.co') && url.pathname.startsWith('/rest/'),
-  new NetworkFirst({ cacheName: 'supabase-api', networkTimeoutSeconds: 5 }),
+  new NetworkOnly(),
 );
 registerRoute(
   ({ url }) =>
