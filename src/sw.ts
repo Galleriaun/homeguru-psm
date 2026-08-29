@@ -30,6 +30,24 @@ declare const self: ServiceWorkerGlobalScope & {
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
+// Take control of already-open tabs as soon as this SW activates. Without
+// this, calling skipWaiting() (below, via the SKIP_WAITING message) makes
+// the new SW active in the background, but an ALREADY-OPEN tab keeps being
+// served by the OLD SW until it performs a fresh navigation — skipWaiting()
+// alone does not hand control to open clients. PwaUpdatePrompt's "Yenile"
+// button (src/components/PwaUpdatePrompt.tsx) calls updateServiceWorker(true)
+// from vite-plugin-pwa, which sends SKIP_WAITING and then waits for the
+// `controlling` event to auto-reload the page — that event only fires once
+// clients.claim() runs. Without it, tapping "Yenile" silently does nothing:
+// the new SW finishes activating, but the open tab is never told, so the
+// reload the button promises never happens. Root-caused 2026-08-29 while
+// debugging why a deployed fix wasn't taking effect after tapping the
+// banner — only a full close-and-reopen worked, which is what claim() here
+// makes unnecessary going forward.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // Supabase REST (PostgREST) — deliberately NOT cached. This used to be
 // NetworkFirst({ networkTimeoutSeconds: 5 }): on a slow/weak connection the
 // network race would time out and Workbox would silently serve whatever was
