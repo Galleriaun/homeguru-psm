@@ -36,7 +36,7 @@ import { DateNoteModal } from './DateNoteModal';
 import { NightlyPriceModal } from './NightlyPriceModal';
 import { MoveReservationModal } from './MoveReservationModal';
 import { DayUseMonthCalendar } from './DayUseMonthCalendar';
-import { cn, formatDate, formatRoomType, istanbulToday } from '@/lib/utils';
+import { cn, formatDate, formatRoomType, formatTRY, istanbulToday } from '@/lib/utils';
 import { loadReservationsWithPayments } from '@/lib/queries/payments';
 import { PAYMENT_LINE, PAYMENT_META, paymentState } from '@/lib/paymentStatus';
 import type { ReservationStatus } from '@/types/database';
@@ -108,6 +108,73 @@ function istanbulDateOf(iso: string): string {
 // label güniçi (day-use) bars, which carry a meaningful giriş/çıkış time.
 function istanbulClock(iso: string): string {
   return new Date(new Date(iso).getTime() + 3 * 60 * 60 * 1000).toISOString().slice(11, 16);
+}
+
+/**
+ * Gece sayısı of an overnight stay = calendar days between the Istanbul
+ * check-in date and the Istanbul checkout date. This is the SAME definition
+ * the booking form uses (checkout = checkin + nights), and the same span the
+ * Gantt bar draws, so all three always agree.
+ *
+ * It must NOT be derived from a raw millisecond difference. stay_start carries
+ * a real check-in TIME while stay_end is midnight, so `(end - start) / DAY_MS`
+ * lands at `nights - <check-in fraction of day>`: rounding that undercounts by
+ * a full night for ANY check-in after ~12:00 UTC (15:00 Istanbul) — i.e. most
+ * real check-ins. Measured against live data: a 28 Ağu 22:15 → 30 Ağu stay
+ * (genuinely 2 nights) came out as 1.
+ *
+ * That was harmless while nights only decided whether "Kısalt" was offered,
+ * but it is now the DIVISOR for per-night re-pricing (see shiftPreview), where
+ * being off by one silently mis-charges the guest. Hence the calendar-date form.
+ *
+ * Day-use stays (giriş = çıkış) return 0; callers must not divide by it.
+ */
+function stayNights(startISO: string, endISO: string): number {
+  return dayIndex(istanbulDateOf(startISO), istanbulDateOf(endISO));
+}
+
+/** Round to kuruş — total_amount is numeric(10,2), so 2 decimals is the floor. */
+function roundKurus(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Everything an Uzat / Kısalt will do, computed in ONE place so the
+ * confirmation dialog PREVIEWS exactly what the write APPLIES. Two separate
+ * calculations could drift and the dialog would promise the operator a number
+ * the database never receives — on money, that is the worst kind of bug.
+ *
+ * Re-prices by one night's share of the stay's OWN total (per-night =
+ * total_amount / nights): ₺9.000 over 3 gece extends to ₺12.000, ₺4.500 over
+ * 3 gece to ₺6.000. Shortening subtracts identically, which round-trips back
+ * to the original total exactly (total × (n±1)/n), rounding included.
+ *
+ * Deliberately derived from the stay's own total, NOT the price calendar /
+ * unit base rate that auto-debit uses (migration 088): total_amount is the
+ * agreed price of this booking, which may have been negotiated, so extending
+ * scales what was agreed rather than silently repricing at rack rate.
+ *
+ * `newTotal === null` means "move the date, leave the money alone" — the
+ * divisor guard. Day-use (0 nights) never reaches here since Uzat/Kısalt are
+ * OVERNIGHT-only, but a malformed legacy row could still read 0 nights, and a
+ * total of 0 has no per-night share; either way that beats writing NaN or
+ * Infinity into a money column.
+ */
+function shiftPreview(
+  r: { stay_start: string; stay_end: string; total_amount: number | string },
+  deltaDays: number,
+) {
+  const newEnd = new Date(new Date(r.stay_end).getTime() + deltaDays * DAY_MS).toISOString();
+  const nights = stayNights(r.stay_start, r.stay_end);
+  const total = Number(r.total_amount);
+  const canReprice = nights > 0 && Number.isFinite(total) && total > 0;
+  // max(0) satisfies the total_amount >= 0 CHECK. Unreachable in practice:
+  // Kısalt is hidden at 1 night, so the smallest shorten is 2 → 1, which keeps
+  // half the total. It exists so a bad row can never make the DB reject outright.
+  const newTotal = canReprice
+    ? Math.max(0, roundKurus(total + deltaDays * (total / nights)))
+    : null;
+  return { newEnd, nights, total, newTotal };
 }
 
 const weekdayFmt = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
@@ -229,9 +296,18 @@ export function ReservationsCalendarPage() {
   const [resvToCancel, setResvToCancel] = useState<ReservationWithRefs | null>(null);
   const [resvCancelError, setResvCancelError] = useState<string | null>(null);
   const [resvCancelLoading, setResvCancelLoading] = useState(false);
-  /** Toast for inline +1/-1 night results — kept lightweight, auto-dismiss. */
-  const [actionError, setActionError] = useState<string | null>(null);
-  /** Success counterpart of actionError — e.g. "iptal talebi gönderildi". */
+  /**
+   * Pending Uzat / Kısalt awaiting confirmation. `delta` is +1 or -1 night.
+   * These re-price the stay, so they go through a dialog that shows the exact
+   * tarih and tutar change rather than applying silently on a single tap.
+   */
+  const [pendingShift, setPendingShift] = useState<{
+    r: ReservationWithRefs;
+    delta: number;
+  } | null>(null);
+  const [shiftLoading, setShiftLoading] = useState(false);
+  const [shiftError, setShiftError] = useState<string | null>(null);
+  /** Success toast — e.g. "iptal talebi gönderildi". */
   const [actionInfo, setActionInfo] = useState<string | null>(null);
 
   // ---- range-select (Task 9) ----
@@ -535,16 +611,40 @@ export function ReservationsCalendarPage() {
     setPickedReservation(r);
   };
 
-  /** +1 / -1 night via direct updateReservation; the EXCLUDE constraint
-      catches collisions and wrapErr surfaces the Turkish message. */
-  const shiftStayEnd = async (r: ReservationWithRefs, deltaDays: number) => {
-    setActionError(null);
+  /**
+   * Apply a confirmed +1 / -1 night shift. Date and tutar go in ONE update: a
+   * single row write (so it can never half-apply), one overlap check, and one
+   * "Rezervasyon değişikliği" push reporting the date AND tutar change together
+   * (migration 129 renders both).
+   *
+   * Throws on failure — handleConfirmShift owns the message so the EXCLUDE
+   * constraint's "çakışıyor" lands inside the dialog (which stays open) rather
+   * than in a toast behind a dialog that already closed.
+   *
+   * The payment badge needs no work here: paymentState() derives it from
+   * collected-vs-total, so raising the total turns "Ödeme Alındı" into
+   * "Kısmi Ödeme Alındı" by itself, everywhere it is shown — and Kısalt
+   * turns it back.
+   */
+  const applyStayShift = async (r: ReservationWithRefs, deltaDays: number) => {
+    const { newEnd, newTotal } = shiftPreview(r, deltaDays);
+    const patch: { stay_end: string; total_amount?: number } = { stay_end: newEnd };
+    if (newTotal !== null) patch.total_amount = newTotal;
+    await updateReservation(r.id, patch);
+    setReservationVersion((v) => v + 1);
+  };
+
+  const handleConfirmShift = async () => {
+    if (!pendingShift) return;
+    setShiftLoading(true);
+    setShiftError(null);
     try {
-      const newEnd = new Date(new Date(r.stay_end).getTime() + deltaDays * DAY_MS).toISOString();
-      await updateReservation(r.id, { stay_end: newEnd });
-      setReservationVersion((v) => v + 1);
+      await applyStayShift(pendingShift.r, pendingShift.delta);
+      setPendingShift(null);
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'İşlem başarısız');
+      setShiftError(err instanceof Error ? err.message : 'İşlem başarısız');
+    } finally {
+      setShiftLoading(false);
     }
   };
 
@@ -564,13 +664,17 @@ export function ReservationsCalendarPage() {
         // Keep pickedReservation set so MoveReservationModal can read from it.
         setShowMoveModal(true);
         return;
+      // Uzat / Kısalt change the tutar as well as the date, so they ask first
+      // instead of applying on the single tap that opened this sheet.
       case 'extend':
+        setShiftError(null);
+        setPendingShift({ r, delta: +1 });
         setPickedReservation(null);
-        void shiftStayEnd(r, +1);
         return;
       case 'shorten':
+        setShiftError(null);
+        setPendingShift({ r, delta: -1 });
         setPickedReservation(null);
-        void shiftStayEnd(r, -1);
         return;
       case 'cancel':
         setResvCancelError(null);
@@ -780,22 +884,6 @@ export function ReservationsCalendarPage() {
               type="button"
               onClick={() => setActionInfo(null)}
               className="text-xs text-emerald-800 underline hover:no-underline dark:text-emerald-300"
-            >
-              kapat
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {/* Inline +1/-1 night / extend error toast. */}
-      {actionError && (
-        <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-red-700 dark:text-red-400">{actionError}</p>
-            <button
-              type="button"
-              onClick={() => setActionError(null)}
-              className="text-xs text-red-700 underline hover:no-underline dark:text-red-400"
             >
               kapat
             </button>
@@ -1293,14 +1381,11 @@ export function ReservationsCalendarPage() {
         !showMoveModal &&
         (() => {
           const r = pickedReservation;
-          // Nights = days between stay_start and stay_end. Day-use stays
-          // collapse to ≤1 which is fine (Uzat/Kısalt are hidden for them).
-          const nights = Math.max(
-            1,
-            Math.round(
-              (new Date(r.stay_end).getTime() - new Date(r.stay_start).getTime()) / DAY_MS,
-            ),
-          );
+          // Calendar-date nights (see stayNights) — the old raw-millisecond
+          // form undercounted by one for evening check-ins, which hid "Kısalt"
+          // on genuine multi-night stays. Day-use returns 0, which is correct
+          // here: it only gates `nights > 1`, and Uzat/Kısalt are OVERNIGHT-only.
+          const nights = stayNights(r.stay_start, r.stay_end);
           return (
             <ReservationActionSheet
               guestName={r.guest?.full_name ?? '—'}
@@ -1367,6 +1452,78 @@ export function ReservationsCalendarPage() {
         onCancel={() => {
           setResvToCancel(null);
           setResvCancelError(null);
+        }}
+      />
+
+      {/* Uzat / Kısalt confirmation — shows the exact tarih AND tutar change
+          before committing, since these re-price the stay. The preview comes
+          from the same shiftPreview() the write uses, so the numbers shown
+          here are literally the numbers that get saved. */}
+      <ConfirmDialog
+        open={pendingShift !== null}
+        title={
+          pendingShift?.delta === -1
+            ? 'Rezervasyon kısaltılsın mı?'
+            : 'Rezervasyon uzatılsın mı?'
+        }
+        description={
+          pendingShift &&
+          (() => {
+            const { r, delta } = pendingShift;
+            const { newEnd, nights, total, newTotal } = shiftPreview(r, delta);
+            return (
+              <>
+                <p>
+                  <strong>{r.guest?.full_name ?? '—'}</strong>
+                  {r.unit?.name ? ` — ${r.unit.name}` : ''}
+                </p>
+                <p className="mt-2">
+                  Çıkış: {formatDate(istanbulDateOf(r.stay_end))} →{' '}
+                  <strong>{formatDate(istanbulDateOf(newEnd))}</strong>
+                  <span className="text-stone-600 dark:text-stone-300">
+                    {' '}
+                    ({nights} gece → {nights + delta} gece)
+                  </span>
+                </p>
+                {newTotal === null ? (
+                  <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
+                    Tutar değişmeyecek.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-1">
+                      Tutar: {formatTRY(total)} → <strong>{formatTRY(newTotal)}</strong>
+                      <span
+                        className={
+                          delta > 0
+                            ? 'text-amber-700 dark:text-amber-400'
+                            : 'text-emerald-700 dark:text-emerald-400'
+                        }
+                      >
+                        {' '}
+                        ({delta > 0 ? '+' : '−'}
+                        {formatTRY(Math.abs(roundKurus(newTotal - total)))})
+                      </span>
+                    </p>
+                    <p className="mt-2 text-xs text-stone-600 dark:text-stone-300">
+                      Gecelik ücret bu rezervasyonun kendi tutarından hesaplanır (
+                      {formatTRY(roundKurus(total / nights))} / gece). Tahsil edilen tutar
+                      değişmediği için ödeme durumu buna göre güncellenir.
+                    </p>
+                  </>
+                )}
+              </>
+            );
+          })()
+        }
+        confirmLabel={pendingShift?.delta === -1 ? 'Kısalt' : 'Uzat'}
+        cancelLabel="Vazgeç"
+        loading={shiftLoading}
+        error={shiftError}
+        onConfirm={handleConfirmShift}
+        onCancel={() => {
+          setPendingShift(null);
+          setShiftError(null);
         }}
       />
 

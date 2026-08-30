@@ -117,14 +117,14 @@ export function ReservationActionSheet({
         key: 'extend',
         Icon: PlusIcon,
         label: 'Uzat (+1 gece)',
-        hint: 'Çıkış tarihini bir gün ileri al.',
+        hint: 'Çıkış tarihini bir gün ileri alır, bir gecelik ücreti tutara ekler.',
       });
       if (nights > 1) {
         actions.push({
           key: 'shorten',
           Icon: MinusIcon,
           label: 'Kısalt (−1 gece)',
-          hint: 'Çıkış tarihini bir gün geri al.',
+          hint: 'Çıkış tarihini bir gün geri alır, bir gecelik ücreti tutardan düşer.',
         });
       }
     }
