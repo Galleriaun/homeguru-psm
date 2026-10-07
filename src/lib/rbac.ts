@@ -18,6 +18,11 @@ export type Permission =
   | 'guest:delete'
   | 'finance:read'
   | 'finance:write'
+  // Read a reservation's cari hesap (totals, balance, movements). Split from
+  // finance:read so a Personel can see what a guest owes WITHOUT getting the
+  // kasa, the CSV export or any way to change the account. Server side this is
+  // the ledger_select policy (migration 144).
+  | 'ledger:read'
   | 'staff:read'
   | 'staff:write'
   | 'housekeeping:read'
@@ -43,6 +48,7 @@ const MANAGER_PERMS: Permission[] = [
   'guest:update',
   'finance:read',
   'finance:write',
+  'ledger:read',
   'staff:read',
   'staff:write',
   'housekeeping:read',
@@ -63,6 +69,7 @@ const PERSONEL_PERMS: Permission[] = [
   'guest:read',
   'guest:create',
   'guest:update',
+  'ledger:read',
   'housekeeping:read',
   'housekeeping:write',
   'issue:write',
@@ -146,4 +153,55 @@ export function canCollectPayment(role: Role, propertyType: PropertyType): boole
   if (r === 'RECEPTION' && propertyType === 'HOTEL') return true;
   if (r === 'HOUSEKEEPING' && propertyType === 'APARTMENT') return true;
   return false;
+}
+
+/**
+ * What a role may do with the Cari Hesap section of a reservation.
+ *
+ *   view           → the section itself (totals, balance, movements)
+ *   exportCsv      → CSV İndir
+ *   addCharge      → + Ekstra Ücret
+ *   lock           → Hesabı Kilitle / Kilidi Aç
+ *   deleteEntry    → the per-row delete
+ *   approvalStatus → whether a payment is approved or still waiting: the
+ *                    "(onaylandı)" wording, the "Onay bekliyor" mark and the
+ *                    separate "Onay bekleyen" total
+ *
+ * The Personel roles get `view` and nothing else: they read the account but
+ * cannot export or change it, and they are shown every payment the same way,
+ * approved or not (see buildCariView in cariHesap.ts). lock / deleteEntry
+ * compare the raw role on purpose — the server gates both on SUPER_ADMIN alone
+ * (migrations 078, 017).
+ */
+export function ledgerAccess(role: Role) {
+  return {
+    view: can(role, 'ledger:read'),
+    exportCsv: can(role, 'finance:read'),
+    addCharge: can(role, 'finance:write'),
+    lock: role === 'SUPER_ADMIN',
+    deleteEntry: role === 'SUPER_ADMIN',
+    approvalStatus: can(role, 'finance:read'),
+  };
+}
+
+/**
+ * How the Ödeme Topla dialog behaves for a role.
+ *
+ *   approvalNotice → the amber note that the payment waits in Onaylar and is
+ *                    not posted to the kasa / cari until approved
+ *   confirmFirst   → ask "Tahsilat yapılsın mı?" before the payment is sent
+ *
+ * A role that reads the Cari Hesap without approval status (the Personel roles)
+ * is not told about approval here either — the note would also contradict what
+ * that role sees, where the payment appears at once. It is asked to confirm
+ * instead. Derived from ledgerAccess() so the dialog and the section cannot
+ * disagree; every other role keeps the note and no question, as before.
+ */
+export function paymentCollectUi(role: Role) {
+  const cari = ledgerAccess(role);
+  const approvalHidden = cari.view && !cari.approvalStatus;
+  return {
+    approvalNotice: !approvalHidden,
+    confirmFirst: approvalHidden,
+  };
 }

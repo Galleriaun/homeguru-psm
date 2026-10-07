@@ -34,7 +34,9 @@ function istanbulTomorrow(): string {
 // Alındı, > total → Fazladan. State + colours live in @/lib/paymentStatus so
 // this page's badges/filters and the Takvim bar lines stay identical.
 function paymentBadge(paid: number, total: number) {
-  return PAYMENT_META[paymentState(paid, total)];
+  // null when the figures are unreadable — no badge rather than a guessed one.
+  const state = paymentState(paid, total);
+  return state ? PAYMENT_META[state] : null;
 }
 
 // The payment filters, shown in their own icon dropdown next to the durum chip.
@@ -644,7 +646,7 @@ function ReservationRows({
                   {paidLoaded &&
                     (() => {
                       const badge = paymentBadge(paidMap.get(r.id) ?? 0, Number(r.total_amount));
-                      return <span className={badge.className}>{badge.label}</span>;
+                      return badge ? <span className={badge.className}>{badge.label}</span> : null;
                     })()}
                 </span>
               )}

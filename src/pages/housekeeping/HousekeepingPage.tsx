@@ -6,11 +6,13 @@ import { listProperties, sortHotelsFirst, type Property } from '@/lib/queries/pr
 import { listAllUnits, type Unit } from '@/lib/queries/units';
 import {
   listAllTasks,
+  listStaysForCleaning,
   recordTaskStatus,
   latestPerUnit,
   DEFAULT_STATUS,
   type TaskWithRefs,
 } from '@/lib/queries/housekeeping';
+import { cleaningStateByUnit, type StayForCleaning } from '@/lib/cleaningState';
 import { listOpenIssueCountsByUnit } from '@/lib/queries/housekeepingIssues';
 import { loadStaffDirectory } from '@/lib/queries/staff_directory';
 import { Button } from '@/components/ui/Button';
@@ -51,6 +53,11 @@ export function HousekeepingPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [tasks, setTasks] = useState<TaskWithRefs[]>([]);
+  /** Stays that ended recently (or end within a day) — they decide "Kirli". */
+  const [stays, setStays] = useState<StayForCleaning[]>([]);
+  /** Re-read every minute, so a unit turns Kirli at checkout time while the
+      screen stays open — a stay's end is a moment, not an event we are told of. */
+  const [now, setNow] = useState(() => Date.now());
   // Honour ?filter=… so the dashboard tiles land on the right view:
   // "Açık Sorun" → Sorunlu, "Kirli Daireler" → Kirli; otherwise Tümü.
   const [searchParams] = useSearchParams();
@@ -82,15 +89,30 @@ export function HousekeepingPage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([listProperties(), listAllUnits(), listAllTasks(), listOpenIssueCountsByUnit()])
-      .then(([p, u, t, ic]) => {
+    // The stays are part of the same all-or-nothing load on purpose: without
+    // them a unit whose guest has left would quietly read "Temiz".
+    Promise.all([
+      listProperties(),
+      listAllUnits(),
+      listAllTasks(),
+      listOpenIssueCountsByUnit(),
+      listStaysForCleaning(),
+    ])
+      .then(([p, u, t, ic, st]) => {
         setProperties(p);
         setUnits(u);
         setTasks(t);
         setOpenIssueCounts(ic);
+        setStays(st);
+        setNow(Date.now());
       })
       .catch((e) => setError(e?.message ?? 'Yüklenemedi'))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
   }, []);
 
   // Best-effort: resolves updated_by → staff name for the "Son Değiştiren" line.
@@ -110,8 +132,24 @@ export function HousekeepingPage() {
       });
   };
 
-  // Current status per unit (derived). Units without history default to DIRTY.
+  // Latest cleaning mark per unit.
   const currentByUnit = useMemo(() => latestPerUnit(tasks), [tasks]);
+
+  // The state shown for each unit: its latest mark, unless a stay on it has
+  // ended since — then it is Kirli, whatever the reservation's status says.
+  // See cleaningState.ts. Units without any history default to DIRTY.
+  const stateByUnit = useMemo(
+    () =>
+      cleaningStateByUnit(
+        units.map((u) => u.id),
+        currentByUnit,
+        stays,
+        now,
+      ),
+    [units, currentByUnit, stays, now],
+  );
+  const statusOf = (unitId: string): HousekeepingStatus =>
+    stateByUnit.get(unitId)?.status ?? DEFAULT_STATUS;
 
   // Group units by property, hotel-first; sort units alphabetically within property.
   const grouped = useMemo(() => {
@@ -125,27 +163,20 @@ export function HousekeepingPage() {
   }, [properties, units]);
 
   const totalCount = units.length;
-  const dirtyCount = units.filter(
-    (u) => (currentByUnit.get(u.id)?.status ?? DEFAULT_STATUS) === 'DIRTY',
-  ).length;
-  const inProgressCount = units.filter(
-    (u) => (currentByUnit.get(u.id)?.status ?? DEFAULT_STATUS) === 'IN_PROGRESS',
-  ).length;
-  const cleanCount = units.filter(
-    (u) => (currentByUnit.get(u.id)?.status ?? DEFAULT_STATUS) === 'CLEAN',
-  ).length;
+  const dirtyCount = units.filter((u) => statusOf(u.id) === 'DIRTY').length;
+  const inProgressCount = units.filter((u) => statusOf(u.id) === 'IN_PROGRESS').length;
+  const cleanCount = units.filter((u) => statusOf(u.id) === 'CLEAN').length;
   const issuesCount = units.filter((u) => (openIssueCounts.get(u.id) ?? 0) > 0).length;
 
   const matchesFilter = (unitId: string): boolean => {
     if (filter === 'ALL') return true;
     if (filter === 'ISSUES') return (openIssueCounts.get(unitId) ?? 0) > 0;
-    const status = currentByUnit.get(unitId)?.status ?? DEFAULT_STATUS;
-    return status === filter;
+    return statusOf(unitId) === filter;
   };
 
   const handleChangeStatus = async (unit: Unit, newStatus: HousekeepingStatus) => {
     if (!canWrite) return;
-    const current = currentByUnit.get(unit.id)?.status ?? DEFAULT_STATUS;
+    const current = statusOf(unit.id);
     if (current === newStatus) return; // no-op
 
     setSavingUnitId(unit.id);
@@ -308,7 +339,12 @@ export function HousekeepingPage() {
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         {g.visible.map((unit) => {
                           const latest = currentByUnit.get(unit.id);
-                          const current = latest?.status ?? DEFAULT_STATUS;
+                          const current = statusOf(unit.id);
+                          // Set when the unit is Kirli because a stay ended after
+                          // its last mark — the mark's time and author would then
+                          // describe the cleaning BEFORE that stay, so they are
+                          // not shown.
+                          const stayEndedAt = stateByUnit.get(unit.id)?.stayEndedAt ?? null;
                           const isSaving = savingUnitId === unit.id;
                           const openIssues = openIssueCounts.get(unit.id) ?? 0;
                           return (
@@ -323,14 +359,17 @@ export function HousekeepingPage() {
                                   </p>
                                   {/* Cleaning-status metadata. */}
                                   <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                                    {latest
-                                      ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
-                                      : 'Henüz kayıt yok'}
+                                    {stayEndedAt
+                                      ? `Rezervasyon bitti: ${formatDateTime(stayEndedAt)}`
+                                      : latest
+                                        ? `Son güncelleme: ${formatDateTime(latest.updated_at)}`
+                                        : 'Henüz kayıt yok'}
                                   </p>
                                   {(() => {
-                                    const changer = latest?.updated_by
-                                      ? staffMap.get(latest.updated_by)
-                                      : undefined;
+                                    const changer =
+                                      !stayEndedAt && latest?.updated_by
+                                        ? staffMap.get(latest.updated_by)
+                                        : undefined;
                                     if (!changer) return null;
                                     return (
                                       <p className="text-xs text-stone-500 dark:text-stone-400">

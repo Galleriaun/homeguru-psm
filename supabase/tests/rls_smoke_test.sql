@@ -5,9 +5,9 @@
 -- Everything happens inside ONE transaction that is ROLLED BACK at the end —
 -- no test data survives, so it is safe to run against the live project.
 --
--- Prerequisite: migrations 001–133 plus 140–142 applied. The preflight block
--- below names exactly which object is missing if you are behind.
--- (134–139 are not exercised here.)
+-- Prerequisite: migrations 001–133 plus 140–142, 144 and 145 applied. The
+-- preflight block below names exactly which object is missing if you are behind.
+-- (134–138 are not exercised here; 139's role mapping is, through PASS 34/35.)
 --
 -- On success the last message is:   ALL TESTS PASSED (rolled back)
 -- On the first failed check it stops with:  FAIL: <what broke>
@@ -50,6 +50,19 @@
 --   • 142 The fingerprint columns cannot be written directly (which would hide
 --     a row from the pre-check), while the backfill-shaped write stays legal so
 --     140/141 remain re-runnable.
+--   • 144 The three Personel roles (Personel, Personel Bornova, Teknik Personel)
+--     READ a reservation's cari hesap, each inside its own region / scope, and
+--     nothing more: no insert, update or delete, and soft_delete_entity still
+--     refuses them cleanly. Resepsiyon / Temizlik / Onay Bekliyor stay at zero
+--     rows, and guest-level rows (no reservation) stay Yönetici-only.
+--   • 145 The guest list is shared by every role that makes reservations: a
+--     Personel Bornova finds an Ana Grup guest, a Personel finds a Bornova
+--     guest, and a guest with no reservation at all is found too — so the
+--     duplicate-TC refusal (140) names the existing guest instead of ending in
+--     "kayıt size görünmüyor". Seeing is not editing: the update, the Sorunlu
+--     flag, the TC / passport card and the Ek Misafir list all stay inside the
+--     region until the guest has a reservation there. Temizlik and Onay
+--     Bekliyor see exactly what they saw before.
 --
 -- Note: 143 (the DB-level UNIQUE index) is OPTIONAL and may not be applied —
 -- it needs the duplicate rows cleaned up first. The tests never assume it; the
@@ -156,7 +169,33 @@ begin
   ) then
     raise exception 'FAIL: migration 142 not applied (guests_fingerprint_guard trigger missing)';
   end if;
-  raise notice 'PREFLIGHT OK: migrations 126–132 + 140–142 present';
+  -- 144 widens ledger_select to the Personel roles. pg_policies.qual is the
+  -- deparsed USING clause, so the role name appears in it only once 144 has run.
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'ledger_entries'
+       and policyname = 'ledger_select' and qual like '%YETKILI%'
+  ) then
+    raise exception 'FAIL: migration 144 not applied (ledger_select does not let the Personel roles read the cari hesap)';
+  end if;
+  -- 145 opens the guest list to every role that makes reservations and moves
+  -- the old visibility rule into guests_update. Before it, guests_select (103)
+  -- never named YETKILI and guests_update (028) had no auth_sees_property().
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'guests'
+       and policyname = 'guests_select' and qual like '%YETKILI%'
+  ) then
+    raise exception 'FAIL: migration 145 not applied (guests_select still hides other-region guests from the Personel roles)';
+  end if;
+  if not exists (
+    select 1 from pg_policies
+     where schemaname = 'public' and tablename = 'guests'
+       and policyname = 'guests_update' and qual like '%auth_sees_property%'
+  ) then
+    raise exception 'FAIL: migration 145 not applied (guests_update does not carry the edit scope)';
+  end if;
+  raise notice 'PREFLIGHT OK: migrations 126–132 + 140–142 + 144–145 present';
 end $$;
 
 do $$
@@ -206,6 +245,42 @@ declare
   g_pp       uuid;   -- pasaportlu misafir
   g_dash     uuid;   -- pasaportu '---' (harf/rakam yok) olan misafir
   g_legacy   uuid;   -- eski (140 oncesi) cift kayit simulasyonu
+
+  -- 144 cari hesap okuma. Kullanıcılar ve kayıtlar PASS 34'ün İÇİNDE açılır:
+  -- yukarıdaki ortak fixture'a eklenselerdi önceki testlerin sayımları kayardı.
+  u_personel uuid := gen_random_uuid();  -- YETKILI          (Personel)
+  u_pbornova uuid := gen_random_uuid();  -- PERSONEL_BORNOVA (Personel Bornova)
+  u_teknik   uuid := gen_random_uuid();  -- TEKNIK_PERSONEL  (Teknik Personel)
+  p_born     uuid;   -- HOTEL, region 'bornova'
+  un_born    uuid;
+  rc_hotel   uuid;   -- bitmiş konaklama, Ana Grup oteli
+  rc_apart   uuid;   -- bitmiş konaklama, Ana Grup dairesi
+  rc_born    uuid;   -- bitmiş konaklama, Bornova
+  le_hotel   uuid;   -- cari hareket → rc_hotel
+  le_apart   uuid;   -- cari hareket → rc_apart
+  le_born    uuid;   -- cari hareket → rc_born
+  le_guest   uuid;   -- rezervasyonsuz (misafir düzeyi) cari hareket
+  v_amount   numeric;
+  v_uid      uuid;   -- yazma denemelerinde sıradaki Personel rolü
+  v_le       uuid;   -- o rolün GÖREBİLDİĞİ cari hareket
+  v_res      uuid;   -- o hareketin rezervasyonu
+  v_who      text;
+
+  -- 145 ortak misafir listesi. PASS 34'ün kullanıcılarını ve Bornova mülkünü
+  -- kullanır; kendi kayıtları PASS 35'in İÇİNDE açılır. TC'ler 29'daki gibi
+  -- rastgeledir (canlı bir misafirle çakışmasın diye).
+  u_ybornova uuid := gen_random_uuid();  -- YONETICI_BORNOVA (Yönetici Bornova)
+  v_tc_d     text;
+  v_tc_e     text;
+  v_tc_f     text;
+  g_genel    uuid;   -- yalnızca Ana Grup'ta konaklamış misafir
+  g_bornova  uuid;   -- yalnızca Bornova'da konaklamış misafir
+  g_orphan   uuid;   -- hiç rezervasyonu olmayan misafir
+  gc_genel   uuid;   -- g_genel'in ek misafiri
+  r_pick     uuid;   -- Personel Bornova'nın g_genel için açtığı rezervasyon
+  v_gf       uuid;   -- sıradaki rolün GÖRDÜĞÜ ama düzenleyememesi gereken misafir
+  v_go       uuid;   -- aynı rolün kendi bölgesindeki misafir (pozitif kontrol)
+  v_msg      text;
 
   warn_count int := 0;
 begin
@@ -990,6 +1065,582 @@ begin
     perform pg_temp.logout();
     raise notice 'PASS 33: eski cift kayitlar duzenlenebilir, baskasinin TC sine tasinamaz';
   end if;
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- 34) 144 — Personel rolleri rezervasyonun cari hesabını OKUR, yalnızca okur.
+  --     Öncesinde ledger_select yalnızca Yönetici + Alt Yönetici'ye açıktı ve
+  --     Personel, rezervasyon ekranında Cari Hesap bölümünü hiç görmüyordu.
+  --     144 okumayı üç Personel rolüne açar (auth_role() üçünü de YETKILI'ye
+  --     eşler — 139).
+  --
+  --     Sınananlar:
+  --       (a–c) her rol KENDİ bölgesi / kapsamı içinde okur. Okuma izni bölge
+  --             izolasyonunu delmemeli: Personel Bornova'yı, Personel Bornova
+  --             Ana Grup'u görmez; Teknik Personel hepsini görür (117).
+  --       (d)   açılmaması gerekenler kapalı kalır.
+  --       (e)   zaten görenler görmeye devam eder.
+  --       (f)   okuma izni yazma / silme izni DEĞİLDİR. soft_delete_entity özel
+  --             olarak sınanır: 132'den beri çağıranın yetkisiyle koşar ve bu
+  --             roller artık satırı GÖREBİLDİĞİ için "kayıt bulunamadı" yerine
+  --             DELETE'in 0 satır dönmesiyle reddeder — o yol çöp satırını da
+  --             geri almak zorunda.
+  --
+  --     Sayımlar testin KENDİ satırlarıyla sınırlıdır (where id = ...): bu dosya
+  --     canlı veritabanında koşar, süzülmemiş bir sayım gerçek cari hareketleri
+  --     de sayardı.
+  -- ═══════════════════════════════════════════════════════════════════════
+  perform pg_temp.logout();
+
+  insert into auth.users
+    (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+     raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values
+    ('00000000-0000-0000-0000-000000000000', u_personel, 'authenticated', 'authenticated',
+     'hg-smoke-personel@test.local', '', now(),
+     '{"provider":"email","providers":["email"]}', '{"full_name":"Smoke Personel"}', now(), now()),
+    ('00000000-0000-0000-0000-000000000000', u_pbornova, 'authenticated', 'authenticated',
+     'hg-smoke-pbornova@test.local', '', now(),
+     '{"provider":"email","providers":["email"]}', '{"full_name":"Smoke Personel Bornova"}', now(), now()),
+    ('00000000-0000-0000-0000-000000000000', u_teknik, 'authenticated', 'authenticated',
+     'hg-smoke-teknik@test.local', '', now(),
+     '{"provider":"email","providers":["email"]}', '{"full_name":"Smoke Teknik"}', now(), now());
+
+  select count(*) into n from staff_profiles
+   where user_id in (u_personel, u_pbornova, u_teknik) and role = 'PENDING';
+  if n <> 3 then
+    raise exception 'FAIL 34 (fixture): 3 PENDING profil bekleniyordu, % bulundu', n;
+  end if;
+
+  update staff_profiles set role = 'YETKILI',          access_scope = 'ALL' where user_id = u_personel;
+  update staff_profiles set role = 'PERSONEL_BORNOVA', access_scope = 'ALL' where user_id = u_pbornova;
+  update staff_profiles set role = 'TEKNIK_PERSONEL',  access_scope = 'ALL' where user_id = u_teknik;
+
+  insert into properties (name, type, region)
+  values ('Smoke Bornova Otel', 'HOTEL', 'bornova') returning id into p_born;
+  insert into units (property_id, name, room_type, capacity, base_price)
+  values (p_born, 'Smoke Bornova Oda', 'DOUBLE', 2, 1000.00) returning id into un_born;
+
+  -- Üç BİTMİŞ konaklama: 'completed' çift rezervasyon kısıtının dışındadır ve
+  -- hiçbir aktivasyon trigger'ını (otomatik borçlandırma, KBS) tetiklemez.
+  insert into reservations
+    (property_id, unit_id, guest_id, stay_start, stay_end, status,
+     total_amount, deposit, created_by)
+  values
+    (p_hotel, un_hotel, g_guest, now() - interval '60 days', now() - interval '58 days',
+     'completed', 1000.00, 0, u_reception)
+  returning id into rc_hotel;
+
+  insert into reservations
+    (property_id, unit_id, guest_id, stay_start, stay_end, status,
+     total_amount, deposit, created_by)
+  values
+    (p_apart, un_apart, g_guest, now() - interval '60 days', now() - interval '58 days',
+     'completed', 2000.00, 0, u_reception)
+  returning id into rc_apart;
+
+  insert into reservations
+    (property_id, unit_id, guest_id, stay_start, stay_end, status,
+     total_amount, deposit, created_by)
+  values
+    (p_born, un_born, g_guest, now() - interval '60 days', now() - interval '58 days',
+     'completed', 3000.00, 0, u_reception)
+  returning id into rc_born;
+
+  insert into ledger_entries (guest_id, reservation_id, type, amount, currency, note, created_by)
+  values (g_guest, rc_hotel, 'DEBT', 1000.00, 'TRY', 'Smoke cari otel', u_admin)
+  returning id into le_hotel;
+  insert into ledger_entries (guest_id, reservation_id, type, amount, currency, note, created_by)
+  values (g_guest, rc_apart, 'DEBT', 2000.00, 'TRY', 'Smoke cari daire', u_admin)
+  returning id into le_apart;
+  insert into ledger_entries (guest_id, reservation_id, type, amount, currency, note, created_by)
+  values (g_guest, rc_born, 'DEBT', 3000.00, 'TRY', 'Smoke cari bornova', u_admin)
+  returning id into le_born;
+  -- Rezervasyona bağlı OLMAYAN hareket: 144 bunu Personel'e açmamalı.
+  insert into ledger_entries (guest_id, reservation_id, type, amount, currency, note, created_by)
+  values (g_guest, NULL, 'DEBT', 4000.00, 'TRY', 'Smoke cari misafir', u_admin)
+  returning id into le_guest;
+
+  -- (a) Personel — Ana Grup, kapsam ALL.
+  perform pg_temp.login(u_personel);
+  select count(*) into n from ledger_entries where id in (le_hotel, le_apart);
+  if n <> 2 then
+    raise exception 'FAIL 34a: Personel kendi bölgesindeki cari hareketleri göremiyor (2 beklenirken %)', n;
+  end if;
+  select count(*) into n from ledger_entries where id = le_born;
+  if n <> 0 then
+    raise exception 'FAIL 34a: Personel BORNOVA cari hareketini görüyor — okuma izni bölge izolasyonunu deldi';
+  end if;
+  select count(*) into n from ledger_entries where id = le_guest;
+  if n <> 0 then
+    raise exception 'FAIL 34a: Personel rezervasyonsuz (misafir düzeyi) cari hareketi görüyor';
+  end if;
+  perform pg_temp.logout();
+
+  -- Kapsam da geçerli kalmalı: yalnızca otellere bakan Personel daireyi görmez.
+  update staff_profiles set access_scope = 'HOTELS' where user_id = u_personel;
+  perform pg_temp.login(u_personel);
+  select count(*) into n from ledger_entries where id = le_hotel;
+  if n <> 1 then
+    raise exception 'FAIL 34a: HOTELS kapsamlı Personel otelin cari hareketini göremiyor';
+  end if;
+  select count(*) into n from ledger_entries where id = le_apart;
+  if n <> 0 then
+    raise exception 'FAIL 34a: HOTELS kapsamlı Personel DAİRENİN cari hareketini görüyor — kapsam delindi';
+  end if;
+  perform pg_temp.logout();
+  update staff_profiles set access_scope = 'ALL' where user_id = u_personel;
+
+  -- (b) Personel Bornova — yalnızca Bornova.
+  perform pg_temp.login(u_pbornova);
+  select count(*) into n from ledger_entries where id = le_born;
+  if n <> 1 then
+    raise exception 'FAIL 34b: Personel Bornova kendi bölgesinin cari hareketini göremiyor';
+  end if;
+  select count(*) into n from ledger_entries where id in (le_hotel, le_apart, le_guest);
+  if n <> 0 then
+    raise exception 'FAIL 34b: Personel Bornova ANA GRUP cari hareketlerini görüyor (% satır) — bölge izolasyonu delindi', n;
+  end if;
+  perform pg_temp.logout();
+
+  -- (c) Teknik Personel — tüm bölgeler (117), ama misafir düzeyi hareket yine yok.
+  perform pg_temp.login(u_teknik);
+  select count(*) into n from ledger_entries where id in (le_hotel, le_apart, le_born);
+  if n <> 3 then
+    raise exception 'FAIL 34c: Teknik Personel üç bölgenin cari hareketlerini göremiyor (3 beklenirken %)', n;
+  end if;
+  select count(*) into n from ledger_entries where id = le_guest;
+  if n <> 0 then
+    raise exception 'FAIL 34c: Teknik Personel rezervasyonsuz (misafir düzeyi) cari hareketi görüyor';
+  end if;
+  perform pg_temp.logout();
+
+  -- (d) Açılmaması gerekenler: Resepsiyon, Temizlik, Onay Bekliyor.
+  perform pg_temp.login(u_reception);
+  select count(*) into n from ledger_entries where id in (le_hotel, le_apart, le_born, le_guest);
+  if n <> 0 then raise exception 'FAIL 34d: Resepsiyon cari hareket görüyor (% satır)', n; end if;
+  perform pg_temp.login(u_house);
+  select count(*) into n from ledger_entries where id in (le_hotel, le_apart, le_born, le_guest);
+  if n <> 0 then raise exception 'FAIL 34d: Temizlik cari hareket görüyor (% satır)', n; end if;
+  perform pg_temp.login(u_pending);
+  select count(*) into n from ledger_entries where id in (le_hotel, le_apart, le_born, le_guest);
+  if n <> 0 then raise exception 'FAIL 34d: Onay Bekliyor cari hareket görüyor (% satır)', n; end if;
+  perform pg_temp.logout();
+
+  -- (e) Zaten görenler değişmedi: Alt Yönetici (tüm bölgeler, 102) üç
+  --     rezervasyon hareketini, Yönetici dördünü de görür.
+  perform pg_temp.login(u_manager);
+  select count(*) into n from ledger_entries where id in (le_hotel, le_apart, le_born);
+  if n <> 3 then
+    raise exception 'FAIL 34e: Alt Yönetici cari hareketleri artık göremiyor (3 beklenirken %)', n;
+  end if;
+  perform pg_temp.login(u_admin);
+  select count(*) into n from ledger_entries where id in (le_hotel, le_apart, le_born, le_guest);
+  if n <> 4 then
+    raise exception 'FAIL 34e: Yönetici cari hareketleri artık göremiyor (4 beklenirken %)', n;
+  end if;
+
+  -- Pozitif kontrol (hâlâ Yönetici olarak): aşağıda Personel'in REDDEDİLMESİNİ
+  -- beklediğimiz INSERT'in aynısı yetkili biri için ÇALIŞMALI. Çalışmazsa
+  -- Personel'in reddi yetkiden değil bozuk bir satırdan geliyor olabilirdi ve
+  -- (f) yanlış sebepten geçerdi.
+  begin
+    insert into ledger_entries (guest_id, reservation_id, type, amount, currency, note, created_by)
+    values (g_guest, rc_hotel, 'DEBT', 1.00, 'TRY', 'Smoke kontrol ekleme', u_admin);
+  exception when others then
+    raise exception 'FAIL 34 (kontrol): Yönetici aynı cari hareketi ekleyemedi, test satırı hatalı: %', sqlerrm;
+  end;
+  perform pg_temp.logout();
+
+  -- (f) Üç Personel rolü de, GÖREBİLDİĞİ bir hareket üzerinde, hiçbir şey
+  --     yazamaz. login() blokların DIŞINDA: istisna savepoint'e geri sarar ve
+  --     blok içinde yapılmış bir login'i de geri alırdı.
+  for i in 1..3 loop
+    v_uid := (array[u_personel, u_pbornova, u_teknik])[i];
+    v_le  := (array[le_hotel,   le_born,    le_hotel])[i];
+    v_res := (array[rc_hotel,   rc_born,    rc_hotel])[i];
+    v_who := (array['Personel', 'Personel Bornova', 'Teknik Personel'])[i];
+
+    perform pg_temp.login(v_uid);
+
+    -- Önce: bu rol bu satırı gerçekten GÖRÜYOR olmalı. Görmüyorsa aşağıdaki
+    -- UPDATE / DELETE "0 satır" sonuçları hiçbir şey kanıtlamazdı.
+    select count(*) into n from ledger_entries where id = v_le;
+    if n <> 1 then
+      raise exception 'FAIL 34f (kontrol): % kendi cari hareketini göremiyor, yazma testleri anlamsız', v_who;
+    end if;
+
+    -- INSERT (ekrandaki "+ Ekstra Ücret"in yolu). Yalnızca yetki hatası kabul:
+    -- başka bir hata testi durdurur.
+    ok := false;
+    begin
+      insert into ledger_entries (guest_id, reservation_id, type, amount, currency, note, created_by)
+      values (g_guest, v_res, 'DEBT', 1.00, 'TRY', 'Smoke yetkisiz ekleme', v_uid);
+      ok := true;
+    exception when insufficient_privilege then null;
+    end;
+    if ok then
+      raise exception 'FAIL 34f: % cari hareket EKLEYEBİLDİ', v_who;
+    end if;
+
+    -- UPDATE: politika yok → RLS 0 satıra indirir (ya da tablo yetkisi reddeder).
+    n := 0;
+    begin
+      update ledger_entries set amount = 1.00 where id = v_le;
+      get diagnostics n = row_count;
+    exception when insufficient_privilege then n := 0;
+    end;
+    if n <> 0 then
+      raise exception 'FAIL 34f: % cari hareketi DEĞİŞTİREBİLDİ', v_who;
+    end if;
+
+    -- DELETE: ledger_delete yalnızca Yönetici (017).
+    n := 0;
+    begin
+      delete from ledger_entries where id = v_le;
+      get diagnostics n = row_count;
+    exception when insufficient_privilege then n := 0;
+    end;
+    if n <> 0 then
+      raise exception 'FAIL 34f: % cari hareketi SİLEBİLDİ', v_who;
+    end if;
+
+    -- soft_delete_entity (ekrandaki silme simgesinin yolu).
+    ok := false;
+    begin
+      perform soft_delete_entity('ledger_entries', v_le);
+      ok := true;
+    exception when others then null;
+    end;
+    if ok then
+      raise exception 'FAIL 34f: % cari hareketi Çöp Kutusu''na GÖNDEREBİLDİ', v_who;
+    end if;
+
+    perform pg_temp.logout();
+
+    -- Tablo sahibi olarak: hiçbir iz kalmamış olmalı.
+    select count(*) into n from ledger_entries where note = 'Smoke yetkisiz ekleme';
+    if n <> 0 then
+      raise exception 'FAIL 34f: % için reddedilen ekleme yine de satır bıraktı', v_who;
+    end if;
+    select amount into v_amount from ledger_entries where id = v_le;
+    if v_amount is null then
+      raise exception 'FAIL 34f: % için reddedilen silmeye rağmen cari hareket kayboldu', v_who;
+    end if;
+    if v_amount <> (array[1000.00, 3000.00, 1000.00])[i] then
+      raise exception 'FAIL 34f: % için reddedilen değişikliğe rağmen tutar değişti (%)', v_who, v_amount;
+    end if;
+    select count(*) into n from trash_entries
+     where entity_type = 'ledger_entries' and entity_id = v_le;
+    if n <> 0 then
+      raise exception 'FAIL 34f: % için reddedilen silme çöp satırı bıraktı (ROW_COUNT geri sarması eksik)', v_who;
+    end if;
+  end loop;
+
+  raise notice 'PASS 34: Personel rolleri cari hesabı kendi bölgesinde okur; ekleyemez, değiştiremez, silemez';
+
+  -- ═══════════════════════════════════════════════════════════════════════
+  -- 35) 145 — misafir listesi, rezervasyon açan HER rol için ortaktır.
+  --     Öncesinde guests_select (103) bölgeye bağlı bir role yalnızca kendi
+  --     görebildiği bir rezervasyonu olan misafiri gösteriyordu. Sonuç bir
+  --     çıkmazdı: Ana Grup'ta kayıtlı bir misafir Bornova'ya geldiğinde
+  --     personel onu listede bulamıyor, yeni kayıt açmayı deniyor ve 140'ın TC
+  --     kuralı "kayıt size görünmüyor" diyerek onu da reddediyordu. Hiç
+  --     rezervasyonu olmayan misafir ise her Personel için aynı çıkmazdı.
+  --
+  --     Sınananlar:
+  --       (a) rezervasyon açan roller üç misafiri de görür — iki yönde ve
+  --           rezervasyonsuz misafir dâhil.
+  --       (b) açılmaması gerekenler olduğu gibi kalır (Temizlik, Onay Bekliyor).
+  --       (c) ekran görüntüsündeki durum: aynı TC yine reddedilir, ama mesaj
+  --           artık mevcut misafirin ADINI verir.
+  --       (d) görmek düzenlemek DEĞİLDİR. guests_update (028) yalnızca role
+  --           bakıyordu ve kapsamını SELECT politikasından alıyordu; liste
+  --           açılınca düzenleme de sessizce açılırdı. 145 eski kuralı
+  --           guests_update'in içine taşır. Burada dört yazma yolu da sınanır:
+  --           doğrudan UPDATE, set_guest_problematic (SECURITY INVOKER),
+  --           update_guest ve kartın kendisi (get_guest_decrypted).
+  --       (e) ek misafirler bölgede kalır.
+  --       (f) "seçilebilir": Personel Bornova o misafir için rezervasyon açar;
+  --           açtıktan sonra misafir onun için sıradan bir Bornova misafiridir.
+  --
+  --     Sayımlar testin KENDİ satırlarıyla sınırlıdır (where id = ...).
+  --     PASS 34'ün kullanıcılarına ve Bornova mülküne dayanır.
+  -- ═══════════════════════════════════════════════════════════════════════
+  perform pg_temp.logout();
+
+  insert into auth.users
+    (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+     raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values
+    ('00000000-0000-0000-0000-000000000000', u_ybornova, 'authenticated', 'authenticated',
+     'hg-smoke-ybornova@test.local', '', now(),
+     '{"provider":"email","providers":["email"]}', '{"full_name":"Smoke Yonetici Bornova"}', now(), now());
+
+  select count(*) into n from staff_profiles
+   where user_id = u_ybornova and role = 'PENDING';
+  if n <> 1 then
+    raise exception 'FAIL 35 (fixture): 1 PENDING profil bekleniyordu, % bulundu', n;
+  end if;
+  update staff_profiles set role = 'YONETICI_BORNOVA', access_scope = 'ALL' where user_id = u_ybornova;
+
+  v_tc_d := '6' || lpad((floor(random() * 10000000000))::bigint::text, 10, '0');
+  v_tc_e := '5' || lpad((floor(random() * 10000000000))::bigint::text, 10, '0');
+  v_tc_f := '4' || lpad((floor(random() * 10000000000))::bigint::text, 10, '0');
+
+  perform pg_temp.login(u_admin);
+  select g.id into g_genel   from create_guest('Smoke Genel Misafir', v_tc_d) g;
+  select g.id into g_bornova from create_guest('Smoke Bornova Misafir', v_tc_e) g;
+  select g.id into g_orphan  from create_guest('Smoke Rezervasyonsuz Misafir', v_tc_f) g;
+  perform pg_temp.logout();
+
+  if g_genel is null or g_bornova is null or g_orphan is null then
+    raise exception 'FAIL 35 (fixture): test misafirleri açılamadı';
+  end if;
+
+  -- g_genel yalnızca Ana Grup'ta, g_bornova yalnızca Bornova'da konakladı;
+  -- g_orphan'ın rezervasyonu yok. İkisi de BİTMİŞ konaklama (PASS 34 gerekçesi).
+  insert into reservations
+    (property_id, unit_id, guest_id, stay_start, stay_end, status,
+     total_amount, deposit, created_by)
+  values
+    (p_hotel, un_hotel, g_genel, now() - interval '70 days', now() - interval '68 days',
+     'completed', 1000.00, 0, u_reception);
+
+  insert into reservations
+    (property_id, unit_id, guest_id, stay_start, stay_end, status,
+     total_amount, deposit, created_by)
+  values
+    (p_born, un_born, g_bornova, now() - interval '70 days', now() - interval '68 days',
+     'completed', 1000.00, 0, u_reception);
+
+  insert into guest_companions (guest_id, full_name)
+  values (g_genel, 'Smoke Ek Misafir')
+  returning id into gc_genel;
+
+  -- (a) Rezervasyon açan dört bölge/kapsam rolü üç misafiri de görür.
+  for i in 1..4 loop
+    v_uid := (array[u_pbornova, u_personel, u_ybornova, u_teknik])[i];
+    v_who := (array['Personel Bornova', 'Personel', 'Yönetici Bornova', 'Teknik Personel'])[i];
+
+    perform pg_temp.login(v_uid);
+    select count(*) into n from guests where id in (g_genel, g_bornova, g_orphan);
+    perform pg_temp.logout();
+    if n <> 3 then
+      raise exception 'FAIL 35a: % üç misafirden yalnızca % tanesini görüyor (Ana Grup + Bornova + rezervasyonsuz = 3 bekleniyordu)', v_who, n;
+    end if;
+  end loop;
+
+  -- (b) Açılmaması gerekenler. Temizlik rezervasyon açmaz: yalnızca görebildiği
+  --     bir konaklamanın misafirini görmeye devam eder (g_genel → Smoke Otel).
+  perform pg_temp.login(u_house);
+  select count(*) into n from guests where id = g_genel;
+  if n <> 1 then
+    raise exception 'FAIL 35b: Temizlik, görebildiği bir konaklamanın misafirini artık göremiyor';
+  end if;
+  select count(*) into n from guests where id in (g_bornova, g_orphan);
+  if n <> 0 then
+    raise exception 'FAIL 35b: Temizlik başka bölgenin / rezervasyonsuz misafiri görüyor (% satır) — liste yalnızca rezervasyon açan rollere açılmalıydı', n;
+  end if;
+  perform pg_temp.login(u_pending);
+  select count(*) into n from guests where id in (g_genel, g_bornova, g_orphan);
+  if n <> 0 then raise exception 'FAIL 35b: Onay Bekliyor misafir görüyor (% satır)', n; end if;
+
+  -- Zaten hepsini görenler değişmedi.
+  perform pg_temp.login(u_reception);
+  select count(*) into n from guests where id in (g_genel, g_bornova, g_orphan);
+  if n <> 3 then raise exception 'FAIL 35b: Resepsiyon misafirleri artık göremiyor (3 beklenirken %)', n; end if;
+  perform pg_temp.login(u_manager);
+  select count(*) into n from guests where id in (g_genel, g_bornova, g_orphan);
+  if n <> 3 then raise exception 'FAIL 35b: Alt Yönetici misafirleri artık göremiyor (3 beklenirken %)', n; end if;
+  perform pg_temp.login(u_admin);
+  select count(*) into n from guests where id in (g_genel, g_bornova, g_orphan);
+  if n <> 3 then raise exception 'FAIL 35b: Yönetici misafirleri artık göremiyor (3 beklenirken %)', n; end if;
+  perform pg_temp.logout();
+
+  -- (c) Ekran görüntüsündeki durum, iki yönde ve rezervasyonsuz misafir için.
+  --     Aynı TC yine reddedilmeli (140 kuralı yerinde), ama mesaj mevcut
+  --     misafirin adını vermeli: personel o adı Misafir alanında arayıp seçer.
+  for i in 1..3 loop
+    v_uid := (array[u_pbornova, u_personel, u_pbornova])[i];
+    v_who := (array['Personel Bornova / Ana Grup misafiri',
+                    'Personel / Bornova misafiri',
+                    'Personel Bornova / rezervasyonsuz misafir'])[i];
+
+    perform pg_temp.login(v_uid);
+    ok := false;
+    v_msg := null;
+    begin
+      perform create_guest('Smoke Tekrar Kayit', (array[v_tc_d, v_tc_e, v_tc_f])[i]);
+      ok := true;
+    exception when others then v_msg := sqlerrm;
+    end;
+    perform pg_temp.logout();
+
+    if ok then
+      raise exception 'FAIL 35c: % — aynı TC ile ikinci misafir AÇILABİLDİ (140 kuralı delindi)', v_who;
+    end if;
+    if v_msg is null
+       or v_msg not like '%' || (array['Smoke Genel Misafir',
+                                       'Smoke Bornova Misafir',
+                                       'Smoke Rezervasyonsuz Misafir'])[i] || '%'
+       or v_msg not like '%mevcut misafiri kullanın%'
+       or v_msg like '%görünmüyor%' then
+      raise exception 'FAIL 35c: % — mesaj mevcut misafirin adını vermiyor, personel yine çıkmazda: %', v_who, v_msg;
+    end if;
+  end loop;
+
+  -- (d) Görmek düzenlemek değildir. v_gf: rolün GÖRDÜĞÜ ama kendi bölgesinde
+  --     rezervasyonu olmayan misafir; v_go: kendi bölgesindeki misafir.
+  --     login() blokların DIŞINDA (PASS 34f notu).
+  for i in 1..4 loop
+    v_uid := (array[u_pbornova, u_personel, u_ybornova, u_personel])[i];
+    v_gf  := (array[g_genel,    g_bornova,  g_genel,    g_orphan])[i];
+    v_go  := (array[g_bornova,  g_genel,    g_bornova,  g_genel])[i];
+    v_who := (array['Personel Bornova / Ana Grup misafiri',
+                    'Personel / Bornova misafiri',
+                    'Yönetici Bornova / Ana Grup misafiri',
+                    'Personel / rezervasyonsuz misafir'])[i];
+
+    perform pg_temp.login(v_uid);
+
+    -- Önce: bu rol satırı gerçekten GÖRÜYOR olmalı. Görmüyorsa aşağıdaki
+    -- "0 satır" sonuçları hiçbir şey kanıtlamazdı.
+    select count(*) into n from guests where id = v_gf;
+    if n <> 1 then
+      raise exception 'FAIL 35d (kontrol): % — misafir görünmüyor, yazma testleri anlamsız', v_who;
+    end if;
+
+    -- Doğrudan UPDATE (elle hazırlanmış bir API çağrısının yolu).
+    n := 0;
+    begin
+      update guests set phone = '5550000035' where id = v_gf;
+      get diagnostics n = row_count;
+    exception when insufficient_privilege then n := 0;
+    end;
+    if n <> 0 then
+      raise exception 'FAIL 35d: % — misafir doğrudan UPDATE ile DEĞİŞTİRİLEBİLDİ', v_who;
+    end if;
+
+    -- "Sorunlu Misafir" işareti: SECURITY INVOKER, yani aynı politikaya tabi.
+    -- 0 satır günceller ve hata vermez; sonucu aşağıda tablo sahibi doğrular.
+    begin
+      perform set_guest_problematic(v_gf, true, 'Smoke yetkisiz isaret');
+    exception when insufficient_privilege then null;
+    end;
+
+    -- Düzenleme formunun yolu.
+    ok := false;
+    begin
+      perform update_guest(v_gf, 'Smoke Yetkisiz Ad');
+      ok := true;
+    exception when others then null;
+    end;
+    if ok then
+      raise exception 'FAIL 35d: % — misafir update_guest ile DEĞİŞTİRİLEBİLDİ', v_who;
+    end if;
+
+    -- Kart (TC / pasaport) Personel için kapalı kalır. Yönetici Bornova hariç:
+    -- get_guest_decrypted ona zaten açıktı (139) ve 145 buna dokunmuyor.
+    if (array[true, true, false, true])[i] then
+      ok := false;
+      begin
+        perform 1 from get_guest_decrypted(v_gf);
+        ok := true;
+      exception when insufficient_privilege then null;
+      end;
+      if ok then
+        raise exception 'FAIL 35d: % — misafir kartı (TC / pasaport) AÇILABİLDİ', v_who;
+      end if;
+    end if;
+
+    -- Pozitif kontrol: aynı rol KENDİ bölgesinin misafirini düzenlemeye devam
+    -- eder. Edemiyorsa yukarıdaki retler kuraldan değil, fazla daraltılmış bir
+    -- politikadan geliyor demektir.
+    n := 0;
+    update guests set phone = '5550000036' where id = v_go;
+    get diagnostics n = row_count;
+    if n <> 1 then
+      raise exception 'FAIL 35d (kontrol): % — rol KENDİ bölgesinin misafirini artık düzenleyemiyor (% satır); düzenleme kuralı fazla daraltılmış', v_who, n;
+    end if;
+
+    perform pg_temp.logout();
+
+    -- Tablo sahibi olarak: reddedilen yazmalar iz bırakmamış olmalı.
+    select count(*) into n from guests
+     where id = v_gf
+       and phone is distinct from '5550000035'
+       and is_problematic = false
+       and full_name <> 'Smoke Yetkisiz Ad';
+    if n <> 1 then
+      raise exception 'FAIL 35d: % — reddedilen düzenleme yine de iz bıraktı', v_who;
+    end if;
+  end loop;
+
+  -- Alt Yönetici (bölgesiz) herkesi düzenlemeye devam eder: rezervasyonsuz
+  -- misafir dâhil. Düzenleme kuralı 103'teki görünürlüğün aynısıdır.
+  perform pg_temp.login(u_manager);
+  n := 0;
+  update guests set phone = '5550000037' where id = g_orphan;
+  get diagnostics n = row_count;
+  perform pg_temp.logout();
+  if n <> 1 then
+    raise exception 'FAIL 35d (kontrol): Alt Yönetici rezervasyonsuz misafiri artık düzenleyemiyor (% satır)', n;
+  end if;
+
+  -- (e) Ek misafirler bölgede kalır: g_genel'in ek misafirini Personel Bornova
+  --     görmez, Ana Grup Personeli görür.
+  perform pg_temp.login(u_pbornova);
+  select count(*) into n from guest_companions where id = gc_genel;
+  if n <> 0 then
+    raise exception 'FAIL 35e: Personel Bornova, Ana Grup misafirinin EK MİSAFİRİNİ görüyor';
+  end if;
+  perform pg_temp.login(u_personel);
+  select count(*) into n from guest_companions where id = gc_genel;
+  if n <> 1 then
+    raise exception 'FAIL 35e (kontrol): Personel kendi bölgesindeki misafirin ek misafirini göremiyor';
+  end if;
+  perform pg_temp.logout();
+
+  -- (f) "Seçilebilir": Personel Bornova, listeden bulduğu Ana Grup misafiri
+  --     için Bornova'da rezervasyon açar. Açtıktan sonra misafir onun için
+  --     sıradan bir Bornova misafiridir: düzenler, kartını açar, ek misafirini
+  --     görür.
+  perform pg_temp.login(u_pbornova);
+  begin
+    insert into reservations
+      (property_id, unit_id, guest_id, stay_start, stay_end, status,
+       total_amount, deposit, created_by)
+    values
+      (p_born, un_born, g_genel, now() + interval '200 days', now() + interval '202 days',
+       'upcoming', 2000.00, 0, u_pbornova)
+    returning id into r_pick;
+  exception when others then
+    raise exception 'FAIL 35f: Personel Bornova, seçtiği Ana Grup misafiri için Bornova rezervasyonu AÇAMADI: %', sqlerrm;
+  end;
+  if r_pick is null then
+    raise exception 'FAIL 35f: rezervasyon açıldı ama kimliği dönmedi';
+  end if;
+
+  n := 0;
+  update guests set phone = '5550000038' where id = g_genel;
+  get diagnostics n = row_count;
+  if n <> 1 then
+    raise exception 'FAIL 35f: rezervasyon açıldıktan sonra misafir hâlâ düzenlenemiyor (% satır)', n;
+  end if;
+
+  begin
+    perform 1 from get_guest_decrypted(g_genel);
+  exception when others then
+    raise exception 'FAIL 35f: rezervasyon açıldıktan sonra misafir kartı hâlâ açılmıyor: %', sqlerrm;
+  end;
+
+  select count(*) into n from guest_companions where id = gc_genel;
+  if n <> 1 then
+    raise exception 'FAIL 35f: rezervasyon açıldıktan sonra ek misafir hâlâ görünmüyor';
+  end if;
+  perform pg_temp.logout();
+
+  raise notice 'PASS 35: misafir listesi rezervasyon açan her role ortak; düzenleme, kart ve ek misafir bölgede kaldı';
 
   -- ═══════════════════════════════════════════════════════════════════════
   -- SECURITY ASSERTIONS — hardening gaps. These WARN instead of aborting so

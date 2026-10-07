@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { can, canCollectPayment } from '@/lib/rbac';
+import { can, canCollectPayment, ledgerAccess, paymentCollectUi } from '@/lib/rbac';
 import {
   cancelReservation,
   deleteReservation,
@@ -22,7 +22,13 @@ import {
   deleteLedgerEntry,
   type LedgerEntry,
 } from '@/lib/queries/ledger';
-import { deletePaymentCollection, countActivePaymentsForReservation } from '@/lib/queries/payments';
+import {
+  deletePaymentCollection,
+  countActivePaymentsForReservation,
+  listPendingPaymentsForReservation,
+  type PendingPayment,
+} from '@/lib/queries/payments';
+import { buildCariView } from '@/lib/cariHesap';
 import { supabase } from '@/lib/supabase';
 import type { Database, ReservationStatus, PaymentMethod } from '@/types/database';
 import { Button } from '@/components/ui/Button';
@@ -92,8 +98,11 @@ export function ReservationDetailPage() {
   const [cancelRequesting, setCancelRequesting] = useState(false);
   const [cancellationPending, setCancellationPending] = useState(false);
 
-  // Cari hesap (ledger) — gated to finance:read
+  // Cari hesap (ledger) — gated to ledger:read
   const [ledger, setLedger] = useState<LedgerEntry[] | null>(null);
+  /** Payments collected for this reservation that still wait for approval —
+      they have no ledger row yet, so they are loaded separately. */
+  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [showLedgerModal, setShowLedgerModal] = useState(false);
   // Bumping this re-runs the ledger fetch (used after a successful payment collection)
@@ -118,9 +127,13 @@ export function ReservationDetailPage() {
   const [entryDeleteError, setEntryDeleteError] = useState<string | null>(null);
   const [entryDeleting, setEntryDeleting] = useState(false);
 
-  const canSeeLedger = Boolean(profile && can(profile.role, 'finance:read'));
-  const canWriteLedger = Boolean(profile && can(profile.role, 'finance:write'));
-  const canDeleteLedger = profile?.role === 'SUPER_ADMIN';
+  // Kept as plain booleans: canSeeLedger is an effect dependency below, and the
+  // object ledgerAccess() returns is a new one on every render.
+  const cari = profile ? ledgerAccess(profile.role) : null;
+  const canSeeLedger = Boolean(cari?.view);
+  const canExportLedger = Boolean(cari?.exportCsv);
+  const canWriteLedger = Boolean(cari?.addCharge);
+  const canDeleteLedger = Boolean(cari?.deleteEntry);
 
   useEffect(() => {
     if (!id) return;
@@ -173,12 +186,26 @@ export function ReservationDetailPage() {
     const rid = reservation?.id;
     if (!rid || !canSeeLedger) {
       setLedger(null);
+      setPendingPayments([]);
       return;
     }
     setLedgerError(null);
-    listLedgerForReservation(rid)
-      .then(setLedger)
-      .catch((e) => setLedgerError(e?.message ?? 'Cari yüklenemedi'));
+    // The ledger and the pending payments are loaded and applied TOGETHER. If
+    // either fails the section shows the error: half of it would be a wrong
+    // total. `stale` drops the answer of a load that a newer one has replaced.
+    let stale = false;
+    Promise.all([listLedgerForReservation(rid), listPendingPaymentsForReservation(rid)])
+      .then(([entries, pending]) => {
+        if (stale) return;
+        setLedger(entries);
+        setPendingPayments(pending);
+      })
+      .catch((e) => {
+        if (!stale) setLedgerError(e?.message ?? 'Cari yüklenemedi');
+      });
+    return () => {
+      stale = true;
+    };
   }, [reservation?.id, canSeeLedger, ledgerVersion]);
 
   // Track active (UNCONFIRMED + CONFIRMED) payment count so Ödeme Topla can
@@ -227,7 +254,11 @@ export function ReservationDetailPage() {
   const isCancelled = reservation.status === 'cancelled';
   // Cari hesap lock — only Yönetici (SUPER_ADMIN) can toggle it.
   const isBlocked = reservation.cari_blocked;
-  const canBlockCari = profile?.role === 'SUPER_ADMIN';
+  const canBlockCari = Boolean(cari?.lock);
+  // Ödeme Topla dialog: the approval note, or the "Tahsilat yapılsın mı?"
+  // question instead — see paymentCollectUi(). Without a profile the dialog
+  // keeps its long-standing default (note shown, no question).
+  const collectUi = profile ? paymentCollectUi(profile.role) : null;
 
   const handleToggleBlock = async () => {
     setBlockError(null);
@@ -558,7 +589,10 @@ export function ReservationDetailPage() {
       {canSeeLedger && (
         <LedgerSection
           ledger={ledger}
+          pending={pendingPayments}
+          showApproval={Boolean(cari?.approvalStatus)}
           error={ledgerError}
+          canExport={canExportLedger}
           canWrite={canWriteLedger}
           canDelete={canDeleteLedger}
           guestName={guestName}
@@ -593,6 +627,8 @@ export function ReservationDetailPage() {
         <PaymentCollectModal
           reservationId={reservation.id}
           defaultAmount={Number(reservation.total_amount)}
+          showApprovalNotice={collectUi?.approvalNotice ?? true}
+          confirmFirst={collectUi?.confirmFirst ?? false}
           onClose={() => setShowCollectModal(false)}
           onCollected={() => {
             setShowCollectModal(false);
@@ -620,9 +656,14 @@ export function ReservationDetailPage() {
         <LateCheckoutModal
           reservationId={reservation.id}
           current={reservation.late_checkout_hours ?? 0}
+          stay={reservation}
           onClose={() => setShowLateCheckout(false)}
-          onUpdated={(next) => {
-            setReservation((prev) => (prev ? { ...prev, late_checkout_hours: next } : prev));
+          onUpdated={(next, reopened) => {
+            setReservation((prev) =>
+              prev
+                ? { ...prev, late_checkout_hours: next, status: reopened ?? prev.status }
+                : prev,
+            );
             setShowLateCheckout(false);
           }}
         />
@@ -768,9 +809,33 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** "Onay bekliyor" — shown only to a viewer who may see approval status. */
+function PendingChip({ className = '' }: { className?: string }) {
+  return (
+    <span
+      className={`rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 ${className}`}
+    >
+      Onay bekliyor
+    </span>
+  );
+}
+
+/** A pending payment is drawn neutral: it is not part of Toplam Ödeme yet. */
+function amountColor(row: { kind: 'DEBT' | 'PAYMENT'; pending: boolean }): string {
+  if (row.kind === 'DEBT') return 'text-amber-600 dark:text-amber-400';
+  if (row.pending) return 'text-stone-500 dark:text-stone-400';
+  return 'text-emerald-600 dark:text-emerald-400';
+}
+
 interface LedgerSectionProps {
   ledger: LedgerEntry[] | null;
+  /** Payments still waiting for approval (no ledger row yet). */
+  pending: PendingPayment[];
+  /** Whether this viewer may see which payments are approved — see buildCariView. */
+  showApproval: boolean;
   error: string | null;
+  /** CSV İndir — finance roles only; a Personel reads the section but cannot export it. */
+  canExport: boolean;
   canWrite: boolean;
   canDelete: boolean;
   /** Used to build the CSV download filename. */
@@ -788,7 +853,10 @@ interface LedgerSectionProps {
 
 function LedgerSection({
   ledger,
-  error,
+  pending,
+  showApproval,
+  error: loadError,
+  canExport,
   canWrite,
   canDelete,
   guestName,
@@ -801,15 +869,29 @@ function LedgerSection({
   onAddClick,
   onDeleteClick,
 }: LedgerSectionProps) {
+  /** The approved ledger rows — what CSV İndir exports. */
   const entries = ledger ?? [];
-  // Split the two totals so the user can verify the math by sight,
+  // Rows and totals for THIS viewer (what counts as paid, and whether approval
+  // is visible at all, depends on the role) — see buildCariView. It throws on
+  // an amount it cannot read; that is shown as an error, never as a number.
+  const built = useMemo(() => {
+    try {
+      return { view: buildCariView(ledger ?? [], pending, showApproval), failure: null };
+    } catch (e) {
+      return {
+        view: null,
+        failure: e instanceof Error ? e.message : 'Cari hesap gösterilemiyor',
+      };
+    }
+  }, [ledger, pending, showApproval]);
+  const view = built.view;
+  const error = loadError ?? built.failure;
+  // The two totals are shown split so the user can verify the math by sight,
   // instead of trusting a single signed number.
-  const totalDebt = entries.reduce((s, e) => (e.type === 'DEBT' ? s + Number(e.amount) : s), 0);
-  const totalPayment = entries.reduce(
-    (s, e) => (e.type === 'PAYMENT' ? s + Number(e.amount) : s),
-    0,
-  );
-  const balance = totalDebt - totalPayment;
+  const totalDebt = view?.totalDebt ?? 0;
+  const totalPayment = view?.totalPayment ?? 0;
+  const pendingTotal = view?.pendingTotal ?? 0;
+  const balance = view?.balance ?? 0;
 
   // Color the balance by who is "in the red":
   //   positive  → guest owes us       (amber)
@@ -841,7 +923,7 @@ function LedgerSection({
         </span>
         {ledger !== null && (
           <div className="flex flex-wrap gap-2">
-            {entries.length > 0 && (
+            {canExport && entries.length > 0 && (
               <Button
                 size="sm"
                 variant="secondary"
@@ -917,7 +999,7 @@ function LedgerSection({
         <p className="text-sm text-stone-600 dark:text-stone-300">Yükleniyor…</p>
       )}
 
-      {!error && ledger !== null && (
+      {!error && ledger !== null && view !== null && (
         <>
           <Card>
             <div className="space-y-2">
@@ -933,6 +1015,17 @@ function LedgerSection({
                   {formatTRY(totalPayment)}
                 </span>
               </div>
+              {/* Collected but not approved yet: listed below, kept out of
+                  Toplam Ödeme and Bakiye. Only ever non-zero for a viewer who
+                  may see approval status. */}
+              {pendingTotal > 0 && (
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm text-stone-600 dark:text-stone-300">Onay Bekleyen</span>
+                  <span className="text-sm font-semibold text-stone-500 dark:text-stone-400">
+                    {formatTRY(pendingTotal)}
+                  </span>
+                </div>
+              )}
               <div className="border-t border-stone-300 pt-2 dark:border-stone-700">
                 <div className="flex items-baseline justify-between">
                   <span className="text-base font-medium text-stone-700 dark:text-stone-200">
@@ -944,7 +1037,7 @@ function LedgerSection({
                 </div>
                 <div className="mt-1 flex items-baseline justify-between">
                   <span className="text-xs text-stone-600 dark:text-stone-300">
-                    {ledger.length} hareket
+                    {view.rows.length} hareket
                   </span>
                   <div className="text-right">
                     <span className={`block text-sm font-medium ${balanceColor}`}>
@@ -960,13 +1053,7 @@ function LedgerSection({
                           TRANSFER: 'Havale/EFT',
                           CARD: 'Kart',
                         };
-                        const methods = Array.from(
-                          new Set(
-                            ledger
-                              .filter((e) => e.type === 'PAYMENT' && e.payment_collection?.method)
-                              .map((e) => e.payment_collection!.method),
-                          ),
-                        );
+                        const methods = view.methods;
                         if (methods.length === 0) return null;
                         return (
                           <div className="mt-1 flex flex-wrap justify-end gap-1">
@@ -987,7 +1074,7 @@ function LedgerSection({
             </div>
           </Card>
 
-          {ledger.length === 0 ? (
+          {view.rows.length === 0 ? (
             <Card>
               <p className="text-center text-sm text-stone-600 dark:text-stone-300">
                 Henüz hareket yok.
@@ -997,16 +1084,18 @@ function LedgerSection({
             <>
               {/* Mobile: stacked cards */}
               <div className="space-y-2 sm:hidden">
-                {ledger.map((e) => {
-                  const isDebt = e.type === 'DEBT';
+                {view.rows.map((row) => {
+                  const isDebt = row.kind === 'DEBT';
+                  // A pending payment has no ledger row yet — nothing to delete here.
+                  const entry = row.entry;
                   return (
                     <div
-                      key={e.id}
+                      key={row.key}
                       className="rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-700 dark:bg-stone-900"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span
                               className={
                                 isDebt
@@ -1016,35 +1105,30 @@ function LedgerSection({
                             >
                               {isDebt ? 'Ücret' : 'Ödeme'}
                             </span>
+                            {row.pending && <PendingChip />}
                             <span className="text-xs text-stone-600 dark:text-stone-300">
-                              {formatDate(e.created_at)} · {formatTime(e.created_at)}
+                              {formatDate(row.at)} · {formatTime(row.at)}
                             </span>
                           </div>
                           <p className="mt-1 break-words text-sm text-stone-700 dark:text-stone-300">
-                            {tPaymentMethods(e.note)}
-                            {e.created_by === null && (
+                            {row.description}
+                            {row.system && (
                               <span className="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-stone-600 dark:bg-stone-700 dark:text-stone-300">
                                 Sistem
                               </span>
                             )}
                           </p>
                         </div>
-                        <p
-                          className={
-                            isDebt
-                              ? 'shrink-0 text-right font-semibold text-amber-600 dark:text-amber-400'
-                              : 'shrink-0 text-right font-semibold text-emerald-600 dark:text-emerald-400'
-                          }
-                        >
+                        <p className={`shrink-0 text-right font-semibold ${amountColor(row)}`}>
                           {isDebt ? '+' : '−'}
-                          {formatTRY(Number(e.amount))}
+                          {formatTRY(row.amount)}
                         </p>
                       </div>
-                      {canDelete && (
+                      {canDelete && entry && (
                         <div className="mt-2 flex justify-end">
                           <button
                             type="button"
-                            onClick={() => onDeleteClick(e)}
+                            onClick={() => onDeleteClick(entry)}
                             className="text-xs text-red-600 hover:underline dark:text-red-400"
                           >
                             Sil
@@ -1070,17 +1154,22 @@ function LedgerSection({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-300 dark:divide-stone-700">
-                      {ledger.map((e) => {
-                        const isDebt = e.type === 'DEBT';
+                      {view.rows.map((row) => {
+                        const isDebt = row.kind === 'DEBT';
+                        // A pending payment has no ledger row yet — nothing to delete here.
+                        const entry = row.entry;
                         return (
-                          <tr key={e.id}>
+                          <tr key={row.key}>
                             <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                              <div>{formatDate(e.created_at)}</div>
+                              <div>{formatDate(row.at)}</div>
                               <div className="text-xs text-stone-600 dark:text-stone-300">
-                                {formatTime(e.created_at)}
+                                {formatTime(row.at)}
                               </div>
                             </td>
-                            <td className="px-6 py-3">
+                            {/* nowrap: body sets overflow-wrap:anywhere, so a
+                                squeezed column would break a chip or an amount
+                                in the middle of a word. */}
+                            <td className="whitespace-nowrap px-6 py-3">
                               <span
                                 className={
                                   isDebt
@@ -1090,48 +1179,47 @@ function LedgerSection({
                               >
                                 {isDebt ? 'Ücret' : 'Ödeme'}
                               </span>
+                              {row.pending && <PendingChip className="ml-2" />}
                             </td>
                             <td className="px-6 py-3 text-stone-700 dark:text-stone-300">
-                              <span>{tPaymentMethods(e.note)}</span>
-                              {e.created_by === null && (
+                              <span>{row.description}</span>
+                              {row.system && (
                                 <span className="ml-2 rounded bg-stone-200 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-stone-600 dark:bg-stone-700 dark:text-stone-300">
                                   Sistem
                                 </span>
                               )}
                             </td>
                             <td
-                              className={
-                                isDebt
-                                  ? 'px-6 py-3 text-right font-semibold text-amber-600 dark:text-amber-400'
-                                  : 'px-6 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400'
-                              }
+                              className={`whitespace-nowrap px-6 py-3 text-right font-semibold ${amountColor(row)}`}
                             >
                               {isDebt ? '+' : '−'}
-                              {formatTRY(Number(e.amount))}
+                              {formatTRY(row.amount)}
                             </td>
                             {canDelete && (
                               <td className="px-6 py-3 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => onDeleteClick(e)}
-                                  aria-label="Hareketi sil"
-                                  className="rounded p-1 text-stone-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-                                >
-                                  <svg
-                                    className="h-4 w-4"
-                                    viewBox="0 0 20 20"
-                                    fill="none"
-                                    aria-hidden="true"
+                                {entry && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onDeleteClick(entry)}
+                                    aria-label="Hareketi sil"
+                                    className="rounded p-1 text-stone-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400"
                                   >
-                                    <path
-                                      d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"
-                                      stroke="currentColor"
-                                      strokeWidth="1.5"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                  </svg>
-                                </button>
+                                    <svg
+                                      className="h-4 w-4"
+                                      viewBox="0 0 20 20"
+                                      fill="none"
+                                      aria-hidden="true"
+                                    >
+                                      <path
+                                        d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"
+                                        stroke="currentColor"
+                                        strokeWidth="1.5"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                    </svg>
+                                  </button>
+                                )}
                               </td>
                             )}
                           </tr>

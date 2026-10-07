@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/queries/fetchAll';
 import type { Database, PaymentMethod, PaymentStatus } from '@/types/database';
 
 type PaymentCollectionRow = Database['public']['Tables']['payment_collections']['Row'];
@@ -120,23 +121,84 @@ export async function countActivePaymentsForReservation(
   return count ?? 0;
 }
 
+/** A payment that was collected and is still waiting for a manager's approval. */
+export interface PendingPayment {
+  id: string;
+  amount: number;
+  method: PaymentMethod;
+  /** When it was collected. */
+  created_at: string;
+}
+
+/**
+ * The payments of one reservation still waiting for approval (UNCONFIRMED),
+ * newest first — the Cari Hesap section lists them next to the ledger rows.
+ *
+ * Deliberately UNCONFIRMED only: a CONFIRMED payment already has its ledger
+ * row, so returning it here would count it twice; a DISPUTED one was rejected
+ * and never moved money.
+ *
+ * Not paged: this is one reservation's handful of rows, nowhere near Max Rows.
+ * An amount that is not a readable number throws instead of reaching a sum.
+ */
+export async function listPendingPaymentsForReservation(
+  reservationId: string,
+): Promise<PendingPayment[]> {
+  const { data, error } = await supabase
+    .from('payment_collections')
+    .select('id, amount, method, created_at')
+    .eq('reservation_id', reservationId)
+    .eq('status', 'UNCONFIRMED' satisfies PaymentStatus)
+    .order('created_at', { ascending: false });
+  if (error) throw wrapErr(error);
+
+  const rows = (data ?? []) as { id: string; amount: unknown; method: PaymentMethod; created_at: string }[];
+  return rows.map((row) => {
+    // null and '' are refused explicitly: Number() turns both into 0.
+    const amount =
+      typeof row.amount === 'number'
+        ? row.amount
+        : typeof row.amount === 'string' && row.amount.trim() !== ''
+          ? Number(row.amount)
+          : NaN;
+    if (!Number.isFinite(amount)) {
+      throw new Error('Ödemeler yüklenemedi: okunamayan bir tutar var.');
+    }
+    return { id: row.id, amount, method: row.method, created_at: row.created_at };
+  });
+}
+
 /**
  * Returns a Map of reservation_id → total collected amount across active
  * (UNCONFIRMED or CONFIRMED) payment_collections rows. Lets the reservation
  * list render a "Kısmi / tam / fazladan Ödeme Alındı" badge per card by
  * comparing the collected sum against the reservation total, without an N+1
  * query loop. DISPUTED payments are excluded — those were rejected.
+ *
+ * Goes through fetchAllRows: a single request is silently cut at the server's
+ * Max Rows, and a dropped payment row makes a paid stay read as unpaid or
+ * partial. A failed request throws, so callers never see an understated sum —
+ * and so does an amount that is not a number: added into a sum it would turn
+ * the whole sum into NaN, which compares false to everything and would let
+ * that stay drop off the Borçlular list as if it were settled.
  */
 export async function loadReservationsWithPayments(): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from('payment_collections')
-    .select('reservation_id, amount')
-    .in('status', ['UNCONFIRMED', 'CONFIRMED'] satisfies PaymentStatus[]);
-  if (error) throw wrapErr(error);
+  const data = await fetchAllRows<{ id: string; reservation_id: string; amount: number }>(
+    () =>
+      supabase
+        .from('payment_collections')
+        .select('id, reservation_id, amount', { count: 'exact' })
+        .in('status', ['UNCONFIRMED', 'CONFIRMED'] satisfies PaymentStatus[]),
+    wrapErr,
+  );
   const map = new Map<string, number>();
-  for (const row of data ?? []) {
+  for (const row of data) {
     if (!row.reservation_id) continue;
-    map.set(row.reservation_id, (map.get(row.reservation_id) ?? 0) + Number(row.amount));
+    const amount = Number(row.amount);
+    if (!Number.isFinite(amount)) {
+      throw new Error('Ödemeler yüklenemedi: okunamayan bir tutar var.');
+    }
+    map.set(row.reservation_id, (map.get(row.reservation_id) ?? 0) + amount);
   }
   return map;
 }

@@ -3,15 +3,31 @@ import { updateReservation } from '@/lib/queries/reservations';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { checkoutTimeLabel, cn, DEFAULT_CHECKOUT_HOUR } from '@/lib/utils';
+import { statusAfterEndMoved } from '@/lib/reservationStatus';
+import type { ReservationStatus, StayType } from '@/types/database';
 
 interface Props {
   reservationId: string;
   /** Current offset on the reservation. 0 = standart 11:00. */
   current: number;
+  /** The stay itself — decides whether a later checkout reopens it (see below). */
+  stay: {
+    status: ReservationStatus;
+    stay_start: string;
+    stay_end: string;
+    stay_type: StayType;
+    late_checkout_hours: number | null;
+  };
   onClose: () => void;
-  /** Called with the new offset after a successful save. */
-  onUpdated: (next: number) => void;
+  /** Called after a successful save with the new offset, and the status the
+      stay was set back to — null when its status did not change. */
+  onUpdated: (next: number, status: ReservationStatus | null) => void;
 }
+
+const REOPENED_LABEL: Partial<Record<ReservationStatus, string>> = {
+  active: 'Aktif',
+  upcoming: 'Yakında',
+};
 
 /** Up to +4 hours past the base — same range the DB CHECK allows. */
 const OPTIONS: number[] = [0, 1, 2, 3, 4];
@@ -20,9 +36,17 @@ const OPTIONS: number[] = [0, 1, 2, 3, 4];
  * Mini modal: pick how many hours past the standard checkout (11:00) the
  * guest gets. Writes reservations.late_checkout_hours via a normal update —
  * RLS already lets the same roles that can edit a reservation update it.
+ *
+ * If the stay is already "Tamamlandı" and the later checkout is still ahead,
+ * the guest is still in the room: the same save sets the stay back to "Aktif"
+ * (statusAfterEndMoved — the rule Uzat and Düzenle follow). The job then
+ * completes it at the new hour.
  */
-export function LateCheckoutModal({ reservationId, current, onClose, onUpdated }: Props) {
+export function LateCheckoutModal({ reservationId, current, stay, onClose, onUpdated }: Props) {
   const [selected, setSelected] = useState<number>(current);
+  // One clock for the line shown below and for the save, so they cannot differ.
+  const [openedAt] = useState(() => Date.now());
+  const newStatus = statusAfterEndMoved(stay, { ...stay, late_checkout_hours: selected }, openedAt);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,8 +62,14 @@ export function LateCheckoutModal({ reservationId, current, onClose, onUpdated }
     setSaving(true);
     setError(null);
     try {
-      await updateReservation(reservationId, { late_checkout_hours: selected });
-      onUpdated(selected);
+      // One UPDATE: the hours and the status change together or not at all.
+      await updateReservation(
+        reservationId,
+        newStatus === null
+          ? { late_checkout_hours: selected }
+          : { late_checkout_hours: selected, status: newStatus },
+      );
+      onUpdated(selected, newStatus);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kaydedilemedi');
       setSaving(false);
@@ -104,6 +134,13 @@ export function LateCheckoutModal({ reservationId, current, onClose, onUpdated }
             );
           })}
         </div>
+
+        {newStatus !== null && (
+          <p className="mt-3 text-sm text-stone-700 dark:text-stone-300">
+            Durum: Tamamlandı → <strong>{REOPENED_LABEL[newStatus] ?? newStatus}</strong>
+            <span className="text-stone-600 dark:text-stone-300"> (konaklama devam ediyor)</span>
+          </p>
+        )}
 
         {error && (
           <p className="mt-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400">

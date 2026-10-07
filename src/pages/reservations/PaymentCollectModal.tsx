@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { NumberInput } from '@/components/ui/NumberInput';
-import { cn } from '@/lib/utils';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { cn, formatTRY } from '@/lib/utils';
 import type { PaymentMethod } from '@/types/database';
 
 interface Props {
@@ -12,6 +13,11 @@ interface Props {
   /** Amount to pre-fill — typically the reservation's total. The operator
       can still overwrite (partial collection, refund-style entry, etc.). */
   defaultAmount?: number;
+  /** Show the note that the payment waits in Onaylar until approved. Off for
+      the roles that are not told about approval — see paymentCollectUi(). */
+  showApprovalNotice?: boolean;
+  /** Ask "Tahsilat yapılsın mı?" before the payment is sent. */
+  confirmFirst?: boolean;
   onClose: () => void;
   onCollected: () => void;
 }
@@ -25,40 +31,45 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
 export function PaymentCollectModal({
   reservationId,
   defaultAmount = 0,
+  showApprovalNotice = true,
+  confirmFirst = false,
   onClose,
   onCollected,
 }: Props) {
   // Migration 067: every tahsilat — including yönetici's own — lands as
   // UNCONFIRMED and waits for an explicit Onayla tap on /finance/pending.
-  const requiresApproval = true;
+  // Whether THIS user is told so is the caller's decision (showApprovalNotice).
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [amount, setAmount] = useState(defaultAmount);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The "Tahsilat yapılsın mı?" question is on screen. */
+  const [confirming, setConfirming] = useState(false);
 
   const amountRef = useRef<HTMLInputElement>(null);
+  // Read by the Escape handler below, which is bound once.
+  const confirmingRef = useRef(false);
+  confirmingRef.current = confirming;
+  // A second tap must never send a second payment, whatever the render timing.
+  const sendingRef = useRef(false);
 
   // Focus the amount field on mount; Escape closes
   useEffect(() => {
     amountRef.current?.focus();
     const handle = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      // While the question is open, Escape belongs to it (the native dialog
+      // cancels itself): it must not also close the whole Ödeme Topla form.
+      if (e.key === 'Escape' && !confirmingRef.current) onClose();
     };
     document.addEventListener('keydown', handle);
     return () => document.removeEventListener('keydown', handle);
   }, [onClose]);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!amount || amount <= 0) {
-      setError('Tutar sıfırdan büyük olmalıdır.');
-      return;
-    }
-
+  const send = async () => {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setSaving(true);
     try {
       // Cash payments land in the single general kasa — resolved server-side.
@@ -70,9 +81,29 @@ export function PaymentCollectModal({
       });
       onCollected();
     } catch (err) {
+      // Back to the form with the reason; nothing was recorded.
       setError(err instanceof Error ? err.message : 'Kaydedilemedi');
       setSaving(false);
+      setConfirming(false);
+      sendingRef.current = false;
     }
+  };
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!amount || amount <= 0) {
+      setError('Tutar sıfırdan büyük olmalıdır.');
+      return;
+    }
+
+    if (confirmFirst) {
+      // Nothing is sent yet — only "Evet" in the question sends.
+      setConfirming(true);
+      return;
+    }
+    void send();
   };
 
   return (
@@ -104,7 +135,7 @@ export function PaymentCollectModal({
           </button>
         </div>
 
-        {requiresApproval && (
+        {showApprovalNotice && (
           <div className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
             Bu tahsilat <strong>Onaylar</strong> bölümünde onaylamanız için
             beklemede kalacak. Onaylanana kadar kasa ve cari hesaba işlenmez.
@@ -170,6 +201,22 @@ export function PaymentCollectModal({
           </div>
         </form>
       </Card>
+
+      {/* Native <dialog>: it sits in the top layer above this form and makes
+          the form inert, so the amount and method being confirmed cannot change
+          underneath it. */}
+      <ConfirmDialog
+        open={confirming}
+        title="Tahsilat yapılsın mı?"
+        description={`${formatTRY(amount)} · ${METHOD_LABELS[method]}`}
+        confirmLabel="Evet"
+        cancelLabel="Vazgeç"
+        loading={saving}
+        onConfirm={() => void send()}
+        onCancel={() => {
+          if (!saving) setConfirming(false);
+        }}
+      />
     </div>
   );
 }

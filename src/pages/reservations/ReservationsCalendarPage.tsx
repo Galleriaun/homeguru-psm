@@ -39,7 +39,8 @@ import { DayUseMonthCalendar } from './DayUseMonthCalendar';
 import { cn, formatDate, formatRoomType, formatTRY, istanbulToday } from '@/lib/utils';
 import { loadReservationsWithPayments } from '@/lib/queries/payments';
 import { PAYMENT_LINE, PAYMENT_META, paymentState } from '@/lib/paymentStatus';
-import type { ReservationStatus } from '@/types/database';
+import { statusAfterStayShift } from '@/lib/reservationStatus';
+import type { ReservationStatus, StayType } from '@/types/database';
 
 // The timeline is ONE freely-scrollable range — no Önceki/Sonraki paging. It
 // spans RANGE_START → end of BASE_END_YEAR; the "Sene Ekle" button grows the end
@@ -159,12 +160,27 @@ function roundKurus(value: number): number {
  * OVERNIGHT-only, but a malformed legacy row could still read 0 nights, and a
  * total of 0 has no per-night share; either way that beats writing NaN or
  * Infinity into a money column.
+ *
+ * `newStatus` is the status the stay must take with its new checkout, or null
+ * when the status stays as it is. Only one case sets it: Uzat on a "Tamamlandı"
+ * stay whose new checkout is still ahead — the guest is staying on, so the stay
+ * becomes "Aktif" again (see statusAfterStayShift). `at` is the moment the
+ * dialog was opened, so the preview and the write decide from the same clock.
  */
 function shiftPreview(
-  r: { stay_start: string; stay_end: string; total_amount: number | string },
+  r: {
+    stay_start: string;
+    stay_end: string;
+    total_amount: number | string;
+    status: ReservationStatus;
+    stay_type: StayType;
+    late_checkout_hours: number | null;
+  },
   deltaDays: number,
+  at: number,
 ) {
   const newEnd = new Date(new Date(r.stay_end).getTime() + deltaDays * DAY_MS).toISOString();
+  const newStatus = statusAfterStayShift(r, newEnd, deltaDays, at);
   const nights = stayNights(r.stay_start, r.stay_end);
   const total = Number(r.total_amount);
   const canReprice = nights > 0 && Number.isFinite(total) && total > 0;
@@ -174,7 +190,7 @@ function shiftPreview(
   const newTotal = canReprice
     ? Math.max(0, roundKurus(total + deltaDays * (total / nights)))
     : null;
-  return { newEnd, nights, total, newTotal };
+  return { newEnd, nights, total, newTotal, newStatus };
 }
 
 const weekdayFmt = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
@@ -304,6 +320,8 @@ export function ReservationsCalendarPage() {
   const [pendingShift, setPendingShift] = useState<{
     r: ReservationWithRefs;
     delta: number;
+    /** When the dialog was opened — the clock both the preview and the write use. */
+    at: number;
   } | null>(null);
   const [shiftLoading, setShiftLoading] = useState(false);
   const [shiftError, setShiftError] = useState<string | null>(null);
@@ -626,10 +644,16 @@ export function ReservationsCalendarPage() {
    * "Kısmi Ödeme Alındı" by itself, everywhere it is shown — and Kısalt
    * turns it back.
    */
-  const applyStayShift = async (r: ReservationWithRefs, deltaDays: number) => {
-    const { newEnd, newTotal } = shiftPreview(r, deltaDays);
-    const patch: { stay_end: string; total_amount?: number } = { stay_end: newEnd };
+  const applyStayShift = async (r: ReservationWithRefs, deltaDays: number, at: number) => {
+    const { newEnd, newTotal, newStatus } = shiftPreview(r, deltaDays, at);
+    const patch: { stay_end: string; total_amount?: number; status?: ReservationStatus } = {
+      stay_end: newEnd,
+    };
     if (newTotal !== null) patch.total_amount = newTotal;
+    // One UPDATE: the date, the tutar and the status change together or not at
+    // all. With the status back to active the stay counts for double-booking
+    // again, so the database refuses the extension if the unit is taken.
+    if (newStatus !== null) patch.status = newStatus;
     await updateReservation(r.id, patch);
     setReservationVersion((v) => v + 1);
   };
@@ -639,7 +663,7 @@ export function ReservationsCalendarPage() {
     setShiftLoading(true);
     setShiftError(null);
     try {
-      await applyStayShift(pendingShift.r, pendingShift.delta);
+      await applyStayShift(pendingShift.r, pendingShift.delta, pendingShift.at);
       setPendingShift(null);
     } catch (err) {
       setShiftError(err instanceof Error ? err.message : 'İşlem başarısız');
@@ -668,12 +692,12 @@ export function ReservationsCalendarPage() {
       // instead of applying on the single tap that opened this sheet.
       case 'extend':
         setShiftError(null);
-        setPendingShift({ r, delta: +1 });
+        setPendingShift({ r, delta: +1, at: Date.now() });
         setPickedReservation(null);
         return;
       case 'shorten':
         setShiftError(null);
-        setPendingShift({ r, delta: -1 });
+        setPendingShift({ r, delta: -1, at: Date.now() });
         setPickedReservation(null);
         return;
       case 'cancel':
@@ -1469,8 +1493,8 @@ export function ReservationsCalendarPage() {
         description={
           pendingShift &&
           (() => {
-            const { r, delta } = pendingShift;
-            const { newEnd, nights, total, newTotal } = shiftPreview(r, delta);
+            const { r, delta, at } = pendingShift;
+            const { newEnd, nights, total, newTotal, newStatus } = shiftPreview(r, delta, at);
             return (
               <>
                 <p>
@@ -1485,6 +1509,15 @@ export function ReservationsCalendarPage() {
                     ({nights} gece → {nights + delta} gece)
                   </span>
                 </p>
+                {newStatus !== null && (
+                  <p className="mt-1">
+                    Durum: {STATUS_LABELS[r.status]} → <strong>{STATUS_LABELS[newStatus]}</strong>
+                    <span className="text-stone-600 dark:text-stone-300">
+                      {' '}
+                      (konaklama devam ediyor)
+                    </span>
+                  </p>
+                )}
                 {newTotal === null ? (
                   <p className="mt-1 text-xs text-stone-600 dark:text-stone-300">
                     Tutar değişmeyecek.

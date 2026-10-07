@@ -12,9 +12,12 @@ import { formatDate } from '@/lib/utils';
 
 export function GuestsListPage() {
   const { profile } = useAuth();
-  // The Bornova filter is for those who see every region's guests — Yönetici
-  // (SUPER_ADMIN) and Alt Yönetici (PROPERTY_MANAGER). Bornova roles already see
-  // only Bornova guests, so they need no filter.
+  // The Bornova filter is offered to the roles that oversee every region —
+  // Yönetici (SUPER_ADMIN) and Alt Yönetici (PROPERTY_MANAGER). Since migration
+  // 145 every role that makes reservations is handed the whole guest list
+  // (Bornova roles and Personel included), so this no longer says who SEES all
+  // guests — only who gets the Tümü / Bornova chips. The others get the list
+  // unfiltered.
   const seesAllRegions =
     profile?.role === 'SUPER_ADMIN' || profile?.role === 'PROPERTY_MANAGER';
   const [guests, setGuests] = useState<GuestSummary[] | null>(null);

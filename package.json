@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
+    "test": "node tests/fetchAll.check.mjs && node tests/paymentStatus.check.mjs && node tests/rbac.check.mjs && node tests/cariHesap.check.mjs && node tests/cleaningState.check.mjs && node tests/reservationStatus.check.mjs && node tests/queries.check.mjs && node tests/wire.check.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {

@@ -17,6 +17,7 @@ import { DateInput } from '@/components/ui/DateInput';
 import { NumberInput } from '@/components/ui/NumberInput';
 import { Select } from '@/components/ui/Select';
 import { formatTRY, istanbulToday } from '@/lib/utils';
+import { defaultStatusForNewStay, statusAfterEndMoved } from '@/lib/reservationStatus';
 import { QuickAddGuestModal } from '@/components/QuickAddGuestModal';
 import { CompanionModal } from '@/pages/guests/CompanionModal';
 import { markPendingImported } from '@/lib/queries/google_calendar';
@@ -61,6 +62,41 @@ function toIstanbulDateAndTime(iso: string): { date: string; time: string } {
 }
 
 /**
+ * stay_start / stay_end exactly as the form saves them, from its date and time
+ * fields — or null while those fields do not form a valid date yet. One
+ * function, so what the form previews (the status below) and what it saves can
+ * never be computed two different ways.
+ */
+function stayRangeOf(v: {
+  stayType: StayType;
+  checkin: string;
+  checkout: string;
+  checkinTime: string;
+  startTime: string;
+  endTime: string;
+}): { stay_start: string; stay_end: string } | null {
+  try {
+    if (v.stayType === 'DAYUSE') {
+      // Istanbul-local times → UTC ISO. Istanbul is fixed UTC+3.
+      return {
+        stay_start: new Date(`${v.checkin}T${v.startTime}:00+03:00`).toISOString(),
+        stay_end: new Date(`${v.checkin}T${v.endTime}:00+03:00`).toISOString(),
+      };
+    }
+    // Overnight stays carry an explicit Istanbul-local check-in time (defaults
+    // to creation time, operator-editable). Istanbul is fixed UTC+3. Checkout
+    // keeps its date-only midnight boundary.
+    return {
+      stay_start: new Date(`${v.checkin}T${v.checkinTime}:00+03:00`).toISOString(),
+      stay_end: new Date(v.checkout + 'T00:00:00Z').toISOString(),
+    };
+  } catch {
+    // toISOString() throws on an invalid date (a half-typed field).
+    return null;
+  }
+}
+
+/**
  * Default Istanbul-local check-in time for a giriş date. A FUTURE day defaults
  * to 12:00; a same-day (today) booking keeps the current time, since a same-day
  * arrival is usually happening around "now". Past dates fall through to "now"
@@ -84,32 +120,6 @@ function maskTime(raw: string): string {
 }
 
 const TIME_HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-/**
- * Default status for a new reservation, from its dates: a future stay is
- * 'upcoming', one in progress 'active', a fully-past one 'completed'.
- * (A daily cron later promotes 'upcoming' → 'active' on the check-in day.)
- *
- * Day-use stays are single-day, so checkout-date equals checkin-date: the
- * overnight rule "checkoutStr <= today → completed" would wrongly mark a
- * day-use booking on today as already finished. Treat day-use as active for
- * its single day and let the operator flip it to completed manually.
- */
-function deriveStatus(
-  checkinStr: string,
-  checkoutStr: string,
-  stayType: StayType,
-): ReservationStatus {
-  const today = istanbulToday();
-  if (stayType === 'DAYUSE') {
-    if (checkinStr > today) return 'upcoming';
-    if (checkinStr < today) return 'completed';
-    return 'active';
-  }
-  if (checkinStr > today) return 'upcoming';
-  if (checkoutStr <= today) return 'completed';
-  return 'active';
-}
 
 export function ReservationFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -166,6 +176,18 @@ export function ReservationFormPage() {
   const [showNote, setShowNote] = useState(false);
   // Once the operator picks a status by hand, stop auto-deriving it from dates.
   const [statusEdited, setStatusEdited] = useState(false);
+  /**
+   * Edit mode: the stay as it was when the form opened — its status, and its
+   * END as this form would save it from the loaded values. Comparing against
+   * that (rather than the raw column) means an untouched form never reads as
+   * "the end moved", however an old row happens to be stored.
+   */
+  const [loadedStay, setLoadedStay] = useState<{
+    status: ReservationStatus;
+    stay_end: string;
+    stay_type: StayType;
+    late_checkout_hours: number | null;
+  } | null>(null);
 
   /**
    * "İptal" is only offered to a reviewer — see isCancelReviewer above. The one
@@ -249,15 +271,48 @@ export function ReservationFormPage() {
             setStartTime(startLocal.time);
             setEndTime(endLocal.time);
             setNights(1);
+            const loaded = stayRangeOf({
+              stayType: 'DAYUSE',
+              checkin: startLocal.date,
+              checkout: startLocal.date,
+              checkinTime: '',
+              startTime: startLocal.time,
+              endTime: endLocal.time,
+            });
+            setLoadedStay(
+              loaded && {
+                status: r.status,
+                stay_end: loaded.stay_end,
+                stay_type: r.stay_type,
+                late_checkout_hours: r.late_checkout_hours,
+              },
+            );
           } else {
             // Surface the Istanbul-local check-in date AND time back into the
             // form so editing preserves the recorded giriş hour (a raw UTC
             // slice would mis-date a stay stamped near midnight).
             const startLocal = toIstanbulDateAndTime(r.stay_start);
             const end = toIstanbulDateAndTime(r.stay_end).date;
+            const loadedNights = daysBetween(startLocal.date, end);
             setCheckin(startLocal.date);
-            setNights(daysBetween(startLocal.date, end));
+            setNights(loadedNights);
             setCheckinTime(startLocal.time);
+            const loaded = stayRangeOf({
+              stayType: 'OVERNIGHT',
+              checkin: startLocal.date,
+              checkout: addDays(startLocal.date, loadedNights),
+              checkinTime: startLocal.time,
+              startTime: '',
+              endTime: '',
+            });
+            setLoadedStay(
+              loaded && {
+                status: r.status,
+                stay_end: loaded.stay_end,
+                stay_type: r.stay_type,
+                late_checkout_hours: r.late_checkout_hours,
+              },
+            );
           }
           setTotalAmount(Number(r.total_amount));
           setDeposit(Number(r.deposit));
@@ -334,11 +389,12 @@ export function ReservationFormPage() {
 
     let cancelled = false;
     const endDateExclusive = addDays(checkin, nights);
-    listPricesInRange(checkin, endDateExclusive)
+    listPricesInRange(checkin, endDateExclusive, selectedUnit.id)
       .then((rows) => {
         if (cancelled) return;
-        // listPricesInRange returns every visible unit in the window — filter
-        // to our selected unit before building the lookup map.
+        // The query already asks for this unit only (at most one row per
+        // night). The filter stays as a guard: a row from another unit in this
+        // map would silently misprice the stay.
         const byDate = new Map(
           rows
             .filter((r) => r.unit_id === selectedUnit.id)
@@ -390,15 +446,38 @@ export function ReservationFormPage() {
     setNights(n);
   };
 
-  // New reservations take their status from the check-in date — future stay
-  // 'upcoming', current one 'active', past one 'completed' — until the
+  // New reservations take their status from their dates — future stay
+  // 'upcoming', current one 'active', one that is over 'completed' — until the
   // operator picks a status by hand. Editing never auto-changes the status.
+  // "Over" means past the checkout HOUR, not merely on the checkout date: see
+  // defaultStatusForNewStay (a stay entered after midnight for a guest who has
+  // just arrived must not be born "Tamamlandı").
   useEffect(() => {
     if (!isEdit && !statusEdited) {
-      setStatus(deriveStatus(checkin, checkout, stayType));
+      setStatus(defaultStatusForNewStay(checkin, checkout, stayType, new Date()));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkin, checkout, stayType]);
+
+  // Editing leaves the status to the operator, with ONE exception: a
+  // "Tamamlandı" stay whose end this edit moves LATER, to a moment still ahead.
+  // The guest is staying on, so the stay is running again — left completed it
+  // would not block another booking on the unit, and the job would never
+  // complete it (see statusAfterEndMoved). The Durum field shows the result
+  // before saving, the operator can still overrule it there, and putting the
+  // dates back puts the status back.
+  useEffect(() => {
+    if (!isEdit || statusEdited || !loadedStay || loadedStay.status !== 'completed') return;
+    const range = stayRangeOf({ stayType, checkin, checkout, checkinTime, startTime, endTime });
+    const reopened = range
+      ? statusAfterEndMoved(
+          loadedStay,
+          { ...range, stay_type: stayType, late_checkout_hours: loadedStay.late_checkout_hours },
+          Date.now(),
+        )
+      : null;
+    setStatus(reopened ?? loadedStay.status);
+  }, [isEdit, statusEdited, loadedStay, stayType, checkin, checkout, checkinTime, startTime, endTime]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -432,19 +511,11 @@ export function ReservationFormPage() {
 
     setSaving(true);
     try {
-      let stay_start: string;
-      let stay_end: string;
-      if (stayType === 'DAYUSE') {
-        // Istanbul-local times → UTC ISO. Istanbul is fixed UTC+3.
-        stay_start = new Date(`${checkin}T${startTime}:00+03:00`).toISOString();
-        stay_end = new Date(`${checkin}T${endTime}:00+03:00`).toISOString();
-      } else {
-        // Overnight stays now carry an explicit Istanbul-local check-in time
-        // (defaults to creation time, operator-editable). Istanbul is fixed
-        // UTC+3. Checkout keeps its date-only midnight boundary.
-        stay_start = new Date(`${checkin}T${checkinTime}:00+03:00`).toISOString();
-        stay_end = new Date(checkout + 'T00:00:00Z').toISOString();
-      }
+      const range = stayRangeOf({ stayType, checkin, checkout, checkinTime, startTime, endTime });
+      // Same failure as before for a date that cannot be read: the error is
+      // caught below and shown in the form.
+      if (!range) throw new RangeError('Invalid time value');
+      const { stay_start, stay_end } = range;
 
       // Day-use stays don't expose the auto-debit toggle; force off so a
       // checkbox toggled before flipping to day-use doesn't leak through.
@@ -818,6 +889,13 @@ export function ReservationFormPage() {
             }}
             options={statusOptions}
           />
+          {isEdit && !statusEdited && loadedStay?.status === 'completed' && status !== 'completed' && (
+            <p className="-mt-2 text-xs text-amber-700 dark:text-amber-400">
+              Çıkış ileri alındı; konaklama devam ettiği için durum “
+              {STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status}” yapıldı.
+              Farklı olmasını istiyorsanız yukarıdan seçin.
+            </p>
+          )}
           {!isCancelReviewer && status !== 'cancelled' && (
             <p className="-mt-2 text-xs text-stone-500 dark:text-stone-400">
               İptal için rezervasyon detayındaki “İptal Et” ile yönetici onayı

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows, sortByInstant } from '@/lib/queries/fetchAll';
 import type { Database } from '@/types/database';
 
 export type PropertyBlock = Database['public']['Tables']['property_blocks']['Row'];
@@ -21,19 +22,22 @@ const wrapErr = (e: { message: string; details?: string; hint?: string; code?: s
  * Blocks that overlap the [startISO, endISO) window. A block overlaps when it
  * starts before the window ends and ends after the window starts — same shape
  * as listReservationsInRange so the calendar can use them interchangeably.
+ * Goes through fetchAllRows for the same reason (no silent Max Rows cut).
  */
 export async function listBlocksInRange(
   startISO: string,
   endISO: string,
 ): Promise<PropertyBlock[]> {
-  const { data, error } = await supabase
-    .from('property_blocks')
-    .select('*')
-    .lt('block_start', endISO)
-    .gt('block_end', startISO)
-    .order('block_start', { ascending: true });
-  if (error) throw wrapErr(error);
-  return data ?? [];
+  const rows = await fetchAllRows<PropertyBlock>(
+    () =>
+      supabase
+        .from('property_blocks')
+        .select('*', { count: 'exact' })
+        .lt('block_start', endISO)
+        .gt('block_end', startISO),
+    wrapErr,
+  );
+  return sortByInstant(rows, (r) => r.block_start, true);
 }
 
 export interface BlockInput {

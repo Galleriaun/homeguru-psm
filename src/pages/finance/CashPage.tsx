@@ -807,7 +807,7 @@ export function CashPage() {
                                   );
                                 })()}
                               </td>
-                              <td className="px-6 py-3">
+                              <td className="whitespace-nowrap px-6 py-3">
                                 <span
                                   className={
                                     positive
@@ -840,8 +840,8 @@ export function CashPage() {
                               <td
                                 className={
                                   positive
-                                    ? 'px-6 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400'
-                                    : 'px-6 py-3 text-right font-semibold text-red-600 dark:text-red-400'
+                                    ? 'whitespace-nowrap px-6 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-400'
+                                    : 'whitespace-nowrap px-6 py-3 text-right font-semibold text-red-600 dark:text-red-400'
                                 }
                               >
                                 {positive ? '+' : '−'}

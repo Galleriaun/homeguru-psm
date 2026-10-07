@@ -12,11 +12,33 @@ export type PaymentState = 'none' | 'partial' | 'full' | 'over';
 /**
  * A small epsilon absorbs float rounding so an exact-amount payment reads as
  * fully paid rather than "kısmi" or "fazladan".
+ *
+ * Both arguments are coerced before use. They are typed `number`, and every
+ * current caller already passes `Number(r.total_amount)` — but total_amount is
+ * a Postgres numeric, which PostgREST can hand back as a STRING, and TypeScript
+ * cannot catch that at a `supabase-js` boundary. An uncoerced string would break
+ * exactly one branch, silently: `'12000' + 0.005` CONCATENATES to '120000.005',
+ * so an overpayment compares against a number ~10× too large and misreports as
+ * 'full' instead of 'over' — i.e. money owed back to a guest would stop being
+ * flagged. (The 'partial' branch uses `-`, which coerces numerically, so it
+ * would keep working and hide the problem.) Number() here makes the function
+ * correct on its own terms rather than dependent on all four call sites
+ * remembering.
+ *
+ * Returns null when either figure is unreadable (NaN / ±Infinity after
+ * coercion). Every comparison with NaN is false, so without this guard such a
+ * stay fell through all three branches to 'full' and wore the green "Ödeme
+ * Alındı" badge with nothing to back it. Unknown is not a state to guess at:
+ * callers draw no badge / no line for null, the same as when the tahsilat
+ * data has not loaded.
  */
-export function paymentState(paid: number, total: number): PaymentState {
-  if (paid <= 0) return 'none';
-  if (paid < total - 0.005) return 'partial';
-  if (paid > total + 0.005) return 'over';
+export function paymentState(paid: number, total: number): PaymentState | null {
+  const p = Number(paid);
+  const t = Number(total);
+  if (!Number.isFinite(p) || !Number.isFinite(t)) return null;
+  if (p <= 0) return 'none';
+  if (p < t - 0.005) return 'partial';
+  if (p > t + 0.005) return 'over';
   return 'full';
 }
 

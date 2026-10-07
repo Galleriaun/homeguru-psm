@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows, sortByInstant, type PagedQuery } from '@/lib/queries/fetchAll';
 import { softDeleteEntity } from '@/lib/queries/trash';
 import type { Database, ReservationStatus } from '@/types/database';
 
@@ -53,20 +54,31 @@ const wrapErr = (e: { message: string; details?: string; hint?: string; code?: s
 };
 
 /**
- * List reservations with joined guest/unit/property names. Capped at the
- * 1000 most recent by stay_start so the query stays bounded as history grows
- * — far beyond any realistic working set for this operation.
+ * Columns + joined names behind ReservationWithRefs. One definition, so the
+ * Liste, the Takvim and the active-stay picker cannot drift apart.
+ */
+const RESERVATION_WITH_REFS_SELECT =
+  'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, note, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)';
+
+/**
+ * List EVERY reservation with joined guest/unit/property names, newest
+ * stay_start first.
+ *
+ * Goes through fetchAllRows rather than a single request. This used to be
+ * `.limit(1000)` on the assumption that 1000 was beyond any realistic working
+ * set; at 1410 reservations it silently dropped the 410 oldest stays from the
+ * Liste and — worse — from the Borçlular ledger, hiding guests who still owed
+ * money.
  */
 export async function listReservations(): Promise<ReservationWithRefs[]> {
-  const { data, error } = await supabase
-    .from('reservations')
-    .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, note, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
-    )
-    .order('stay_start', { ascending: false })
-    .limit(1000);
-  if (error) throw wrapErr(error);
-  return (data as unknown as ReservationWithRefs[]) ?? [];
+  const rows = await fetchAllRows<ReservationWithRefs>(
+    () =>
+      supabase.from('reservations').select(RESERVATION_WITH_REFS_SELECT, {
+        count: 'exact',
+      }) as unknown as PagedQuery<ReservationWithRefs>,
+    wrapErr,
+  );
+  return sortByInstant(rows, (r) => r.stay_start, false);
 }
 
 /**
@@ -78,9 +90,7 @@ export async function listReservations(): Promise<ReservationWithRefs[]> {
 export async function listActiveReservations(): Promise<ReservationWithRefs[]> {
   const { data, error } = await supabase
     .from('reservations')
-    .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, note, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
-    )
+    .select(RESERVATION_WITH_REFS_SELECT)
     .eq('status', 'active')
     .order('stay_start', { ascending: false });
   if (error) throw wrapErr(error);
@@ -90,21 +100,26 @@ export async function listActiveReservations(): Promise<ReservationWithRefs[]> {
 /**
  * Reservations overlapping the window [startISO, endISO).
  * A stay overlaps when it starts before the window ends and ends after the window starts.
+ *
+ * Goes through fetchAllRows: the Takvim asks for its whole range at once, and
+ * a single request was silently cut at the server's Max Rows — a stay past the
+ * cap existed in the DB but never appeared on the calendar or in the
+ * availability search.
  */
 export async function listReservationsInRange(
   startISO: string,
   endISO: string,
 ): Promise<ReservationWithRefs[]> {
-  const { data, error } = await supabase
-    .from('reservations')
-    .select(
-      'id, property_id, unit_id, guest_id, stay_start, stay_end, status, stay_type, total_amount, deposit, auto_debit, late_checkout_hours, note, created_by, created_at, deleted_property_name, deleted_unit_name, guest:guests(full_name, phone), unit:units(name, property_id), property:properties(name, type)',
-    )
-    .lt('stay_start', endISO)
-    .gt('stay_end', startISO)
-    .order('stay_start', { ascending: true });
-  if (error) throw wrapErr(error);
-  return (data as unknown as ReservationWithRefs[]) ?? [];
+  const rows = await fetchAllRows<ReservationWithRefs>(
+    () =>
+      supabase
+        .from('reservations')
+        .select(RESERVATION_WITH_REFS_SELECT, { count: 'exact' })
+        .lt('stay_start', endISO)
+        .gt('stay_end', startISO) as unknown as PagedQuery<ReservationWithRefs>,
+    wrapErr,
+  );
+  return sortByInstant(rows, (r) => r.stay_start, true);
 }
 
 export async function getReservation(id: string): Promise<ReservationRow | null> {

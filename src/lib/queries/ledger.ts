@@ -8,8 +8,10 @@ type LedgerInsert = Database['public']['Tables']['ledger_entries']['Insert'];
 export interface LedgerEntry extends LedgerRow {
   /** Joined from payment_collections — set on PAYMENT entries that have a
       payment_collection_id. Lets the cari hesap card surface the actual
-      payment method (Nakit / Havale / Kart) below "Misafirden Alındı". */
-  payment_collection?: { method: PaymentMethod } | null;
+      payment method (Nakit / Havale / Kart) below "Misafirden Alındı".
+      created_at is when the money was COLLECTED; the ledger row's own
+      created_at is when a manager approved it. */
+  payment_collection?: { method: PaymentMethod; created_at?: string | null } | null;
 }
 
 const wrapErr = (e: { message: string; details?: string; hint?: string; code?: string }) =>
@@ -21,15 +23,28 @@ const wrapErr = (e: { message: string; details?: string; hint?: string; code?: s
  * Entries for a single reservation, newest first.
  * Filters strictly by reservation_id — does NOT include guest-scoped entries
  * (reservation_id IS NULL) that may also belong to this guest.
+ *
+ * A row whose amount is not a readable number throws: every caller sums these,
+ * and a NaN total on a money screen is worse than an error.
  */
 export async function listLedgerForReservation(reservationId: string): Promise<LedgerEntry[]> {
   const { data, error } = await supabase
     .from('ledger_entries')
-    .select('*, payment_collection:payment_collections(method)')
+    .select('*, payment_collection:payment_collections(method, created_at)')
     .eq('reservation_id', reservationId)
     .order('created_at', { ascending: false });
   if (error) throw wrapErr(error);
-  return (data as unknown as LedgerEntry[]) ?? [];
+  const rows = (data as unknown as LedgerEntry[]) ?? [];
+  for (const row of rows) {
+    const raw: unknown = row.amount;
+    // null and '' are refused explicitly: Number() turns both into 0.
+    const amount =
+      typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+    if (!Number.isFinite(amount)) {
+      throw new Error('Cari yüklenemedi: okunamayan bir tutar var.');
+    }
+  }
+  return rows;
 }
 
 /** All entries for a guest, newest first — useful for a future guest-level cari view. */

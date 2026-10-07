@@ -1,7 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { istanbulToday } from '@/lib/utils';
 import { listAllUnits } from '@/lib/queries/units';
-import { listAllTasks, latestPerUnit, DEFAULT_STATUS } from '@/lib/queries/housekeeping';
+import { listAllTasks, listStaysForCleaning, latestPerUnit } from '@/lib/queries/housekeeping';
+import { cleaningStateByUnit } from '@/lib/cleaningState';
 
 /**
  * Compact counts that the Panel renders as today's-at-a-glance tiles.
@@ -47,15 +48,23 @@ export async function loadDashboardCounts(): Promise<DashboardCounts> {
     }
   };
 
-  // Dirty units = units whose latest housekeeping status is DIRTY (units with
-  // no task history default to DIRTY). Mirrors the Temizlik page's Kirli count.
+  // Dirty units, by the same rule as the Temizlik page (cleaningState.ts): the
+  // latest cleaning mark, unless a stay on the unit has ended since. Units with
+  // no history default to DIRTY.
   const dirtyUnitsCount = async (): Promise<number> => {
     try {
-      const [units, tasks] = await Promise.all([listAllUnits(), listAllTasks()]);
-      const latest = latestPerUnit(tasks);
-      return units.filter(
-        (u) => (latest.get(u.id)?.status ?? DEFAULT_STATUS) === 'DIRTY',
-      ).length;
+      const [units, tasks, stays] = await Promise.all([
+        listAllUnits(),
+        listAllTasks(),
+        listStaysForCleaning(),
+      ]);
+      const states = cleaningStateByUnit(
+        units.map((u) => u.id),
+        latestPerUnit(tasks),
+        stays,
+        Date.now(),
+      );
+      return units.filter((u) => states.get(u.id)?.status === 'DIRTY').length;
     } catch {
       return 0;
     }
